@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { StudyTopic, TopicReview, AREA_COLORS } from '@/types/database';
+import { StudyTopic, TopicReview, getAreaStyle } from '@/types/database';
 import {
   calculateReviewStatus,
   formatDateBR,
@@ -41,14 +41,14 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   topic,
   reviews,
 }) => {
-  const { deleteTopic } = useData();
+  const { deleteTopic, areas } = useData();
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   if (!topic) return null;
 
-  const areaColor = AREA_COLORS[topic.area];
+  const areaColor = getAreaStyle(topic.area, areas);
 
   // Ordena as revisões existentes de 1 a 8
   const existingReviewsMap = new Map<number, TopicReview>();
@@ -78,12 +78,20 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="space-y-6">
           <SheetHeader>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${areaColor.bg} ${areaColor.text} ${areaColor.border}`}
               >
                 {topic.area}
               </span>
+              {topic.tags && topic.tags.length > 0 && topic.tags.map(t => (
+                <span
+                  key={t}
+                  className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                >
+                  #{t}
+                </span>
+              ))}
               <span className="text-xs text-muted-foreground">
                 Cadastrado em {formatDateBR(topic.initial_date)}
               </span>

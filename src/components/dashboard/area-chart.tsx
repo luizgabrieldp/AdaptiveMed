@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useData } from '@/lib/store/data-context';
-import { MEDICAL_AREAS, AREA_COLORS } from '@/types/database';
 import {
   ResponsiveContainer,
   BarChart,
@@ -22,29 +21,24 @@ import {
 import { BarChart3, PieChart, ShieldCheck } from 'lucide-react';
 
 export const AreaPerformanceChart: React.FC = () => {
-  const { stats, profile } = useData();
+  const { stats, profile, areas } = useData();
   const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
   const targetCutoff = profile?.target_cutoff_percentage || 80;
 
-  const chartData = MEDICAL_AREAS.map(area => {
-    const item = stats.areaAccuracy[area];
+  const chartData = areas.map(a => {
+    const item = stats.areaAccuracy[a.name];
+    // Se o nome for longo, pega as 2 primeiras palavras ou reduz
+    const shortName =
+      a.name.length > 12 ? a.name.split(' ').slice(0, 2).join(' ') : a.name;
+
     return {
-      area,
-      shortName:
-        area === 'Ginecologia e Obstetrícia'
-          ? 'G.O.'
-          : area === 'Medicina Preventiva'
-          ? 'Preventiva'
-          : area === 'Clínica Médica'
-          ? 'Clínica'
-          : area === 'Cirurgia Geral'
-          ? 'Cirurgia'
-          : 'Pediatria',
+      area: a.name,
+      shortName,
       percentage: item ? item.percentage : 0,
       totalQuestions: item ? item.total : 0,
       correctQuestions: item ? item.correct : 0,
       topicsCount: item ? item.topicsCount : 0,
-      color: AREA_COLORS[area].primary,
+      color: a.color,
     };
   });
 
@@ -56,7 +50,7 @@ export const AreaPerformanceChart: React.FC = () => {
             Desempenho por Grande Área
           </CardTitle>
           <CardDescription>
-            Percentual médio de acertos nas 5 áreas cobradas nos concursos de Residência.
+            Percentual médio de acertos nas Grandes Áreas de estudo cadastradas.
           </CardDescription>
         </div>
 

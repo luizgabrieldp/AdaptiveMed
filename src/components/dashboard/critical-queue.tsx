@@ -5,18 +5,18 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
-import { TopicReview, StudyTopic, AREA_COLORS } from '@/types/database';
+import { TopicReview, StudyTopic, getAreaStyle } from '@/types/database';
 import {
   calculateReviewStatus,
   getTodayDateString,
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { ReviewCompletionModal } from './review-completion-modal';
-import { CheckCircle2, Clock, AlertCircle, Sparkles, Plus } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Sparkles, Plus, Tag } from 'lucide-react';
 import { NewTopicModal } from './new-topic-modal';
 
 export const CriticalQueue: React.FC = () => {
-  const { reviews, topics } = useData();
+  const { reviews, topics, areas } = useData();
   const [selectedReview, setSelectedReview] = useState<TopicReview | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newTopicOpen, setNewTopicOpen] = useState(false);
@@ -98,7 +98,7 @@ export const CriticalQueue: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {criticalItems.map(({ review, topic, statusInfo }) => {
-              const areaStyle = topic?.area ? AREA_COLORS[topic.area] : null;
+              const areaStyle = topic?.area ? getAreaStyle(topic.area, areas) : null;
               const isOverdue = statusInfo.status === 'ATRASADO';
 
               return (
@@ -128,6 +128,21 @@ export const CriticalQueue: React.FC = () => {
                       >
                         {statusInfo.badgeText}
                       </Badge>
+
+                      {/* Tags / Subáreas */}
+                      {topic?.tags && topic.tags.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {topic.tags.map(t => (
+                            <span
+                              key={t}
+                              className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border flex items-center gap-0.5"
+                            >
+                              <Tag className="h-2.5 w-2.5 opacity-70" />
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <h4 className="font-bold text-sm sm:text-base text-foreground truncate">

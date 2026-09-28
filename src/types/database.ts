@@ -1,19 +1,73 @@
-export type MedicalArea =
-  | 'Clínica Médica'
-  | 'Cirurgia Geral'
-  | 'Pediatria'
-  | 'Ginecologia e Obstetrícia'
-  | 'Medicina Preventiva';
+export type MedicalArea = string;
 
-export const MEDICAL_AREAS: MedicalArea[] = [
-  'Clínica Médica',
-  'Cirurgia Geral',
-  'Pediatria',
-  'Ginecologia e Obstetrícia',
-  'Medicina Preventiva',
+export interface StudyArea {
+  id: string;
+  name: string;
+  color: string;   // Ex: '#3B82F6'
+  bg: string;      // Ex: 'bg-blue-500/10'
+  text: string;    // Ex: 'text-blue-500'
+  border: string;  // Ex: 'border-blue-500/20'
+}
+
+export const COLOR_PALETTE = [
+  { name: 'Azul', hex: '#3B82F6', bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20' },
+  { name: 'Esmeralda', hex: '#10B981', bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20' },
+  { name: 'Âmbar', hex: '#F59E0B', bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/20' },
+  { name: 'Rosa', hex: '#EC4899', bg: 'bg-pink-500/10', text: 'text-pink-500', border: 'border-pink-500/20' },
+  { name: 'Roxo', hex: '#8B5CF6', bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/20' },
+  { name: 'Vermelho', hex: '#EF4444', bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20' },
+  { name: 'Ciano', hex: '#06B6D4', bg: 'bg-cyan-500/10', text: 'text-cyan-500', border: 'border-cyan-500/20' },
+  { name: 'Índigo', hex: '#6366F1', bg: 'bg-indigo-500/10', text: 'text-indigo-500', border: 'border-indigo-500/20' },
+  { name: 'Laranja', hex: '#F97316', bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20' },
+  { name: 'Verde Lima', hex: '#84CC16', bg: 'bg-lime-500/10', text: 'text-lime-500', border: 'border-lime-500/20' },
 ];
 
-export const AREA_COLORS: Record<MedicalArea, { primary: string; bg: string; text: string; border: string }> = {
+export const DEFAULT_STUDY_AREAS: StudyArea[] = [
+  {
+    id: 'area-clinica',
+    name: 'Clínica Médica',
+    color: '#3B82F6',
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-500',
+    border: 'border-blue-500/20',
+  },
+  {
+    id: 'area-cirurgia',
+    name: 'Cirurgia Geral',
+    color: '#10B981',
+    bg: 'bg-emerald-500/10',
+    text: 'text-emerald-500',
+    border: 'border-emerald-500/20',
+  },
+  {
+    id: 'area-pediatria',
+    name: 'Pediatria',
+    color: '#F59E0B',
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-500',
+    border: 'border-amber-500/20',
+  },
+  {
+    id: 'area-go',
+    name: 'Ginecologia e Obstetrícia',
+    color: '#EC4899',
+    bg: 'bg-pink-500/10',
+    text: 'text-pink-500',
+    border: 'border-pink-500/20',
+  },
+  {
+    id: 'area-preventiva',
+    name: 'Medicina Preventiva',
+    color: '#8B5CF6',
+    bg: 'bg-purple-500/10',
+    text: 'text-purple-500',
+    border: 'border-purple-500/20',
+  },
+];
+
+export const MEDICAL_AREAS: string[] = DEFAULT_STUDY_AREAS.map(a => a.name);
+
+export const AREA_COLORS: Record<string, { primary: string; bg: string; text: string; border: string }> = {
   'Clínica Médica': {
     primary: '#3B82F6',
     bg: 'bg-blue-500/10',
@@ -46,6 +100,38 @@ export const AREA_COLORS: Record<MedicalArea, { primary: string; bg: string; tex
   },
 };
 
+export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []) {
+  // Procura primeiro nas áreas do usuário
+  const found = customAreas.find(a => a.name.toLowerCase() === areaName.toLowerCase());
+  if (found) {
+    return {
+      primary: found.color,
+      bg: found.bg,
+      text: found.text,
+      border: found.border,
+    };
+  }
+
+  // Fallback para mapa padrão
+  if (AREA_COLORS[areaName]) {
+    return AREA_COLORS[areaName];
+  }
+
+  // Fallback hash baseado no nome para cores consistentes
+  let hash = 0;
+  for (let i = 0; i < areaName.length; i++) {
+    hash = areaName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const colorIndex = Math.abs(hash) % COLOR_PALETTE.length;
+  const c = COLOR_PALETTE[colorIndex];
+  return {
+    primary: c.hex,
+    bg: c.bg,
+    text: c.text,
+    border: c.border,
+  };
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -53,6 +139,7 @@ export interface Profile {
   target_exams?: string[];
   target_cutoff_percentage?: number;
   target_year?: number;
+  custom_areas?: StudyArea[];
   onboarding_completed?: boolean;
   is_subscribed?: boolean;
   subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
@@ -62,8 +149,9 @@ export interface Profile {
 export interface StudyTopic {
   id: string;
   user_id: string;
-  area: MedicalArea;
+  area: string;
   subject_name: string;
+  tags?: string[];
   initial_date: string;
   initial_questions: number;
   initial_correct: number;
@@ -119,9 +207,9 @@ export interface UserStats {
   overallAccuracy: number;
   totalQuestions: number;
   vulnerableArea: {
-    area: MedicalArea;
+    area: string;
     accuracy: number;
     topicsCount: number;
   } | null;
-  areaAccuracy: Record<MedicalArea, { correct: number; total: number; percentage: number; topicsCount: number }>;
+  areaAccuracy: Record<string, { correct: number; total: number; percentage: number; topicsCount: number }>;
 }

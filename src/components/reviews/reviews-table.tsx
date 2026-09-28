@@ -12,15 +12,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useData } from '@/lib/store/data-context';
 import {
   StudyTopic,
   TopicReview,
-  MedicalArea,
-  MEDICAL_AREAS,
-  AREA_COLORS,
   ReviewStatus,
+  getAreaStyle,
 } from '@/types/database';
+import { useData } from '@/lib/store/data-context';
 import {
   calculateReviewStatus,
   formatDateBR,
@@ -37,12 +35,14 @@ import {
   Calendar,
   AlertCircle,
   Clock,
+  Tag,
 } from 'lucide-react';
 
 export const ReviewsTable: React.FC = () => {
-  const { topics, reviews, deleteTopic } = useData();
+  const { topics, reviews, deleteTopic, areas, allTags } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedArea, setSelectedArea] = useState<string>('TODAS');
+  const [selectedTag, setSelectedTag] = useState<string>('TODAS');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
 
   // Controle dos modais e drawer
@@ -88,22 +88,27 @@ export const ReviewsTable: React.FC = () => {
   // Filtros em tempo real
   const filteredTopics = useMemo(() => {
     return enhancedTopics.filter(({ topic, statusInfo }) => {
-      // Busca por nome do assunto
-      const matchesSearch = topic.subject_name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      // Busca por nome do assunto ou tags
+      const s = searchTerm.toLowerCase();
+      const matchesSearch =
+        topic.subject_name.toLowerCase().includes(s) ||
+        (topic.tags && topic.tags.some(t => t.toLowerCase().includes(s)));
 
       // Filtro por Grande Área
       const matchesArea =
         selectedArea === 'TODAS' || topic.area === selectedArea;
 
+      // Filtro por Subárea / Tag
+      const matchesTag =
+        selectedTag === 'TODAS' || (topic.tags && topic.tags.includes(selectedTag));
+
       // Filtro por Status
       const matchesStatus =
         selectedStatus === 'TODOS' || statusInfo.status === selectedStatus;
 
-      return matchesSearch && matchesArea && matchesStatus;
+      return matchesSearch && matchesArea && matchesTag && matchesStatus;
     });
-  }, [enhancedTopics, searchTerm, selectedArea, selectedStatus]);
+  }, [enhancedTopics, searchTerm, selectedArea, selectedTag, selectedStatus]);
 
   const handleOpenDrawer = (topic: StudyTopic) => {
     setDrawerTopic(topic);
@@ -125,7 +130,7 @@ export const ReviewsTable: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Buscar assunto (ex: Pneumonia, Apendicite, ICFER)..."
+            placeholder="Buscar assunto ou subárea (ex: Pneumonia, Cardiologia)..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="pl-9 text-xs h-9 bg-muted/40 border-border"
@@ -143,13 +148,32 @@ export const ReviewsTable: React.FC = () => {
               className="h-9 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="TODAS">Todas as Áreas</option>
-              {MEDICAL_AREAS.map(a => (
-                <option key={a} value={a}>
-                  {a}
+              {areas.map(a => (
+                <option key={a.id} value={a.name}>
+                  {a.name}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* Seletor de Subárea / Tag */}
+          {allTags.length > 0 && (
+            <div className="flex items-center space-x-1.5 text-xs text-muted-foreground">
+              <Tag className="h-3.5 w-3.5" />
+              <select
+                value={selectedTag}
+                onChange={e => setSelectedTag(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="TODAS">Todas as Subáreas / Tags</option>
+                {allTags.map(tag => (
+                  <option key={tag} value={tag}>
+                    #{tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Seletor de Status */}
           <select
@@ -189,7 +213,7 @@ export const ReviewsTable: React.FC = () => {
           </TableHeader>
           <TableBody>
             {filteredTopics.map(({ topic, activeReview, statusInfo }) => {
-              const areaStyle = AREA_COLORS[topic.area];
+              const areaStyle = getAreaStyle(topic.area, areas);
 
               return (
                 <TableRow key={topic.id} className="cursor-pointer group">
@@ -202,12 +226,24 @@ export const ReviewsTable: React.FC = () => {
                     </span>
                   </TableCell>
 
-                  {/* Nome do Assunto */}
+                  {/* Nome do Assunto + Tags */}
                   <TableCell onClick={() => handleOpenDrawer(topic)}>
                     <div className="space-y-0.5">
                       <p className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
                         {topic.subject_name}
                       </p>
+                      {topic.tags && topic.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 py-0.5">
+                          {topic.tags.map(t => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border/60"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <p className="text-[11px] text-muted-foreground">
                         {topic.initial_correct}/{topic.initial_questions} questões na fixação inicial
                       </p>

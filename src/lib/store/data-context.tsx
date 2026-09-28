@@ -8,7 +8,9 @@ import {
   InstitutionExam,
   Profile,
   MedicalArea,
-  MEDICAL_AREAS,
+  StudyArea,
+  DEFAULT_STUDY_AREAS,
+  COLOR_PALETTE,
   UserStats,
 } from '@/types/database';
 import {
@@ -32,17 +34,24 @@ interface DataContextType {
   mockExams: MockExam[];
   institutionExams: InstitutionExam[];
   profile: Profile | null;
+  areas: StudyArea[];
+  allTags: string[];
   user: any;
   isLoading: boolean;
   isDemoMode: boolean;
   stats: UserStats;
   addTopic: (data: {
-    area: MedicalArea;
+    area: string;
     subject_name: string;
+    tags?: string[];
     initial_date: string;
     initial_questions: number;
     initial_correct: number;
   }) => Promise<void>;
+  addArea: (name: string, colorHex: string) => Promise<void>;
+  updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
+  deleteArea: (id: string) => Promise<void>;
+  resetDefaultAreas: () => Promise<void>;
   completeReview: (
     reviewId: string,
     questionsDone: number,
@@ -76,6 +85,7 @@ const LOCAL_STORAGE_KEYS = {
   MOCK_EXAMS: 'adaptivemed_mock_exams_v1',
   INST_EXAMS: 'adaptivemed_inst_exams_v1',
   PROFILE: 'adaptivemed_profile_v1',
+  AREAS: 'adaptivemed_areas_v1',
   DEMO_ACTIVE: 'adaptivemed_demo_active',
 };
 
@@ -85,6 +95,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mockExams, setMockExams] = useState<MockExam[]>([]);
   const [institutionExams, setInstitutionExams] = useState<InstitutionExam[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [areas, setAreas] = useState<StudyArea[]>(DEFAULT_STUDY_AREAS);
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(true);
@@ -131,6 +142,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setMockExams([]);
         setInstitutionExams([]);
         setProfile(null);
+        setAreas(DEFAULT_STUDY_AREAS);
         return;
       }
 
@@ -139,6 +151,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedMocks = localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS);
       const storedInsts = localStorage.getItem(LOCAL_STORAGE_KEYS.INST_EXAMS);
       const storedProfile = localStorage.getItem(LOCAL_STORAGE_KEYS.PROFILE);
+      const storedAreas = localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS);
 
       if (storedTopics && storedReviews) {
         setTopics(JSON.parse(storedTopics));
@@ -146,6 +159,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setMockExams(storedMocks ? JSON.parse(storedMocks) : getInitialDemoMockExams());
         setInstitutionExams(storedInsts ? JSON.parse(storedInsts) : getInitialDemoInstitutionExams());
         setProfile(storedProfile ? JSON.parse(storedProfile) : INITIAL_DEMO_PROFILE);
+        setAreas(storedAreas ? JSON.parse(storedAreas) : DEFAULT_STUDY_AREAS);
       } else {
         resetToDemo();
       }
@@ -174,6 +188,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profData) {
         setProfile(profData);
+        if (
+          profData.custom_areas &&
+          Array.isArray(profData.custom_areas) &&
+          profData.custom_areas.length > 0
+        ) {
+          setAreas(profData.custom_areas);
+        } else {
+          setAreas(DEFAULT_STUDY_AREAS);
+        }
+
         // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas
         if (
           !profData.is_subscribed &&
@@ -215,6 +239,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMockExams(dMocks);
     setInstitutionExams(dInsts);
     setProfile(dProf);
+    setAreas(DEFAULT_STUDY_AREAS);
     setIsDemoMode(true);
 
     if (typeof window !== 'undefined') {
@@ -223,6 +248,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(dMocks));
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(dInsts));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(dProf));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEFAULT_STUDY_AREAS));
       localStorage.setItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE, 'true');
       document.cookie = 'adaptivemed_demo=true; path=/; max-age=2592000; SameSite=Lax';
     }
@@ -281,10 +307,100 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [topics, reviews, mockExams, institutionExams, isDemoMode]);
 
+  // GESTÃO DE GRANDES ÁREAS CUSTOMIZADAS
+  const addArea = async (name: string, colorHex: string) => {
+    const palette = COLOR_PALETTE.find(c => c.hex === colorHex) || COLOR_PALETTE[0];
+    const newArea: StudyArea = {
+      id: `area-${Date.now()}`,
+      name: name.trim(),
+      color: palette.hex,
+      bg: palette.bg,
+      text: palette.text,
+      border: palette.border,
+    };
+    const updated = [...areas, newArea];
+    setAreas(updated);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(updated));
+    }
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase.from('profiles').update({ custom_areas: updated }).eq('id', user.id);
+    }
+  };
+
+  const updateArea = async (id: string, name: string, colorHex: string) => {
+    const palette = COLOR_PALETTE.find(c => c.hex === colorHex) || COLOR_PALETTE[0];
+    const updated = areas.map(a =>
+      a.id === id
+        ? {
+            ...a,
+            name: name.trim(),
+            color: palette.hex,
+            bg: palette.bg,
+            text: palette.text,
+            border: palette.border,
+          }
+        : a
+    );
+    setAreas(updated);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(updated));
+    }
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase.from('profiles').update({ custom_areas: updated }).eq('id', user.id);
+    }
+  };
+
+  const deleteArea = async (id: string) => {
+    if (areas.length <= 1) return;
+    const updated = areas.filter(a => a.id !== id);
+    setAreas(updated);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(updated));
+    }
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase.from('profiles').update({ custom_areas: updated }).eq('id', user.id);
+    }
+  };
+
+  const resetDefaultAreas = async () => {
+    setAreas(DEFAULT_STUDY_AREAS);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEFAULT_STUDY_AREAS));
+    }
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase.from('profiles').update({ custom_areas: DEFAULT_STUDY_AREAS }).eq('id', user.id);
+    }
+  };
+
+  // TAGS / SUBÁREAS ÚNICAS
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    topics.forEach(t => {
+      if (t.tags && Array.isArray(t.tags)) {
+        t.tags.forEach(tag => {
+          if (tag.trim()) tagSet.add(tag.trim());
+        });
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [topics]);
+
   // AÇÃO 1: Adicionar Novo Assunto
   const addTopic = async (data: {
-    area: MedicalArea;
+    area: string;
     subject_name: string;
+    tags?: string[];
     initial_date: string;
     initial_questions: number;
     initial_correct: number;
@@ -302,6 +418,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user_id: userId,
       area: data.area,
       subject_name: data.subject_name.trim(),
+      tags: data.tags || [],
       initial_date: data.initial_date,
       initial_questions: data.initial_questions,
       initial_correct: data.initial_correct,
@@ -542,34 +659,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const overallAccuracy =
       totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 1000) / 10 : 0;
 
-    // 4. Acurácia por Grande Área & Identificação de Vulnerabilidade
+    // 4. Acurácia por Grande Área & Identificação de Vulnerabilidade (Dinâmico para qualquer disciplina)
     const areaStats: Record<
-      MedicalArea,
+      string,
       { correct: number; total: number; percentage: number; topicsCount: number }
-    > = {
-      'Clínica Médica': { correct: 0, total: 0, percentage: 0, topicsCount: 0 },
-      'Cirurgia Geral': { correct: 0, total: 0, percentage: 0, topicsCount: 0 },
-      Pediatria: { correct: 0, total: 0, percentage: 0, topicsCount: 0 },
-      'Ginecologia e Obstetrícia': { correct: 0, total: 0, percentage: 0, topicsCount: 0 },
-      'Medicina Preventiva': { correct: 0, total: 0, percentage: 0, topicsCount: 0 },
-    };
+    > = {};
+
+    areas.forEach(a => {
+      areaStats[a.name] = { correct: 0, total: 0, percentage: 0, topicsCount: 0 };
+    });
 
     topics.forEach(t => {
-      if (areaStats[t.area]) {
-        areaStats[t.area].correct += t.initial_correct;
-        areaStats[t.area].total += t.initial_questions;
-        areaStats[t.area].topicsCount += 1;
+      if (!areaStats[t.area]) {
+        areaStats[t.area] = { correct: 0, total: 0, percentage: 0, topicsCount: 0 };
       }
+      areaStats[t.area].correct += t.initial_correct;
+      areaStats[t.area].total += t.initial_questions;
+      areaStats[t.area].topicsCount += 1;
     });
 
     // Adiciona revisões concluídas para a respectiva área
-    const topicAreaMap = new Map<string, MedicalArea>();
+    const topicAreaMap = new Map<string, string>();
     topics.forEach(t => topicAreaMap.set(t.id, t.area));
 
     reviews.forEach(r => {
       if (r.completed_date && r.questions_done) {
         const area = topicAreaMap.get(r.topic_id);
-        if (area && areaStats[area]) {
+        if (area) {
+          if (!areaStats[area]) {
+            areaStats[area] = { correct: 0, total: 0, percentage: 0, topicsCount: 0 };
+          }
           areaStats[area].correct += r.questions_correct || 0;
           areaStats[area].total += r.questions_done;
         }
@@ -579,15 +698,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let vulnerableArea: UserStats['vulnerableArea'] = null;
     let minPercentage = Infinity;
 
-    MEDICAL_AREAS.forEach(area => {
-      const item = areaStats[area];
+    Object.keys(areaStats).forEach(areaName => {
+      const item = areaStats[areaName];
       item.percentage =
         item.total > 0 ? Math.round((item.correct / item.total) * 1000) / 10 : 0;
 
-      if (item.total > 0 && item.percentage < minPercentage) {
+      if (item.topicsCount > 0 && item.percentage < minPercentage) {
         minPercentage = item.percentage;
         vulnerableArea = {
-          area,
+          area: areaName,
           accuracy: item.percentage,
           topicsCount: item.topicsCount,
         };
@@ -602,7 +721,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       vulnerableArea,
       areaAccuracy: areaStats,
     };
-  }, [topics, reviews, mockExams]);
+  }, [topics, reviews, mockExams, areas]);
 
   return (
     <DataContext.Provider
@@ -612,11 +731,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mockExams,
         institutionExams,
         profile,
+        areas,
+        allTags,
         user,
         isLoading,
         isDemoMode,
         stats,
         addTopic,
+        addArea,
+        updateArea,
+        deleteArea,
+        resetDefaultAreas,
         completeReview,
         deleteTopic,
         addMockExam,

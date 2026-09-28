@@ -5,26 +5,30 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
-import { MEDICAL_AREAS, AREA_COLORS } from '@/types/database';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export const AreaBreakdownCards: React.FC = () => {
-  const { stats } = useData();
+  const { stats, areas } = useData();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {MEDICAL_AREAS.map(area => {
-        const areaData = stats.areaAccuracy[area];
-        const color = AREA_COLORS[area];
+      {areas.map(areaObj => {
+        const area = areaObj.name;
+        const areaData = stats.areaAccuracy[area] || {
+          correct: 0,
+          total: 0,
+          percentage: 0,
+          topicsCount: 0,
+        };
         const isConsolidated = areaData.percentage >= 80;
 
         return (
-          <Card key={area} className="border-border shadow-sm">
+          <Card key={areaObj.id} className="border-border shadow-sm">
             <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
               <div className="flex items-center space-x-2">
                 <span
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: color.primary }}
+                  style={{ backgroundColor: areaObj.color }}
                 />
                 <CardTitle className="text-sm font-bold text-foreground">
                   {area}

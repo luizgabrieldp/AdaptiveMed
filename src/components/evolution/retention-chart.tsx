@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useData } from '@/lib/store/data-context';
-import { MEDICAL_AREAS, AREA_COLORS } from '@/types/database';
 import {
   ResponsiveContainer,
   LineChart,
@@ -18,7 +17,7 @@ import {
 import { TrendingUp, Sparkles, Filter, BrainCircuit } from 'lucide-react';
 
 export const RetentionChart: React.FC = () => {
-  const { topics, reviews, profile } = useData();
+  const { topics, reviews, profile, areas } = useData();
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('TODAS');
   const targetCutoff = profile?.target_cutoff_percentage || 80;
 
@@ -117,9 +116,9 @@ export const RetentionChart: React.FC = () => {
             className="h-8 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="TODAS">Média Geral (Todas)</option>
-            {MEDICAL_AREAS.map(a => (
-              <option key={a} value={a}>
-                {a}
+            {areas.map(a => (
+              <option key={a.id} value={a.name}>
+                {a.name}
               </option>
             ))}
           </select>

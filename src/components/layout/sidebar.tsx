@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,17 +15,20 @@ import {
   Flame,
   Stethoscope,
   Sparkles,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 import { useTheme } from './theme-provider';
 import { downloadICalendar } from '@/lib/export/ical-generator';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ManageAreasModal } from '@/components/dashboard/manage-areas-modal';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { profile, stats, topics, reviews, isDemoMode, signOut } = useData();
   const { theme, toggleTheme } = useTheme();
+  const [manageAreasOpen, setManageAreasOpen] = useState(false);
 
   const navItems = [
     {
@@ -135,8 +138,15 @@ export const Sidebar: React.FC = () => {
         {/* Productivity Quick Export */}
         <div className="mt-6 pt-6 border-t border-border/80 px-2 space-y-2">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Produtividade
+            Produtividade & Gestão
           </p>
+          <button
+            onClick={() => setManageAreasOpen(true)}
+            className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors text-left"
+          >
+            <SlidersHorizontal className="h-4 w-4 text-primary" />
+            <span>Gerenciar Grandes Áreas</span>
+          </button>
           <button
             onClick={() => downloadICalendar(topics, reviews)}
             className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors text-left"
@@ -202,6 +212,12 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal de Gestão de Grandes Áreas */}
+      <ManageAreasModal
+        open={manageAreasOpen}
+        onOpenChange={setManageAreasOpen}
+      />
     </aside>
   );
 };

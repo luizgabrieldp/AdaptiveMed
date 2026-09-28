@@ -17,7 +17,53 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
+  const [socialLoading, setSocialLoading] = useState<'google' | null>(null);
+
+  // DETECÇÃO AUTOMÁTICA DE SESSÃO ATIVA (ELIMINA A NECESSIDADE DE 2 CLIQUES)
+  React.useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+
+    // 1. Checa se o usuário já chegou autenticado pelo Google
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: prof }) => {
+            if (prof && prof.onboarding_completed) {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/onboarding');
+            }
+          });
+      }
+    });
+
+    // 2. Escuta mudanças imediatas de autenticação do OAuth
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: prof }) => {
+            if (prof && prof.onboarding_completed) {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/onboarding');
+            }
+          });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +153,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/dashboard`,
+          redirectTo: `${origin}/auth/callback?next=/dashboard`,
         },
       });
 

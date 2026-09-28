@@ -4,7 +4,6 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
-import { AREA_COLORS } from '@/types/database';
 import {
   CalendarClock,
   Flame,

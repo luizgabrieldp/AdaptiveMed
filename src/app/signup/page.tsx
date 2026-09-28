@@ -86,7 +86,7 @@ export default function SignupPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/onboarding`,
+          redirectTo: `${origin}/auth/callback?next=/onboarding`,
         },
       });
 
