@@ -78,7 +78,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'apple') => {
+  const handleSocialLogin = async () => {
     setErrorMessage(null);
     if (!isSupabaseConfigured()) {
       setErrorMessage(
@@ -88,12 +88,17 @@ export default function LoginPage() {
     }
 
     try {
-      setSocialLoading(provider);
+      setSocialLoading('google');
       const supabase = createClient();
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'https://adaptive-med.vercel.app';
+
       const { error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${origin}/dashboard`,
         },
       });
 
@@ -104,7 +109,7 @@ export default function LoginPage() {
           error.message.includes('Unsupported')
         ) {
           setErrorMessage(
-            `O login com ${provider === 'google' ? 'Google' : 'Apple'} ainda está sendo ativado no painel do Supabase. Por favor, utilize seu E-mail e Senha no momento.`
+            'O login com Google ainda está sendo ativado no painel do Supabase. Por favor, utilize seu E-mail e Senha no momento.'
           );
         } else {
           setErrorMessage(error.message);
@@ -112,7 +117,7 @@ export default function LoginPage() {
         setSocialLoading(null);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erro ao conectar provedor social.');
+      setErrorMessage(err.message || 'Erro ao conectar com Google.');
       setSocialLoading(null);
     }
   };
@@ -154,14 +159,14 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Botões de Login Social (Google e Apple) */}
-            <div className="space-y-2">
+            {/* Botão de Login Social (Google) */}
+            <div>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => handleSocialLogin('google')}
+                onClick={handleSocialLogin}
                 disabled={Boolean(socialLoading) || isLoading}
-                className="w-full text-xs font-semibold h-10 border-border hover:bg-muted gap-2.5"
+                className="w-full text-xs font-semibold h-11 border-border hover:bg-muted gap-2.5 shadow-sm"
               >
                 {/* SVG Google Oficial */}
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -182,21 +187,7 @@ export default function LoginPage() {
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                   />
                 </svg>
-                {socialLoading === 'google' ? 'Conectando...' : 'Continuar com o Google'}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleSocialLogin('apple')}
-                disabled={Boolean(socialLoading) || isLoading}
-                className="w-full text-xs font-semibold h-10 border-border hover:bg-muted gap-2.5"
-              >
-                {/* SVG Apple Oficial */}
-                <svg className="h-4 w-4 fill-current" viewBox="0 0 170 170">
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.62-7.85-11.77-14.39-6.41-10.12-11.22-21.78-14.42-34.98-3.21-13.2-4.81-25.26-4.81-36.18 0-16.12 4.12-29.58 12.35-40.38 8.24-10.8 18.57-16.32 30.98-16.57 5.98 0 12.35 1.54 19.12 4.63 6.77 3.09 11.05 4.63 12.83 4.63 1.52 0 6.09-1.63 13.69-4.89 7.61-3.26 13.79-4.63 18.55-4.13 14.13.76 25.13 6.26 33 16.51-12.61 7.61-18.78 17.85-18.53 30.72.25 10.5 4.3 19.26 12.14 26.28 7.84 7.02 17.27 11.05 28.3 12.09-2.54 7.7-5.59 15.1-9.15 22.18zM119.22 33.15c-.25-7.85 2.65-15.35 8.7-22.5 6.06-7.15 13.56-11.37 22.5-12.65.25 1.01.38 2.03.38 3.04 0 7.85-2.91 15.65-8.73 23.4-5.82 7.75-13.42 12.09-22.85 13.01z" />
-                </svg>
-                {socialLoading === 'apple' ? 'Conectando...' : 'Continuar com a Apple'}
+                {socialLoading ? 'Conectando ao Google...' : 'Continuar com o Google'}
               </Button>
             </div>
 
