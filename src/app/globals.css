@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #F8FAFC;
+    --foreground: #0F172A;
+
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;
+
+    --popover: #FFFFFF;
+    --popover-foreground: #0F172A;
+
+    --primary: #2563EB;
+    --primary-foreground: #FFFFFF;
+
+    --secondary: #F1F5F9;
+    --secondary-foreground: #1E293B;
+
+    --muted: #F1F5F9;
+    --muted-foreground: #64748B;
+
+    --accent: #E2E8F0;
+    --accent-foreground: #0F172A;
+
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+
+    --border: #E2E8F0;
+    --input: #E2E8F0;
+    --ring: #3B82F6;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Paleta Médica Dark Slate (#0B0F17, #131A26, #1E293B) */
+    --background: #0B0F17;
+    --foreground: #F8FAFC;
+
+    --card: #131A26;
+    --card-foreground: #F8FAFC;
+
+    --popover: #131A26;
+    --popover-foreground: #F8FAFC;
+
+    --primary: #3B82F6;
+    --primary-foreground: #FFFFFF;
+
+    --secondary: #1E293B;
+    --secondary-foreground: #E2E8F0;
+
+    --muted: #1E293B;
+    --muted-foreground: #94A3B8;
+
+    --accent: #1E293B;
+    --accent-foreground: #F8FAFC;
+
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+
+    --border: #1E293B;
+    --input: #1E293B;
+    --ring: #60A5FA;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-blue-500 selection:text-white;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F17" />
+      <stop offset="100%" stop-color="#1E293B" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)" />
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#accent)" stroke-width="16" stroke-dasharray="16 12" opacity="0.6"/>
+  
+  <!-- Símbolo da Medicina com Eletrocardiograma e Livro Adaptativo -->
+  <path d="M140 256 H190 L220 180 L260 330 L300 220 L330 256 H372" fill="none" stroke="url(#accent)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Cruz Médica estilizada no topo -->
+  <rect x="244" y="110" width="24" height="60" rx="8" fill="#3B82F6" />
+  <rect x="226" y="128" width="60" height="24" rx="8" fill="#3B82F6" />
+  
+  <!-- Ponto brilhante do radar -->
+  <circle cx="372" cy="256" r="14" fill="#10B981" />
+</svg>
