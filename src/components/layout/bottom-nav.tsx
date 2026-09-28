@@ -8,6 +8,7 @@ import {
   CalendarCheck2,
   TrendingUp,
   GraduationCap,
+  User,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 
@@ -36,6 +37,11 @@ export const BottomNav: React.FC = () => {
       label: 'Simulados',
       href: '/simulados',
       icon: GraduationCap,
+    },
+    {
+      label: 'Conta',
+      href: '/conta',
+      icon: User,
     },
   ];
 

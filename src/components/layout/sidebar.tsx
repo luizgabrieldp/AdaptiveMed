@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Sparkles,
   SlidersHorizontal,
+  CreditCard,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 import { useTheme } from './theme-provider';
@@ -54,6 +55,11 @@ export const Sidebar: React.FC = () => {
       label: 'Simulados & Provas',
       href: '/simulados',
       icon: GraduationCap,
+    },
+    {
+      label: 'Minha Conta & Assinatura',
+      href: '/conta',
+      icon: CreditCard,
     },
   ];
 
@@ -169,9 +175,9 @@ export const Sidebar: React.FC = () => {
 
         <div className="flex items-center justify-between">
           <Link
-            href="/onboarding"
+            href="/conta"
             className="flex items-center space-x-3 overflow-hidden group hover:opacity-85 transition-opacity"
-            title="Clique para ajustar suas metas e especialidade"
+            title="Clique para gerenciar sua conta e assinatura"
           >
             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
               {profile?.full_name ? profile.full_name.slice(0, 2).toUpperCase() : 'DR'}

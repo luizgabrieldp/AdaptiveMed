@@ -143,6 +143,10 @@ export interface Profile {
   onboarding_completed?: boolean;
   is_subscribed?: boolean;
   subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
+  cancel_at_period_end?: boolean;
+  current_period_end?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
   created_at: string;
 }
 
