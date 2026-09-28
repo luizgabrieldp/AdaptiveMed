@@ -47,6 +47,16 @@ export default function DashboardPage() {
               <span className="font-semibold text-blue-400">
                 {profile?.target_specialty || 'Residência Médica'}
               </span>
+              {profile?.target_cutoff_percentage && (
+                <span className="ml-2 font-medium text-emerald-400">
+                  • Meta de Corte: {profile.target_cutoff_percentage}%
+                </span>
+              )}
+              {profile?.target_exams && profile.target_exams.length > 0 && (
+                <span className="ml-2 font-medium text-indigo-400">
+                  • Bancas: {profile.target_exams.join(', ')}
+                </span>
+              )}
             </p>
           </div>
 

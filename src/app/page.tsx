@@ -7,13 +7,21 @@ import { Stethoscope } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
-  const { isLoading } = useData();
+  const { isLoading, user, isDemoMode, profile } = useData();
 
   useEffect(() => {
     if (!isLoading) {
-      router.replace('/dashboard');
+      if (user || isDemoMode) {
+        if (profile && profile.onboarding_completed === false) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/dashboard');
+        }
+      } else {
+        router.replace('/login');
+      }
     }
-  }, [isLoading, router]);
+  }, [isLoading, user, isDemoMode, profile, router]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">

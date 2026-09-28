@@ -10,7 +10,11 @@ import { getTodayDateString, addDaysToDate } from '@/lib/spaced-repetition';
 export const INITIAL_DEMO_PROFILE: Profile = {
   id: 'demo-user-id',
   full_name: 'Dr. Lucas Medeiros',
-  target_specialty: 'Cardiologia - USP / ENARE',
+  target_specialty: 'Cardiologia',
+  target_exams: ['USP-SP', 'ENARE', 'UNICAMP', 'SUS-SP'],
+  target_cutoff_percentage: 82.0,
+  target_year: 2026,
+  onboarding_completed: true,
   created_at: new Date().toISOString(),
 };
 

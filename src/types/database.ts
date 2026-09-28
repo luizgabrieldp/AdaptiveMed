@@ -50,6 +50,10 @@ export interface Profile {
   id: string;
   full_name: string;
   target_specialty: string;
+  target_exams?: string[];
+  target_cutoff_percentage?: number;
+  target_year?: number;
+  onboarding_completed?: boolean;
   created_at: string;
 }
 

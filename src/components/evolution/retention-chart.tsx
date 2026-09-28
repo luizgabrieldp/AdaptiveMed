@@ -18,8 +18,9 @@ import {
 import { TrendingUp, Sparkles, Filter, BrainCircuit } from 'lucide-react';
 
 export const RetentionChart: React.FC = () => {
-  const { topics, reviews } = useData();
+  const { topics, reviews, profile } = useData();
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('TODAS');
+  const targetCutoff = profile?.target_cutoff_percentage || 80;
 
   // Calcula a média de retenção para cada etapa: Contato Inicial, R1, R2, ..., R8
   const chartData = useMemo(() => {
@@ -182,11 +183,11 @@ export const RetentionChart: React.FC = () => {
                 wrapperStyle={{ fontSize: 12 }}
               />
               <ReferenceLine
-                y={80}
+                y={targetCutoff}
                 stroke="#F59E0B"
                 strokeDasharray="4 4"
                 label={{
-                  value: 'Corte Residência (80%)',
+                  value: `Sua Meta (${targetCutoff}%)`,
                   position: 'insideBottomLeft',
                   fill: '#F59E0B',
                   fontSize: 10,

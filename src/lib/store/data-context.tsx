@@ -62,6 +62,7 @@ interface DataContextType {
     score_percentage: number;
   }) => Promise<void>;
   deleteInstitutionExam: (examId: string) => Promise<void>;
+  updateProfile: (data: Partial<Profile>) => Promise<void>;
   resetToDemo: () => void;
   signInDemo: () => void;
   signOut: () => Promise<void>;
@@ -119,6 +120,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadLocalStorageDemo = () => {
     try {
+      const isDemoActive =
+        typeof window !== 'undefined' &&
+        localStorage.getItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE) === 'true';
+
+      if (!isDemoActive) {
+        setIsDemoMode(false);
+        setTopics([]);
+        setReviews([]);
+        setMockExams([]);
+        setInstitutionExams([]);
+        setProfile(null);
+        return;
+      }
+
       const storedTopics = localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS);
       const storedReviews = localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS);
       const storedMocks = localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS);
@@ -136,7 +151,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setIsDemoMode(true);
     } catch {
-      resetToDemo();
+      setIsDemoMode(false);
     }
   };
 
@@ -158,10 +173,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       if (profData) setProfile(profData);
-      if (topData) setTopics(topData as StudyTopic[]);
-      if (revData) setReviews(revData as TopicReview[]);
-      if (mockData) setMockExams(mockData as MockExam[]);
-      if (instData) setInstitutionExams(instData as InstitutionExam[]);
+      setTopics(topData ? (topData as StudyTopic[]) : []);
+      setReviews(revData ? (revData as TopicReview[]) : []);
+      setMockExams(mockData ? (mockData as MockExam[]) : []);
+      setInstitutionExams(instData ? (instData as InstitutionExam[]) : []);
     } catch (err) {
       console.error('Erro ao carregar dados do Supabase:', err);
     }
@@ -187,6 +202,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(dMocks));
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(dInsts));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(dProf));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE, 'true');
       document.cookie = 'adaptivemed_demo=true; path=/; max-age=2592000; SameSite=Lax';
     }
   };
@@ -202,8 +218,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
     }
     setUser(null);
+    setIsDemoMode(false);
+    setTopics([]);
+    setReviews([]);
+    setMockExams([]);
+    setInstitutionExams([]);
+    setProfile(null);
     if (typeof window !== 'undefined') {
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE);
+    }
+  };
+
+  const updateProfile = async (data: Partial<Profile>) => {
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      const { error } = await supabase.from('profiles').update(data).eq('id', user.id);
+      if (error) throw error;
+    }
+    setProfile(prev => (prev ? { ...prev, ...data } : ({ id: user?.id || 'demo-user-id', ...data } as Profile)));
+    if (isDemoMode && typeof window !== 'undefined') {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEYS.PROFILE,
+        JSON.stringify({ ...(profile || INITIAL_DEMO_PROFILE), ...data })
+      );
     }
   };
 
@@ -559,6 +597,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteMockExam,
         addInstitutionExam,
         deleteInstitutionExam,
+        updateProfile,
         resetToDemo,
         signInDemo,
         signOut,

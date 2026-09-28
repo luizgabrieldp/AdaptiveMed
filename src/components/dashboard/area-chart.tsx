@@ -22,8 +22,9 @@ import {
 import { BarChart3, PieChart, ShieldCheck } from 'lucide-react';
 
 export const AreaPerformanceChart: React.FC = () => {
-  const { stats } = useData();
+  const { stats, profile } = useData();
   const [chartType, setChartType] = useState<'bar' | 'radar'>('bar');
+  const targetCutoff = profile?.target_cutoff_percentage || 80;
 
   const chartData = MEDICAL_AREAS.map(area => {
     const item = stats.areaAccuracy[area];
@@ -128,11 +129,11 @@ export const AreaPerformanceChart: React.FC = () => {
                   }}
                 />
                 <ReferenceLine
-                  y={80}
+                  y={targetCutoff}
                   stroke="#10B981"
                   strokeDasharray="4 4"
                   label={{
-                    value: 'Meta 80%',
+                    value: `Sua Meta (${targetCutoff}%)`,
                     position: 'top',
                     fill: '#10B981',
                     fontSize: 10,

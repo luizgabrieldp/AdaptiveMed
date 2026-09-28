@@ -158,19 +158,24 @@ export const Sidebar: React.FC = () => {
         )}
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+          <Link
+            href="/onboarding"
+            className="flex items-center space-x-3 overflow-hidden group hover:opacity-85 transition-opacity"
+            title="Clique para ajustar suas metas e especialidade"
+          >
+            <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
               {profile?.full_name ? profile.full_name.slice(0, 2).toUpperCase() : 'DR'}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-foreground truncate">
+              <p className="text-xs font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                 {profile?.full_name || 'Estudante de Medicina'}
               </p>
               <p className="text-[10px] text-muted-foreground truncate">
-                {profile?.target_specialty || 'Residência Médica'}
+                {profile?.target_specialty || 'Residência Médica'}{' '}
+                {profile?.target_cutoff_percentage ? `• Meta: ${profile.target_cutoff_percentage}%` : ''}
               </p>
             </div>
-          </div>
+          </Link>
 
           <div className="flex items-center space-x-1 shrink-0">
             <Button
