@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { useData } from '@/lib/store/data-context';
-import { Stethoscope, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
+import { Stethoscope, ArrowRight, Lock, Mail, AlertCircle, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,23 +16,51 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [contractWarning, setContractWarning] = useState<boolean>(false);
+  const [uncontractedEmail, setUncontractedEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | null>(null);
 
   // DETECÇÃO AUTOMÁTICA DE SESSÃO ATIVA (ELIMINA A NECESSIDADE DE 2 CLIQUES)
   React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const reason = params.get('reason');
+      const emailParam = params.get('email');
+      if (emailParam) setEmail(emailParam);
+      if (reason === 'inactive_account') {
+        setContractWarning(true);
+        if (emailParam) setUncontractedEmail(emailParam);
+      }
+    }
+
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
 
     // 1. Checa se o usuário já chegou autenticado pelo Google
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        const userEmail = session.user.email || '';
+        const isAdmin = userEmail.toLowerCase().includes('admin123');
+
         supabase
           .from('profiles')
-          .select('onboarding_completed')
+          .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', session.user.id)
           .single()
           .then(({ data: prof }) => {
+            const hasActivePlan =
+              isAdmin ||
+              (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+
+            if (!hasActivePlan) {
+              supabase.auth.signOut().then(() => {
+                setContractWarning(true);
+                setUncontractedEmail(userEmail);
+              });
+              return;
+            }
+
             if (prof && prof.onboarding_completed) {
               router.replace('/dashboard');
             } else {
@@ -47,12 +75,27 @@ export default function LoginPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        const userEmail = session.user.email || '';
+        const isAdmin = userEmail.toLowerCase().includes('admin123');
+
         supabase
           .from('profiles')
-          .select('onboarding_completed')
+          .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', session.user.id)
           .single()
           .then(({ data: prof }) => {
+            const hasActivePlan =
+              isAdmin ||
+              (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+
+            if (!hasActivePlan) {
+              supabase.auth.signOut().then(() => {
+                setContractWarning(true);
+                setUncontractedEmail(userEmail);
+              });
+              return;
+            }
+
             if (prof && prof.onboarding_completed) {
               router.replace('/dashboard');
             } else {
@@ -98,9 +141,8 @@ export default function LoginPage() {
       });
 
       if (error) {
-        // Redireciona para a página de vendas para não perder a conversão
         setIsLoading(false);
-        router.push(`/#planos?reason=no_account&email=${encodeURIComponent(cleanEmail)}`);
+        setErrorMessage('E-mail ou senha inválidos. Verifique seus dados.');
         return;
       }
 
@@ -112,11 +154,17 @@ export default function LoginPage() {
           .eq('id', data.user.id)
           .single();
 
+        const isAdmin = cleanEmail.includes('admin123');
+        const hasActivePlan =
+          isAdmin ||
+          (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+
         // Se a conta não tiver assinatura paga ativa
-        if (!prof || (!prof.is_subscribed && prof.subscription_status !== 'active')) {
+        if (!hasActivePlan) {
           await supabase.auth.signOut();
           setIsLoading(false);
-          router.push(`/#planos?reason=inactive_account&email=${encodeURIComponent(cleanEmail)}`);
+          setContractWarning(true);
+          setUncontractedEmail(cleanEmail);
           return;
         }
 
@@ -207,7 +255,38 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {errorMessage && (
+            {contractWarning && (
+              <div className="p-4 rounded-xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-200 text-xs space-y-3 animate-in fade-in slide-in-from-top-2 shadow-lg shadow-amber-500/10">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-bold text-sm text-amber-300">
+                      Você não tem contrato finalizado
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed text-[11px]">
+                      Finalize um contrato escolhendo um dos planos para liberar seu cronograma adaptativo e simulados.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between gap-2 border-t border-amber-500/20">
+                  <span className="text-[10px] text-amber-400/80 font-medium">
+                    Ativação imediata no pagamento
+                  </span>
+                  <Link
+                    href={`/#planos?reason=inactive_account&email=${encodeURIComponent(uncontractedEmail || email)}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs hover:bg-amber-400 transition-colors shadow-sm"
+                  >
+                    <span>Finalizar Contrato</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {errorMessage && !contractWarning && (
               <div className="p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-in fade-in">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>

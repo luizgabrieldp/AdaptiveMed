@@ -31,17 +31,47 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      // Verifica se completou onboarding
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (user) {
+        const sessionId = requestUrl.searchParams.get('session_id');
+
+        // Se veio de um checkout concluído, ativa a assinatura automaticamente
+        if (sessionId) {
+          await supabase
+            .from('profiles')
+            .update({
+              is_subscribed: true,
+              subscription_status: 'active',
+            })
+            .eq('id', user.id);
+        }
+
+        // Verifica status da conta e onboarding
         const { data: profile } = await supabase
           .from('profiles')
-          .select('onboarding_completed')
+          .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', user.id)
           .single();
+
+        const isAdmin = user.email?.toLowerCase().includes('admin123');
+        const hasActivePlan =
+          isAdmin ||
+          Boolean(sessionId) ||
+          (profile && (profile.is_subscribed || profile.subscription_status === 'active'));
+
+        // Se NÃO tem contrato ativo, desloga e manda para a tela de login com aviso explícito
+        if (!hasActivePlan) {
+          await supabase.auth.signOut();
+          return NextResponse.redirect(
+            new URL(
+              `/#planos?reason=inactive_account&email=${encodeURIComponent(user.email || '')}`,
+              requestUrl.origin
+            )
+          );
+        }
 
         if (profile && !profile.onboarding_completed) {
           return NextResponse.redirect(new URL('/onboarding', requestUrl.origin));

@@ -36,6 +36,7 @@ export default function LandingPage() {
 
   const isLoggedIn = Boolean(user || isDemoMode);
   const [redirectNotice, setRedirectNotice] = useState<string | null>(null);
+  const [isContractInactive, setIsContractInactive] = useState<boolean>(false);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -48,8 +49,9 @@ export default function LandingPage() {
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       } else if (reason === 'inactive_account') {
+        setIsContractInactive(true);
         setRedirectNotice(
-          '🔒 Sua conta ainda não possui uma assinatura ativa. Escolha um plano abaixo para liberar seu cronograma adaptativo e simulados!'
+          '🔒 Você não tem contrato finalizado. Finalize um contrato escolhendo um dos planos abaixo para liberar seu acesso:'
         );
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -485,6 +487,17 @@ export default function LandingPage() {
               Tenha acesso completo ao cronograma adaptativo. Cancele quando quiser com apenas 1 clique.
             </p>
           </div>
+
+          {isContractInactive && (
+            <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-200 text-center space-y-1.5 animate-in zoom-in-95 shadow-xl shadow-amber-500/10">
+              <p className="font-bold text-base text-amber-300">
+                Você não tem contrato finalizado.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Escolha o plano mensal ou anual abaixo para finalizar seu contrato e liberar imediatamente seu acesso à plataforma.
+              </p>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto items-center">
             {/* PLANO MENSAL */}

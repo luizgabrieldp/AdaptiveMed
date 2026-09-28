@@ -18,6 +18,32 @@ export default function SignupPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [sessionVerified, setSessionVerified] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sId = params.get('session_id');
+      const pId = params.get('plan');
+      if (sId) {
+        setSessionId(sId);
+        setPlanId(pId);
+        fetch(`/api/checkout?session_id=${encodeURIComponent(sId)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.valid) {
+              setSessionVerified(true);
+              if (data.customer_email) {
+                setEmail(data.customer_email);
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, []);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,6 +74,17 @@ export default function SignupPage() {
         setErrorMessage(error.message);
         setIsLoading(false);
         return;
+      }
+
+      if (data.user && (sessionVerified || sessionId)) {
+        // Ativação imediata da assinatura no perfil do usuário
+        await supabase
+          .from('profiles')
+          .update({
+            is_subscribed: true,
+            subscription_status: 'active',
+          })
+          .eq('id', data.user.id);
       }
 
       // Se logado diretamente (confirmação desativada ou automática)
@@ -83,10 +120,14 @@ export default function SignupPage() {
           ? window.location.origin
           : 'https://adaptive-med.vercel.app';
 
+      const callbackNext = sessionId
+        ? `/auth/callback?next=/onboarding&session_id=${encodeURIComponent(sessionId)}`
+        : `/auth/callback?next=/onboarding`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/auth/callback?next=/onboarding`,
+          redirectTo: `${origin}${callbackNext}`,
         },
       });
 
@@ -130,13 +171,28 @@ export default function SignupPage() {
 
         <Card className="border-border shadow-xl">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-lg font-bold">Criar conta gratuita</CardTitle>
+            <CardTitle className="text-lg font-bold">
+              {sessionId ? 'Criar Acesso do Aluno' : 'Criar conta'}
+            </CardTitle>
             <CardDescription className="text-xs">
-              Seus dados de estudo e simulados ficarão totalmente isolados no seu perfil.
+              {sessionId
+                ? 'Defina sua senha para vincular sua assinatura ao seu plano de estudos.'
+                : 'Seus dados de estudo e simulados ficarão totalmente isolados no seu perfil.'}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
+            {sessionId && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5 animate-in fade-in">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                <div>
+                  <p className="font-bold text-emerald-200">Contrato / Cupom Identificado!</p>
+                  <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                    Defina seus dados para ativar imediatamente seu cronograma adaptativo.
+                  </p>
+                </div>
+              </div>
+            )}
             {errorMessage && (
               <div className="p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
