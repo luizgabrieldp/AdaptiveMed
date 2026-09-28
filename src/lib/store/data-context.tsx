@@ -172,7 +172,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('institution_exams').select('*').eq('user_id', userId).order('exam_year', { ascending: true }),
       ]);
 
-      if (profData) setProfile(profData);
+      if (profData) {
+        setProfile(profData);
+        // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas
+        if (
+          !profData.is_subscribed &&
+          profData.subscription_status !== 'active' &&
+          typeof window !== 'undefined'
+        ) {
+          const path = window.location.pathname;
+          if (
+            path.startsWith('/dashboard') ||
+            path.startsWith('/revisoes') ||
+            path.startsWith('/simulados') ||
+            path.startsWith('/evolucao') ||
+            path.startsWith('/onboarding')
+          ) {
+            await supabase.auth.signOut();
+            window.location.href = '/#planos?reason=inactive_account';
+            return;
+          }
+        }
+      }
       setTopics(topData ? (topData as StudyTopic[]) : []);
       setReviews(revData ? (revData as TopicReview[]) : []);
       setMockExams(mockData ? (mockData as MockExam[]) : []);
@@ -213,9 +234,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (isSupabaseConfigured()) {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+    try {
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.error('Erro ao sair do Supabase:', err);
     }
     setUser(null);
     setIsDemoMode(false);
@@ -227,6 +252,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
       localStorage.removeItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE);
+      window.location.href = '/login';
     }
   };
 

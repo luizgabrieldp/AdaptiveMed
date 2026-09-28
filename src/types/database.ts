@@ -54,6 +54,8 @@ export interface Profile {
   target_cutoff_percentage?: number;
   target_year?: number;
   onboarding_completed?: boolean;
+  is_subscribed?: boolean;
+  subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
   created_at: string;
 }
 

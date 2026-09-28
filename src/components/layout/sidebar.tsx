@@ -190,9 +190,12 @@ export const Sidebar: React.FC = () => {
             <Button
               variant="ghost"
               size="icon"
-              onClick={signOut}
+              onClick={async () => {
+                await signOut();
+                window.location.href = '/login';
+              }}
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              title="Sair"
+              title="Sair da Plataforma"
             >
               <LogOut className="h-4 w-4" />
             </Button>

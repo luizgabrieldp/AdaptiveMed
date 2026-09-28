@@ -15,6 +15,8 @@ export const INITIAL_DEMO_PROFILE: Profile = {
   target_cutoff_percentage: 82.0,
   target_year: 2026,
   onboarding_completed: true,
+  is_subscribed: true,
+  subscription_status: 'active',
   created_at: new Date().toISOString(),
 };
 

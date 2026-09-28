@@ -52,18 +52,27 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setErrorMessage(error.message);
+        // Redireciona para a página de vendas para não perder a conversão
         setIsLoading(false);
+        router.push(`/#planos?reason=no_account&email=${encodeURIComponent(cleanEmail)}`);
         return;
       }
 
       if (data.user) {
-        // Verifica se completou o onboarding
+        // Verifica assinatura ativa e onboarding
         const { data: prof } = await supabase
           .from('profiles')
-          .select('onboarding_completed')
+          .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', data.user.id)
           .single();
+
+        // Se a conta não tiver assinatura paga ativa
+        if (!prof || (!prof.is_subscribed && prof.subscription_status !== 'active')) {
+          await supabase.auth.signOut();
+          setIsLoading(false);
+          router.push(`/#planos?reason=inactive_account&email=${encodeURIComponent(cleanEmail)}`);
+          return;
+        }
 
         if (prof && prof.onboarding_completed) {
           router.push('/dashboard');

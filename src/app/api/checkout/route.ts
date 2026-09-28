@@ -19,13 +19,13 @@ const PLANS: Record<string, PlanConfig> = {
   monthly: {
     name: 'Plano Mensal - AdaptiveMed Pro',
     description: 'Acesso completo a repetição espaçada adaptativa, simulados e métricas por 1 mês.',
-    priceInCents: 4990, // R$ 49,90
+    priceInCents: 799, // R$ 7,99 (com cupom fica R$ 4,99)
     interval: 'month',
   },
   annual: {
     name: 'Plano Anual - AdaptiveMed VIP',
     description: 'Acesso anual com todas as bancas do Brasil, cronograma adaptativo e suporte prioritário.',
-    priceInCents: 39700, // R$ 397,00 (equivalente a R$ 33,08/mês)
+    priceInCents: 6990, // R$ 69,90 (equivalente a R$ 5,82/mês)
     interval: 'year',
   },
 };
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       payment_method_types: ['card'],
       mode: 'subscription',
       customer_email: email || undefined,
+      allow_promotion_codes: true, // HABILITA O CAMPO DE CUPOM DE DESCONTO NO CHECKOUT STRIPE
       line_items: [
         {
           price_data: {

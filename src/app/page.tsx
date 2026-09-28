@@ -35,6 +35,27 @@ export default function LandingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const isLoggedIn = Boolean(user || isDemoMode);
+  const [redirectNotice, setRedirectNotice] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const reason = params.get('reason');
+      if (reason === 'no_account') {
+        setRedirectNotice(
+          '⚠️ Não encontramos uma conta cadastrada com este e-mail. Escolha seu plano abaixo para liberar seu acesso imediato!'
+        );
+        const el = document.getElementById('planos');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      } else if (reason === 'inactive_account') {
+        setRedirectNotice(
+          '🔒 Sua conta ainda não possui uma assinatura ativa. Escolha um plano abaixo para liberar seu cronograma adaptativo e simulados!'
+        );
+        const el = document.getElementById('planos');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, []);
 
   const handleCheckout = async (planId: 'monthly' | 'annual') => {
     try {
@@ -125,8 +146,21 @@ export default function LandingPage() {
         </div>
       </header>
 
+      {/* BANNER DE REDIRECIONAMENTO POR CONTA INATIVA OU NÃO ENCONTRADA */}
+      {redirectNotice && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 py-3 px-4 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2 animate-in fade-in">
+          <span>{redirectNotice}</span>
+          <a
+            href="#planos"
+            className="underline font-bold hover:text-amber-100 inline-flex items-center gap-0.5 ml-1"
+          >
+            Ver Planos <ArrowRight className="h-3 w-3" />
+          </a>
+        </div>
+      )}
+
       {/* BANNER PARA USUÁRIO LOGADO */}
-      {isLoggedIn && (
+      {isLoggedIn && !redirectNotice && (
         <div className="bg-primary/10 border-b border-primary/20 py-2.5 px-4 text-center text-xs font-medium text-primary flex items-center justify-center gap-2">
           <span>
             Você já está autenticado{' '}
@@ -461,16 +495,21 @@ export default function LandingPage() {
                 </div>
                 <CardTitle className="text-2xl font-black">Plano Mensal</CardTitle>
                 <CardDescription className="text-xs">
-                  Ideal para testar o método e acompanhar a reta final sem compromisso longo.
+                  Acesso completo à repetição espaçada e análise das 5 grandes áreas.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-foreground">R$ 49,90</span>
+                  <span className="text-4xl font-black text-foreground">R$ 7,99</span>
                   <span className="text-xs text-muted-foreground">/mês</span>
                 </div>
 
-                <ul className="space-y-2.5 text-xs text-muted-foreground pt-2 border-t border-border">
+                <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-primary font-bold flex items-center gap-1.5">
+                  <span>🏷️</span>
+                  <span>Com cupom de desconto: apenas R$ 4,99 no 1º mês!</span>
+                </div>
+
+                <ul className="space-y-2.5 text-xs text-muted-foreground pt-1 border-t border-border">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                     <span>Algoritmo de repetição espaçada adaptativa</span>
@@ -500,7 +539,7 @@ export default function LandingPage() {
                   variant="outline"
                   className="w-full font-bold text-sm h-11 border-border hover:bg-muted"
                 >
-                  {checkoutLoading === 'monthly' ? 'Carregando Checkout...' : 'Assinar Plano Mensal'}
+                  {checkoutLoading === 'monthly' ? 'Carregando Checkout...' : 'Assinar Plano Mensal (R$ 7,99)'}
                 </Button>
               </CardFooter>
             </Card>
@@ -509,7 +548,7 @@ export default function LandingPage() {
             <Card className="border-2 border-primary bg-card shadow-2xl relative scale-[1.02]">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                 <Badge className="bg-gradient-to-r from-blue-600 to-emerald-500 text-white font-black text-xs px-3.5 py-1 shadow-md shadow-blue-500/25">
-                  🔥 MAIS ESCOLHIDO (ECONOMIZE 33%)
+                  🔥 MAIS ESCOLHIDO (ECONOMIZE 27%)
                 </Badge>
               </div>
 
@@ -524,11 +563,11 @@ export default function LandingPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-emerald-400">R$ 397,00</span>
+                  <span className="text-4xl font-black text-emerald-400">R$ 69,90</span>
                   <span className="text-xs text-muted-foreground">/ano</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Equivalente a apenas <strong className="text-foreground">R$ 33,08/mês</strong> (menos de R$ 1,15 por dia).
+                  Equivalente a apenas <strong className="text-foreground">R$ 5,82/mês</strong> (menos de R$ 0,20 por dia).
                 </p>
 
                 <ul className="space-y-2.5 text-xs text-foreground pt-2 border-t border-border">
@@ -556,7 +595,7 @@ export default function LandingPage() {
                   disabled={checkoutLoading === 'annual'}
                   className="w-full font-bold text-sm h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 hover:opacity-95 text-white shadow-xl shadow-blue-500/25"
                 >
-                  {checkoutLoading === 'annual' ? 'Carregando Checkout...' : 'Garantir Acesso Anual com Desconto'}
+                  {checkoutLoading === 'annual' ? 'Carregando Checkout...' : 'Garantir Acesso Anual (R$ 69,90)'}
                 </Button>
               </CardFooter>
             </Card>
