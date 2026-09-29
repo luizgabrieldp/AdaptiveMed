@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import confetti from 'canvas-confetti';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -102,7 +102,7 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
     exams: [
       { code: 'ENARE', name: 'Exame Nacional de Residência (Forte presença no NE)' },
       { code: 'SES-PE', name: 'Secretaria Estadual de Saúde de Pernambuco', state: 'PE' },
-      { code: 'SURCE', name: 'Seleção Unificada para Residência Médica do Ceará', state: 'CE' },
+      { code: 'PSU-CE', name: 'Processo Seletivo Unificado do Ceará (ESP-CE)', state: 'CE' },
       { code: 'PSU-BA', name: 'Processo Seletivo Unificado da Bahia (CEREM-BA)', state: 'BA' },
       { code: 'PSU-AL', name: 'Processo Seletivo Unificado de Alagoas', state: 'AL' },
       { code: 'UFRN', name: 'Universidade Federal do Rio Grande do Norte', state: 'RN' },
@@ -159,19 +159,15 @@ export default function OnboardingPage() {
   const [titlePrefix, setTitlePrefix] = useState<'Dr.' | 'Dra.' | 'none'>('Dr.');
   const [fullName, setFullName] = useState<string>('');
 
-  // Passo 2: Especialidades (Múltipla Seleção)
+  // Passo 2: Especialidades (Múltipla Seleção Integrada)
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [specialtySearch, setSpecialtySearch] = useState<string>('');
-  const [isSpecialtyDropdownOpen, setIsSpecialtyDropdownOpen] = useState(false);
   const [customSpecialty, setCustomSpecialty] = useState<string>('');
-  const specialtyDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Passo 3: Bancas (Múltipla Seleção com Foco Nordeste)
-  const [selectedExams, setSelectedExams] = useState<string[]>(['ENARE', 'SES-PE', 'SURCE']);
-  const [examSearch, setExamSearch] = useState<string>('');
-  const [isExamDropdownOpen, setIsExamDropdownOpen] = useState(false);
+  // Passo 3: Bancas (Múltipla Seleção com Foco Nordeste & Abas)
+  const [selectedExams, setSelectedExams] = useState<string[]>(['ENARE', 'SES-PE', 'PSU-CE']);
+  const [activeExamTab, setActiveExamTab] = useState<'nordeste' | 'sudeste' | 'outras'>('nordeste');
   const [customExam, setCustomExam] = useState<string>('');
-  const examDropdownRef = useRef<HTMLDivElement>(null);
 
   // Passo 4: Meta de Corte e Ano da Prova Flexível
   const [cutoffPercentage, setCutoffPercentage] = useState<number>(80);
@@ -218,25 +214,11 @@ export default function OnboardingPage() {
     }
   }, [profile, user]);
 
-  // Fechar dropdowns ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        specialtyDropdownRef.current &&
-        !specialtyDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsSpecialtyDropdownOpen(false);
-      }
-      if (
-        examDropdownRef.current &&
-        !examDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsExamDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const currentTabExams = useMemo(() => {
+    if (activeExamTab === 'nordeste') return CATEGORIZED_EXAMS[0].exams;
+    if (activeExamTab === 'sudeste') return CATEGORIZED_EXAMS[1].exams;
+    return CATEGORIZED_EXAMS[2].exams;
+  }, [activeExamTab]);
 
   // --- Handlers de Especialidade ---
   const toggleSpecialty = (spec: string) => {
@@ -316,8 +298,8 @@ export default function OnboardingPage() {
 
       try {
         confetti({
-          particleCount: 120,
-          spread: 80,
+          particleCount: 80,
+          spread: 70,
           origin: { y: 0.6 },
           colors: ['#3B82F6', '#10B981', '#F59E0B'],
         });
@@ -325,10 +307,8 @@ export default function OnboardingPage() {
         // Fallback silencioso
       }
 
-      setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
-      }, 900);
+      // Transição ultrarrápida direta para o Dashboard
+      router.replace('/dashboard');
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -336,7 +316,7 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 py-8 sm:py-12 bg-background relative overflow-y-auto">
       {/* Luzes de fundo sutis */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -572,73 +552,71 @@ export default function OnboardingPage() {
                   )}
                 </div>
 
-                {/* Menu Suspenso / Combobox Pesquisável */}
-                <div className="relative" ref={specialtyDropdownRef}>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">
-                    Abrir menu suspenso de especialidades
+                {/* Busca e Seleção Integrada de Especialidades */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
+                    <span>Buscar na lista de especialidades (+50 opções regulamentadas):</span>
+                    {specialtySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSpecialtySearch('')}
+                        className="text-[11px] text-primary hover:underline"
+                      >
+                        Limpar busca
+                      </button>
+                    )}
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsSpecialtyDropdownOpen(!isSpecialtyDropdownOpen)}
-                    className="w-full h-11 px-3 rounded-xl border border-border bg-card flex items-center justify-between text-left text-sm text-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Stethoscope className="h-4 w-4 text-primary" />
-                      {isSpecialtyDropdownOpen
-                        ? 'Pesquise ou clique nas especialidades...'
-                        : 'Clique para abrir a lista completa (+50 opções)'}
-                    </span>
-                    <ChevronDown
-                      className={`h-4 w-4 text-muted-foreground transition-transform ${
-                        isSpecialtyDropdownOpen ? 'rotate-180' : ''
-                      }`}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Filtrar por nome (ex: Cirurgia, Pediatria, Oftalmo, Anestesio)..."
+                      value={specialtySearch}
+                      onChange={e => setSpecialtySearch(e.target.value)}
+                      className="pl-9 h-10 text-xs sm:text-sm bg-muted/20 border-border"
                     />
-                  </button>
+                  </div>
 
-                  {isSpecialtyDropdownOpen && (
-                    <div className="absolute z-50 mt-1.5 w-full bg-card border border-border rounded-xl shadow-2xl p-2 space-y-2 animate-in fade-in max-h-80 flex flex-col">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder="Buscar especialidade (ex: Cirurgia, Pediatria, Oftalmo)..."
-                          value={specialtySearch}
-                          onChange={e => setSpecialtySearch(e.target.value)}
-                          className="pl-8 text-xs h-9 bg-background"
-                          autoFocus
-                        />
+                  {/* Lista com altura controlada e rolagem interna suave */}
+                  <div className="max-h-48 overflow-y-auto space-y-1 p-1.5 rounded-xl border border-border bg-card/60">
+                    {filteredSpecialties.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-muted-foreground">
+                        Nenhuma especialidade encontrada para &quot;{specialtySearch}&quot;. Use o campo abaixo para cadastrar outra.
                       </div>
-
-                      <div className="overflow-y-auto space-y-1 pr-1 flex-1">
-                        {filteredSpecialties.length === 0 ? (
-                          <div className="p-3 text-center text-xs text-muted-foreground">
-                            Nenhuma especialidade encontrada para &quot;{specialtySearch}&quot;.
-                          </div>
-                        ) : (
-                          filteredSpecialties.map(spec => {
-                            const isSelected = selectedSpecialties.includes(spec);
-                            return (
-                              <button
-                                key={spec}
-                                type="button"
-                                onClick={() => toggleSpecialty(spec)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
+                    ) : (
+                      filteredSpecialties.map(spec => {
+                        const isSelected = selectedSpecialties.includes(spec);
+                        return (
+                          <button
+                            key={spec}
+                            type="button"
+                            onClick={() => toggleSpecialty(spec)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
+                              isSelected
+                                ? 'bg-primary/15 text-primary border border-primary/30'
+                                : 'hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span
+                                className={`w-4 h-4 rounded flex items-center justify-center text-[10px] border ${
                                   isSelected
-                                    ? 'bg-primary/15 text-primary font-bold'
-                                    : 'hover:bg-muted text-foreground'
+                                    ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                    : 'border-muted-foreground/30'
                                 }`}
                               >
-                                <span>{spec}</span>
-                                {isSelected && (
-                                  <span className="text-[11px] font-bold text-primary">✓ Selecionada</span>
-                                )}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
+                                {isSelected ? '✓' : ''}
+                              </span>
+                              <span>{spec}</span>
+                            </span>
+                            {isSelected && (
+                              <span className="text-[11px] font-bold text-primary">Selecionada</span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
 
                 {/* Opção para Adicionar Especialidade Customizada (Outros) */}
@@ -735,112 +713,83 @@ export default function OnboardingPage() {
                   )}
                 </div>
 
-                {/* Bloco 1: Destaque Especial Nordeste */}
-                <div className="p-3.5 rounded-xl border-2 border-emerald-500/30 bg-emerald-500/5 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                        🌟 Principais Bancas do Nordeste
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground font-semibold">
-                      Clique para marcar/desmarcar
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {CATEGORIZED_EXAMS[0].exams.map(exam => {
-                      const isSelected = selectedExams.includes(exam.code);
-                      return (
-                        <button
-                          key={exam.code}
-                          type="button"
-                          onClick={() => toggleExam(exam.code)}
-                          className={`text-left p-2 rounded-lg border text-xs transition-all ${
-                            isSelected
-                              ? 'border-emerald-500 bg-emerald-500 text-slate-950 font-bold shadow-sm'
-                              : 'border-border bg-card/80 hover:bg-muted text-foreground font-medium'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>{exam.code}</span>
-                            {exam.state && (
-                              <span
-                                className={`text-[10px] px-1 rounded ${
-                                  isSelected ? 'bg-slate-900/20 text-slate-950' : 'bg-muted text-muted-foreground'
-                                }`}
-                              >
-                                {exam.state}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Menu Suspenso / Combobox para Outras Bancas e Sudeste */}
-                <div className="relative" ref={examDropdownRef}>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">
-                    Menu suspenso com Sudeste e demais regiões
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsExamDropdownOpen(!isExamDropdownOpen)}
-                    className="w-full h-11 px-3 rounded-xl border border-border bg-card flex items-center justify-between text-left text-sm text-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4 text-emerald-400" />
-                      {isExamDropdownOpen
-                        ? 'Selecione as bancas do Sudeste ou outras...'
-                        : 'Abrir lista de bancas do Sudeste, Sul e Centro-Oeste'}
-                    </span>
-                    <ChevronDown
-                      className={`h-4 w-4 text-muted-foreground transition-transform ${
-                        isExamDropdownOpen ? 'rotate-180' : ''
+                {/* Abas Rápidas por Região */}
+                <div className="space-y-3">
+                  <div className="flex rounded-xl p-1 bg-muted/40 border border-border gap-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveExamTab('nordeste')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
+                        activeExamTab === 'nordeste'
+                          ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
-                    />
-                  </button>
+                    >
+                      <span>🌟 Nordeste</span>
+                      <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[0].exams.length})</span>
+                    </button>
 
-                  {isExamDropdownOpen && (
-                    <div className="absolute z-50 mt-1.5 w-full bg-card border border-border rounded-xl shadow-2xl p-2 space-y-3 animate-in fade-in max-h-80 overflow-y-auto">
-                      {CATEGORIZED_EXAMS.slice(1).map(cat => (
-                        <div key={cat.category} className="space-y-1.5">
-                          <div className="text-[11px] font-bold text-muted-foreground uppercase px-2 tracking-wide flex items-center gap-1.5">
-                            <MapPin className="h-3 w-3 text-primary" />
-                            {cat.badge}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {cat.exams.map(exam => {
-                              const isSelected = selectedExams.includes(exam.code);
-                              return (
-                                <button
-                                  key={exam.code}
-                                  type="button"
-                                  onClick={() => toggleExam(exam.code)}
-                                  className={`text-left px-2.5 py-1.5 rounded-lg border text-xs transition-colors flex items-center justify-between ${
-                                    isSelected
-                                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400 font-bold'
-                                      : 'border-border hover:bg-muted text-foreground'
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="font-bold">{exam.code}</div>
-                                    <div className="text-[10px] text-muted-foreground line-clamp-1">
-                                      {exam.name}
-                                    </div>
-                                  </div>
-                                  {isSelected && <span className="text-emerald-400 font-bold">✓</span>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                    <button
+                      type="button"
+                      onClick={() => setActiveExamTab('sudeste')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
+                        activeExamTab === 'sudeste'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span>🏛️ Sudeste</span>
+                      <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[1].exams.length})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveExamTab('outras')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-center transition-all flex items-center justify-center gap-1.5 ${
+                        activeExamTab === 'outras'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span>🌎 Demais Regiões</span>
+                      <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[2].exams.length})</span>
+                    </button>
+                  </div>
+
+                  {/* Grade de Bancas da Aba Ativa (com rolagem suave controlada) */}
+                  <div className="max-h-56 overflow-y-auto p-1.5 rounded-xl border border-border bg-card/60">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {currentTabExams.map(exam => {
+                        const isSelected = selectedExams.includes(exam.code);
+                        return (
+                          <button
+                            key={exam.code}
+                            type="button"
+                            onClick={() => toggleExam(exam.code)}
+                            className={`text-left p-2 rounded-lg border text-xs transition-all flex flex-col justify-between ${
+                              isSelected
+                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 font-bold shadow-sm'
+                                : 'border-border bg-card hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="font-bold">{exam.code}</span>
+                              {isSelected ? (
+                                <span className="text-emerald-400 font-black">✓</span>
+                              ) : exam.state ? (
+                                <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">
+                                  {exam.state}
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5 font-normal">
+                              {exam.name}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Adicionar outra banca livremente */}
@@ -1021,7 +970,7 @@ export default function OnboardingPage() {
                     </p>
                     <p className="text-muted-foreground">
                       {cutoffPercentage >= 85
-                        ? 'Excelente para especialidades de acesso direto concorridíssimas (Dermatologia, Oftalmologia, Anestesiologia na USP/ENARE/SURCE).'
+                        ? 'Excelente para especialidades de acesso direto concorridíssimas (Dermatologia, Oftalmologia, Anestesiologia na USP/ENARE/PSU-CE).'
                         : cutoffPercentage >= 80
                         ? 'Faixa de nota segura para aprovação na grande maioria dos programas e hospitais universitários do país.'
                         : 'Ritmo inicial ideal para consolidar os temas fundamentais das 5 Grandes Áreas com revisões espaçadas contínuas.'}
