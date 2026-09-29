@@ -102,7 +102,6 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
     exams: [
       { code: 'ENARE', name: 'Exame Nacional de Residência (Forte presença no NE)' },
       { code: 'SES-PE', name: 'Secretaria Estadual de Saúde de Pernambuco', state: 'PE' },
-      { code: 'PSU-CE', name: 'Processo Seletivo Unificado do Ceará (ESP-CE)', state: 'CE' },
       { code: 'PSU-BA', name: 'Processo Seletivo Unificado da Bahia (CEREM-BA)', state: 'BA' },
       { code: 'PSU-AL', name: 'Processo Seletivo Unificado de Alagoas', state: 'AL' },
       { code: 'UFRN', name: 'Universidade Federal do Rio Grande do Norte', state: 'RN' },
@@ -111,7 +110,6 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
       { code: 'UFPI', name: 'Universidade Federal do Piauí', state: 'PI' },
       { code: 'UFS', name: 'Universidade Federal de Sergipe', state: 'SE' },
       { code: 'IMIP', name: 'Instituto de Medicina Integral Prof. Fernando Figueira', state: 'PE' },
-      { code: 'HUWC / MEAC', name: 'Hospital Universitário Walter Cantídio (UFC)', state: 'CE' },
       { code: 'HC-UFPE', name: 'Hospital das Clínicas da UFPE', state: 'PE' },
       { code: 'HCP', name: 'Hospital de Câncer de Pernambuco', state: 'PE' },
     ],
@@ -165,7 +163,7 @@ export default function OnboardingPage() {
   const [customSpecialty, setCustomSpecialty] = useState<string>('');
 
   // Passo 3: Bancas (Múltipla Seleção com Foco Nordeste & Abas)
-  const [selectedExams, setSelectedExams] = useState<string[]>(['ENARE', 'SES-PE', 'PSU-CE']);
+  const [selectedExams, setSelectedExams] = useState<string[]>(['ENARE', 'SES-PE', 'PSU-BA']);
   const [activeExamTab, setActiveExamTab] = useState<'nordeste' | 'sudeste' | 'outras'>('nordeste');
   const [customExam, setCustomExam] = useState<string>('');
 
@@ -970,7 +968,7 @@ export default function OnboardingPage() {
                     </p>
                     <p className="text-muted-foreground">
                       {cutoffPercentage >= 85
-                        ? 'Excelente para especialidades de acesso direto concorridíssimas (Dermatologia, Oftalmologia, Anestesiologia na USP/ENARE/PSU-CE).'
+                        ? 'Excelente para especialidades de acesso direto concorridíssimas (Dermatologia, Oftalmologia, Anestesiologia na USP/ENARE/SES-PE).'
                         : cutoffPercentage >= 80
                         ? 'Faixa de nota segura para aprovação na grande maioria dos programas e hospitais universitários do país.'
                         : 'Ritmo inicial ideal para consolidar os temas fundamentais das 5 Grandes Áreas com revisões espaçadas contínuas.'}

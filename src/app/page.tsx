@@ -168,7 +168,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold tracking-wide animate-in fade-in">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Algoritmo Adaptativo Calibrado para ENARE, SES-PE, PSU-CE e Sudeste</span>
+            <span>Algoritmo Adaptativo Calibrado para ENARE, SES-PE, PSU-BA e Sudeste</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-foreground leading-[1.12]">
@@ -218,7 +218,7 @@ export default function LandingPage() {
             </div>
             <div className="p-4 rounded-2xl bg-card/60 border border-border text-center">
               <div className="text-2xl sm:text-3xl font-black text-blue-400">Nordeste & SE</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">ENARE, SES-PE, PSU-CE, USP</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">ENARE, SES-PE, PSU-BA, USP</div>
             </div>
           </div>
         </div>
@@ -323,12 +323,12 @@ export default function LandingPage() {
               <div className="h-9 w-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                 <MapPin className="h-5 w-5" />
               </div>
-              <h3 className="font-bold text-lg">ENARE, SES-PE & PSU-CE</h3>
+              <h3 className="font-bold text-lg">ENARE, SES-PE & PSU-BA</h3>
               <p className="text-xs text-muted-foreground">
-                Cobertura especializada nas principais provas do Nordeste: Processo Seletivo Unificado do Ceará (PSU-CE), Residência Médica SES-PE, PSU-BA, PSU-AL e universidades federais (UFRN, UFPB, UFMA, UFPI, UFS).
+                Cobertura especializada nas principais provas do Nordeste: Residência Médica SES-PE, PSU-BA (CEREM-BA), PSU-AL e universidades federais (UFRN, UFPB, UFMA, UFPI, UFS).
               </p>
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {['ENARE', 'SES-PE', 'PSU-CE', 'PSU-BA', 'UFRN', 'UFPB'].map(b => (
+                {['ENARE', 'SES-PE', 'PSU-BA', 'PSU-AL', 'UFRN', 'UFPB'].map(b => (
                   <span key={b} className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">
                     {b}
                   </span>
@@ -622,7 +622,7 @@ export default function LandingPage() {
                 Como as bancas do Nordeste são tratadas na plataforma?
               </h3>
               <p className="text-muted-foreground leading-relaxed">
-                O AdaptiveMed foi projetado com seletor e suporte especial para as bancas do Nordeste (ENARE, SES-PE, PSU-CE, PSU-BA, PSU-AL, UFRN, etc.), além das tradicionais de São Paulo (USP, UNICAMP, SUS-SP).
+                O AdaptiveMed foi projetado com seletor e suporte especial para as bancas do Nordeste (ENARE, SES-PE, PSU-BA, PSU-AL, UFRN, etc.), além das tradicionais de São Paulo (USP, UNICAMP, SUS-SP).
               </p>
             </div>
 
