@@ -213,25 +213,23 @@ export const Sidebar: React.FC = () => {
           })}
         </nav>
 
-        {/* Gestão de Grandes Áreas (Sem exportação de calendário) */}
-        <div className="mt-5 pt-4 border-t border-border/70 space-y-1">
-          {!isCollapsed && (
+        {/* Gestão de Grandes Áreas: visível apenas quando o menu estiver estendido */}
+        {!isCollapsed && (
+          <div className="mt-5 pt-4 border-t border-border/70 space-y-1">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 mb-1.5">
               Personalização
             </p>
-          )}
-          <button
-            type="button"
-            onClick={() => setManageAreasOpen(true)}
-            className={`w-full flex items-center rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors ${
-              isCollapsed ? 'justify-center p-2.5' : 'space-x-2.5 px-3 py-2 text-left'
-            }`}
-            title="Gerenciar Grandes Áreas"
-          >
-            <SlidersHorizontal className="h-4 w-4 text-primary shrink-0" />
-            {!isCollapsed && <span className="truncate">Gerenciar Grandes Áreas</span>}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setManageAreasOpen(true)}
+              className="w-full flex items-center rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors space-x-2.5 px-3 py-2 text-left"
+              title="Gerenciar Grandes Áreas"
+            >
+              <SlidersHorizontal className="h-4 w-4 text-primary shrink-0" />
+              <span className="truncate">Gerenciar Grandes Áreas</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer: Perfil + Notificação + Tema */}
@@ -244,12 +242,21 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Seletor de Tema */}
+        {/* Seletor de Tema Dinâmico */}
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isCollapsed && (
             <span className="text-[11px] font-semibold text-muted-foreground">Tema:</span>
           )}
-          <ThemeToggle />
+          <ThemeToggle
+            isCollapsed={isCollapsed}
+            interactiveExpand={!isCollapsed}
+            onExpandSidebar={() => {
+              setIsCollapsed(false);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('adaptivemed_sidebar_collapsed', 'false');
+              }
+            }}
+          />
         </div>
 
         {/* Informações do Usuário + Sair */}

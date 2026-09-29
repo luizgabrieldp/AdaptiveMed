@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { StreakRuleType, DEFAULT_STREAK_CONFIG } from '@/types/database';
@@ -51,8 +52,6 @@ const STREAK_RULES: { id: StreakRuleType; label: string; description: string; ba
     description: 'Apenas dias em que você conclui ao menos um simulado pontuam.',
   },
 ];
-
-const QUESTION_TARGETS = [5, 10, 15, 20, 25, 30, 50];
 
 export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
   open,
@@ -148,9 +147,10 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const finalMinQ = Math.max(1, minDailyQuestions || 10);
       await updateStreakConfig({
         ruleType,
-        minDailyQuestions,
+        minDailyQuestions: finalMinQ,
       });
       onOpenChange(false);
     } catch (err) {
@@ -242,30 +242,36 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
                   Meta Mínima de Questões
                 </label>
                 <span className="text-xs font-bold text-amber-400">
-                  {minDailyQuestions} questões/dia
+                  {minDailyQuestions || 0} questões/dia
                 </span>
               </div>
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-                {QUESTION_TARGETS.map((target) => {
-                  const isSelected = minDailyQuestions === target;
-                  return (
-                    <button
-                      key={target}
-                      type="button"
-                      onClick={() => setMinDailyQuestions(target)}
-                      className={`py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                        isSelected
-                          ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold shadow-sm'
-                          : 'bg-muted/30 text-muted-foreground border-border/60 hover:bg-muted/60 hover:text-foreground'
-                      }`}
-                    >
-                      {target} Qs
-                    </button>
-                  );
-                })}
+              <div className="relative">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min={1}
+                  max={500}
+                  value={minDailyQuestions === 0 ? '' : minDailyQuestions}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/\D/g, '');
+                    const val = clean === '' ? 0 : parseInt(clean, 10);
+                    setMinDailyQuestions(val);
+                  }}
+                  onBlur={() => {
+                    if (!minDailyQuestions || minDailyQuestions < 1) {
+                      setMinDailyQuestions(10);
+                    }
+                  }}
+                  placeholder="Ex: 15"
+                  className="text-sm font-semibold h-10 px-3.5 pr-20 bg-background border-border/80 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl"
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground pointer-events-none">
+                  questões
+                </span>
               </div>
               <p className="text-[10px] text-muted-foreground leading-normal">
-                Soma de questões resolvidas no primeiro contato (R0) e nas revisões (R1-R8) do dia.
+                Digite a quantidade desejada de questões diárias (soma de primeiro contato e revisões).
               </p>
             </div>
           )}

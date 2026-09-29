@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { CancelSubscriptionModal } from '@/components/subscription/cancel-subscription-modal';
@@ -566,51 +567,43 @@ export default function ContaPage() {
 
             {/* Meta Mínima de Questões */}
             {selectedRuleType !== 'mock_only' && (
-              <div className="space-y-2.5 pt-2 border-t border-border/60">
+              <div className="space-y-2 pt-2 border-t border-border/60">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-foreground">
                     Meta Mínima Diária de Questões
                   </label>
                   <span className="text-xs font-extrabold text-primary">
-                    🎯 {selectedMinQuestions} questões/dia
+                    🎯 {selectedMinQuestions || 0} questões/dia
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {[5, 10, 15, 20, 30, 50].map(q => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMinQuestions(q);
-                        handleSaveStreakConfig(selectedRuleType, q);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                        selectedMinQuestions === q
-                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                          : 'bg-muted/50 border-border text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {q} questões
-                    </button>
-                  ))}
-                  <div className="flex items-center gap-1.5 sm:ml-auto">
-                    <span className="text-[11px] text-muted-foreground">Outro valor:</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      min="1"
-                      max="500"
-                      value={selectedMinQuestions}
-                      onChange={e => {
-                        const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                        setSelectedMinQuestions(val);
-                      }}
-                      onBlur={() => handleSaveStreakConfig(selectedRuleType, selectedMinQuestions)}
-                      className="w-16 h-8 text-xs font-bold rounded-lg border border-border bg-card px-2 text-center text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
+                <div className="relative max-w-xs">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    min={1}
+                    max={500}
+                    value={selectedMinQuestions === 0 ? '' : selectedMinQuestions}
+                    onChange={e => {
+                      const clean = e.target.value.replace(/\D/g, '');
+                      const val = clean === '' ? 0 : parseInt(clean, 10);
+                      setSelectedMinQuestions(val);
+                    }}
+                    onBlur={() => {
+                      const finalQ = Math.max(1, selectedMinQuestions || 10);
+                      setSelectedMinQuestions(finalQ);
+                      handleSaveStreakConfig(selectedRuleType, finalQ);
+                    }}
+                    placeholder="Ex: 15"
+                    className="h-10 px-3.5 pr-20 text-sm font-semibold rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground pointer-events-none">
+                    questões
+                  </span>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Digite a quantidade desejada de questões diárias para cumprir sua meta.
+                </p>
               </div>
             )}
 
