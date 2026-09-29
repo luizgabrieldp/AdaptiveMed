@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { getTodayDateString, formatDateBR } from '@/lib/spaced-repetition';
-import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
 import {
   Calendar,
   CalendarDays,
@@ -20,7 +19,6 @@ import {
   Table as TableIcon,
   Plus,
   BookOpen,
-  Download,
   CalendarCheck2,
   Sparkles,
 } from 'lucide-react';
@@ -78,16 +76,6 @@ export default function DiarioPage() {
 
           {/* Ações Rápidas */}
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportTopicsAndReviewsToCSV(topics, reviews)}
-              className="text-xs gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="hidden sm:inline">Exportar</span> CSV
-            </Button>
-
             <Button
               variant="outline"
               size="sm"

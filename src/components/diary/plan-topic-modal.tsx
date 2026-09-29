@@ -30,7 +30,7 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
   defaultArea,
   defaultSubject,
 }) => {
-  const { areas, addPlannedTopic, prevalentTopics } = useData();
+  const { areas, addPlannedTopic, prevalentTopics, topics } = useData();
 
   const [area, setArea] = useState(defaultArea || areas[0]?.name || 'Clínica Médica');
   const [subjectName, setSubjectName] = useState(defaultSubject || '');
@@ -40,10 +40,17 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sugestões de assuntos prevalentes para preenchimento rápido
+  // Sugestões de assuntos prevalentes para preenchimento rápido (somente os ainda não estudados)
   const suggestedTopics = React.useMemo(() => {
-    return prevalentTopics.filter(p => p.area === area).slice(0, 4);
-  }, [prevalentTopics, area]);
+    const studiedSet = new Set(
+      topics
+        .filter(t => !t.is_planned)
+        .map(t => t.subject_name.trim().toLowerCase())
+    );
+    return prevalentTopics
+      .filter(p => p.area === area && !studiedSet.has(p.subject_name.trim().toLowerCase()))
+      .slice(0, 5);
+  }, [prevalentTopics, topics, area]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

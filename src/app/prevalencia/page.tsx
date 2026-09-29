@@ -132,7 +132,7 @@ export default function PrevalenciaPage() {
       }
       return true;
     });
-  }, [sortedPrevalentTopics, selectedAreaFilter, selectedPrevalenceFilter, searchQuery]);
+  }, [sortedPrevalentTopics, selectedAreaFilter, selectedPrevalenceFilter, selectedBancaFilter, searchQuery]);
 
   // Handlers para Mover Posição (Hierarquia)
   const handleMoveUp = async (index: number) => {
@@ -322,7 +322,7 @@ export default function PrevalenciaPage() {
         </div>
 
         {/* Cards de Métricas Estratégicas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Card className="p-3.5 bg-card border-border">
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Total Mapeado
@@ -366,20 +366,6 @@ export default function PrevalenciaPage() {
               </Badge>
             </div>
           </Card>
-
-          <Card className="p-3.5 bg-card border-border">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Foco das Bancas
-            </p>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className="text-sm font-bold text-foreground truncate">
-                ENARE / USP / UNICAMP
-              </span>
-              <Badge variant="secondary" className="text-[10px]">
-                Top 2025/2026
-              </Badge>
-            </div>
-          </Card>
         </div>
 
         {/* Filtros e Busca */}
@@ -398,22 +384,6 @@ export default function PrevalenciaPage() {
 
             {/* Filtro por Nível de Prevalência */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {availableBancas.length > 0 && (
-                <div className="flex items-center gap-1.5 mr-2">
-                  <span className="text-[11px] text-muted-foreground font-semibold">Banca:</span>
-                  <select
-                    value={selectedBancaFilter}
-                    onChange={e => setSelectedBancaFilter(e.target.value)}
-                    className="h-7 text-xs rounded-lg border border-border bg-card px-2 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="TODAS">Todas as Bancas</option>
-                    {availableBancas.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1 mr-1">
                   <Filter className="h-3 w-3" /> Nível:
@@ -485,6 +455,47 @@ export default function PrevalenciaPage() {
               );
             })}
           </div>
+
+          {/* Filtro por Banca em formato de Pílulas */}
+          {availableBancas.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-border/60 scrollbar-none">
+              <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-1 flex items-center gap-1">
+                <GraduationCap className="h-3.5 w-3.5 text-blue-400" /> Banca:
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedBancaFilter('TODAS')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                  selectedBancaFilter === 'TODAS'
+                    ? 'bg-blue-600 text-white font-bold shadow-xs'
+                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                }`}
+              >
+                Todas as Bancas ({sortedPrevalentTopics.length})
+              </button>
+              {availableBancas.map(banca => {
+                const isSelected = selectedBancaFilter === banca;
+                const count = sortedPrevalentTopics.filter(p =>
+                  p.banca?.toLowerCase().includes(banca.toLowerCase())
+                ).length;
+                return (
+                  <button
+                    key={banca}
+                    type="button"
+                    onClick={() => setSelectedBancaFilter(isSelected ? 'TODAS' : banca)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                      isSelected
+                        ? 'bg-blue-600 text-white font-bold shadow-xs ring-1 ring-blue-400'
+                        : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground border border-border/60'
+                    }`}
+                  >
+                    <span>{banca}</span>
+                    <span className="text-[10px] opacity-80 ml-1 font-normal">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Lista Hierárquica de Assuntos Prevalentes */}

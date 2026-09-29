@@ -70,6 +70,7 @@ interface DataContextType {
   ) => Promise<{ nextReviewDate?: string }>;
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
   updatePlannedTopicDate: (topicId: string, planned_date: string | null) => Promise<void>;
+  distributeWeeklyAutoStudy: (weekStartStr: string) => Promise<number>;
   addArea: (name: string, colorHex: string) => Promise<void>;
   updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
   deleteArea: (id: string) => Promise<void>;
@@ -209,12 +210,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { data: revData },
         { data: mockData },
         { data: instData },
+        prevResult,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.from('study_topics').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
         supabase.from('topic_reviews').select('*').eq('user_id', userId).order('scheduled_date', { ascending: true }),
         supabase.from('mock_exams').select('*').eq('user_id', userId).order('exam_date', { ascending: false }),
         supabase.from('institution_exams').select('*').eq('user_id', userId).order('exam_year', { ascending: true }),
+        supabase.from('prevalent_topics').select('*').eq('user_id', userId).order('rank_order', { ascending: true }),
       ]);
 
       if (profData) {
@@ -266,10 +269,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       }
-      setTopics(topData ? (topData as StudyTopic[]) : []);
+
+      if (topData && topData.length > 0) {
+        setTopics(topData as StudyTopic[]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(topData));
+        }
+      } else {
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS) : null;
+        if (stored) {
+          try {
+            setTopics(JSON.parse(stored));
+          } catch {}
+        }
+      }
+
       setReviews(revData ? (revData as TopicReview[]) : []);
       setMockExams(mockData ? (mockData as MockExam[]) : []);
       setInstitutionExams(instData ? (instData as InstitutionExam[]) : []);
+
+      if (prevResult?.data && prevResult.data.length > 0) {
+        setPrevalentTopics(prevResult.data as PrevalentTopic[]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(prevResult.data));
+        }
+      } else {
+        const storedPrevalent = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS) : null;
+        if (storedPrevalent) {
+          try {
+            setPrevalentTopics(JSON.parse(storedPrevalent));
+          } catch {}
+        }
+      }
     } catch (err) {
       console.error('Erro ao carregar dados do Supabase:', err);
     }
@@ -509,7 +540,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setReviews(prev => [...prev, r1Review]);
   };
 
-  // AÇÃO 1.1: Adicionar Assunto Planejado para Estudo Futuro
+  // AÇÃO 1.1: Adicionar Assunto Planejado para Estudo Futuro (Otimista e Instantâneo)
   const addPlannedTopic = async (data: {
     area: string;
     subject_name: string;
@@ -539,12 +570,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    if (!isDemoMode && user) {
-      const supabase = createClient();
-      await supabase.from('study_topics').insert(newTopic);
-    }
+    // 1. Atualização Otimista Imediata (zero latência)
+    setTopics(prev => {
+      const updated = [newTopic, ...prev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
 
-    setTopics(prev => [newTopic, ...prev]);
+    // 2. Sincronização com Supabase com timeout de 2.5s para não prender a UI
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        const insertPromise = supabase.from('study_topics').insert(newTopic);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase insert timeout')), 2500)
+        );
+        await Promise.race([insertPromise, timeoutPromise]);
+      } catch (err) {
+        console.warn('Sincronização em background de addPlannedTopic adiada:', err);
+      }
+    }
   };
 
   // AÇÃO 1.2: Registrar Estudo de Assunto Planejado (Dispara Algoritmo Adaptativo R1)
@@ -602,54 +649,170 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
+    // Atualização otimista imediata
+    setTopics(prev => {
+      const updated = prev.map(t => (t.id === topicId ? updatedTopic : t));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+    setReviews(prev => {
+      const updated = [...prev, r1Review];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
     if (!isDemoMode && user) {
-      const supabase = createClient();
-      await supabase
-        .from('study_topics')
-        .update({
-          initial_date: data.study_date,
-          initial_questions: data.questions_done,
-          initial_correct: data.questions_correct,
-          initial_percentage: percentage,
-          is_planned: false,
-        })
-        .eq('id', topicId);
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('study_topics')
+          .update({
+            initial_date: data.study_date,
+            initial_questions: data.questions_done,
+            initial_correct: data.questions_correct,
+            initial_percentage: percentage,
+            is_planned: false,
+          })
+          .eq('id', topicId);
 
-      await supabase.from('topic_reviews').insert(r1Review);
+        await supabase.from('topic_reviews').insert(r1Review);
+      } catch (err) {
+        console.warn('Erro ao sincronizar recordPlannedTopicStudy:', err);
+      }
     }
-
-    setTopics(prev => prev.map(t => (t.id === topicId ? updatedTopic : t)));
-    setReviews(prev => [...prev, r1Review]);
 
     return { nextReviewDate: r1ScheduledDate };
   };
 
   // AÇÃO 1.3: Alternar se assunto é meta da semana
   const updateTopicWeeklyGoal = async (topicId: string, is_weekly_goal: boolean) => {
-    setTopics(prev =>
-      prev.map(t => (t.id === topicId ? { ...t, is_weekly_goal } : t))
-    );
+    setTopics(prev => {
+      const updated = prev.map(t => (t.id === topicId ? { ...t, is_weekly_goal } : t));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
     if (!isDemoMode && user) {
-      const supabase = createClient();
-      await supabase
-        .from('study_topics')
-        .update({ is_weekly_goal })
-        .eq('id', topicId);
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('study_topics')
+          .update({ is_weekly_goal })
+          .eq('id', topicId);
+      } catch (err) {
+        console.warn('Erro ao atualizar meta semanal:', err);
+      }
     }
   };
 
-  // AÇÃO 1.4: Mover / Agendar assunto planejado para data específica (Drag & Drop)
+  // AÇÃO 1.4: Mover / Agendar / Desagendar assunto planejado (Drag & Drop e Remoção do Calendário)
   const updatePlannedTopicDate = async (topicId: string, planned_date: string | null) => {
-    setTopics(prev =>
-      prev.map(t => (t.id === topicId ? { ...t, planned_date: planned_date || undefined } : t))
+    setTopics(prev => {
+      const updated = prev.map(t =>
+        t.id === topicId
+          ? {
+              ...t,
+              planned_date: planned_date || undefined,
+              is_planned: true,
+              initial_date: planned_date || t.initial_date,
+            }
+          : t
+      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        const updatePromise = supabase
+          .from('study_topics')
+          .update({
+            planned_date: planned_date,
+            is_planned: true,
+            initial_date: planned_date || undefined,
+          })
+          .eq('id', topicId);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase update timeout')), 2500)
+        );
+        await Promise.race([updatePromise, timeoutPromise]);
+      } catch (err) {
+        console.warn('Erro ao sincronizar updatePlannedTopicDate:', err);
+      }
+    }
+  };
+
+  // AÇÃO 1.5: Distribuir Automaticamente os Assuntos da Semana (Auto-Estudo)
+  const distributeWeeklyAutoStudy = async (weekStartStr: string): Promise<number> => {
+    const [year, month, day] = weekStartStr.split('-').map(Number);
+    const startDate = new Date(year, month - 1, day);
+    const weekDays: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      weekDays.push(d.toISOString().split('T')[0]);
+    }
+
+    // Assuntos pendentes de agendamento: is_planned = true e (sem data ou de semanas passadas)
+    const pendingTopics = topics.filter(
+      t => t.is_planned && (!t.planned_date || t.planned_date < weekStartStr)
     );
+
+    if (pendingTopics.length === 0) return 0;
+
+    // Prioriza por prevalência da banca (ALTA -> MEDIA -> BAIXA -> outros)
+    const sorted = [...pendingTopics].sort((a, b) => {
+      const prevA = prevalentTopics.find(
+        p => p.subject_name.toLowerCase() === a.subject_name.toLowerCase()
+      );
+      const prevB = prevalentTopics.find(
+        p => p.subject_name.toLowerCase() === b.subject_name.toLowerCase()
+      );
+      const score = (p?: PrevalentTopic) => {
+        if (!p) return 0;
+        if (p.prevalence_level === 'ALTA') return 3;
+        if (p.prevalence_level === 'MEDIA') return 2;
+        return 1;
+      };
+      return score(prevB) - score(prevA);
+    });
+
+    const topicDateMap = new Map<string, string>();
+    sorted.forEach((topic, idx) => {
+      const targetDay = weekDays[idx % weekDays.length];
+      topicDateMap.set(topic.id, targetDay);
+    });
+
+    const updatedTopics = topics.map(t => {
+      const newDate = topicDateMap.get(t.id);
+      return newDate ? { ...t, planned_date: newDate, initial_date: newDate } : t;
+    });
+
+    setTopics(updatedTopics);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updatedTopics));
+    }
+
     if (!isDemoMode && user) {
       const supabase = createClient();
-      await supabase
-        .from('study_topics')
-        .update({ planned_date })
-        .eq('id', topicId);
+      for (const [id, date] of topicDateMap.entries()) {
+        try {
+          await supabase.from('study_topics').update({ planned_date: date, initial_date: date }).eq('id', id);
+        } catch (e) {
+          console.warn('Erro ao atualizar data no auto-estudo:', e);
+        }
+      }
     }
+
+    return sorted.length;
   };
 
   // AÇÃO 2: Concluir Revisão e Agendar Próximo Ciclo (Adaptativo)
@@ -824,6 +987,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
     }
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        await supabase.from('prevalent_topics').insert(newPrev);
+      } catch (err) {
+        console.warn('Erro ao inserir prevalent_topics no Supabase:', err);
+      }
+    }
   };
 
   const updatePrevalentTopic = async (id: string, data: Partial<PrevalentTopic>) => {
@@ -832,6 +1003,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
     }
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        await supabase.from('prevalent_topics').update(data).eq('id', id);
+      } catch (err) {
+        console.warn('Erro ao atualizar prevalent_topics no Supabase:', err);
+      }
+    }
   };
 
   const deletePrevalentTopic = async (id: string) => {
@@ -839,6 +1018,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPrevalentTopics(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        await supabase.from('prevalent_topics').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Erro ao deletar prevalent_topics no Supabase:', err);
+      }
     }
   };
 
@@ -855,6 +1042,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPrevalentTopics(updated);
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        for (const item of updated) {
+          await supabase.from('prevalent_topics').update({ rank_order: item.rank_order }).eq('id', item.id);
+        }
+      } catch (err) {
+        console.warn('Erro ao reordenar prevalent_topics no Supabase:', err);
+      }
     }
   };
 
@@ -992,6 +1189,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         recordPlannedTopicStudy,
         updateTopicWeeklyGoal,
         updatePlannedTopicDate,
+        distributeWeeklyAutoStudy,
         addArea,
         updateArea,
         deleteArea,

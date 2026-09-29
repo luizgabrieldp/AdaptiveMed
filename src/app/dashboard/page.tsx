@@ -8,10 +8,8 @@ import { WeeklySchedule } from '@/components/dashboard/weekly-schedule';
 import { AreaPerformanceChart } from '@/components/dashboard/area-chart';
 import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
-import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
 import { formatGreetingName } from '@/lib/utils';
 import {
-  Download,
   HeartPulse,
   BookOpen,
   ArrowRight,
@@ -58,16 +56,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportTopicsAndReviewsToCSV(topics, reviews)}
-              className="text-xs gap-1.5"
-              title="Baixar planilha de dados em CSV / Excel"
-            >
-              <Download className="h-3.5 w-3.5" /> CSV
-            </Button>
-
             <Link href="/diario">
               <Button
                 size="sm"
