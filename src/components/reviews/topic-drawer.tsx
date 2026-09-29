@@ -25,7 +25,11 @@ import {
   BrainCircuit,
   Sparkles,
   ArrowRight,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useData } from '@/lib/store/data-context';
 
 interface TopicDrawerProps {
@@ -41,10 +45,27 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   topic,
   reviews,
 }) => {
-  const { deleteTopic, areas } = useData();
+  const { deleteTopic, areas, updateTopicR0 } = useData();
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'complete' | 'edit'>('complete');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Estados para edição do R0
+  const [isEditingR0, setIsEditingR0] = useState(false);
+  const [r0Questions, setR0Questions] = useState<string>('20');
+  const [r0Correct, setR0Correct] = useState<string>('0');
+  const [r0Date, setR0Date] = useState<string>('');
+  const [isSavingR0, setIsSavingR0] = useState(false);
+
+  React.useEffect(() => {
+    if (topic && open) {
+      setR0Questions(String(topic.initial_questions || 20));
+      setR0Correct(String(topic.initial_correct || 0));
+      setR0Date(topic.initial_date || '');
+      setIsEditingR0(false);
+    }
+  }, [topic, open]);
 
   if (!topic) return null;
 
@@ -59,6 +80,24 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   // Gera a lista das 8 revisões progressivas
   const reviewCycles = Array.from({ length: 8 }, (_, i) => i + 1);
 
+  const r0DoneNum = parseInt(r0Questions, 10) || 0;
+  const r0CorrectNum = parseInt(r0Correct, 10) || 0;
+  const r0PreviewPct = r0DoneNum > 0 ? Math.round((r0CorrectNum / r0DoneNum) * 1000) / 10 : 0;
+
+  const handleSaveR0 = async () => {
+    if (r0DoneNum <= 0) return;
+    if (r0CorrectNum > r0DoneNum) return;
+    try {
+      setIsSavingR0(true);
+      await updateTopicR0(topic.id, r0DoneNum, r0CorrectNum, r0Date || undefined);
+      setIsEditingR0(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingR0(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (window.confirm(`Tem certeza que deseja excluir o assunto "${topic.subject_name}" e todas as suas revisões?`)) {
       setIsDeleting(true);
@@ -70,6 +109,13 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
 
   const handleOpenComplete = (rev: TopicReview) => {
     setSelectedReviewToComplete(rev);
+    setModalMode('complete');
+    setCompleteModalOpen(true);
+  };
+
+  const handleOpenEditReview = (rev: TopicReview) => {
+    setSelectedReviewToComplete(rev);
+    setModalMode('edit');
     setCompleteModalOpen(true);
   };
 
@@ -102,31 +148,115 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
             </SheetDescription>
           </SheetHeader>
 
-          {/* Dados do Primeiro Contato */}
-          <div className="p-4 rounded-xl bg-card border border-border space-y-2">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-blue-400" /> Primeiro Contato com a Matéria
-            </h4>
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div className="p-2 rounded-lg bg-muted/40">
-                <p className="text-[10px] text-muted-foreground">Data Inicial</p>
-                <p className="text-xs font-bold text-foreground mt-0.5">
-                  {formatDateBR(topic.initial_date)}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/40">
-                <p className="text-[10px] text-muted-foreground">Questões</p>
-                <p className="text-xs font-bold text-foreground mt-0.5">
-                  {topic.initial_correct} / {topic.initial_questions}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/40">
-                <p className="text-[10px] text-muted-foreground">Aproveitamento</p>
-                <p className={`text-xs font-bold mt-0.5 ${topic.initial_percentage >= 80 ? 'text-emerald-400' : topic.initial_percentage >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
-                  {topic.initial_percentage}%
-                </p>
-              </div>
+          {/* Dados do Primeiro Contato (R0) */}
+          <div className="p-4 rounded-xl bg-card border border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-blue-400" /> Primeiro Contato com a Matéria (R0)
+              </h4>
+              {!isEditingR0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingR0(true)}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3 w-3" /> Editar R0
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingR0(false)}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" /> Cancelar
+                </Button>
+              )}
             </div>
+
+            {isEditingR0 ? (
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground">Questões Feitas</label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={r0Questions}
+                      onChange={e => setR0Questions(e.target.value.replace(/\D/g, ''))}
+                      className="h-8 text-xs font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-muted-foreground">Questões Acertadas</label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={r0Correct}
+                      onChange={e => setR0Correct(e.target.value.replace(/\D/g, ''))}
+                      className="h-8 text-xs font-bold text-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                {r0Correct !== '' && r0CorrectNum > r0DoneNum && (
+                  <p className="text-[11px] text-rose-400 font-medium">
+                    O número de acertos ({r0CorrectNum}) não pode ser maior que o de questões ({r0DoneNum}).
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40 text-xs">
+                  <span className="text-muted-foreground text-[11px]">Novo Aproveitamento Calculado:</span>
+                  <span className={`font-bold ${r0PreviewPct >= 80 ? 'text-emerald-400' : r0PreviewPct >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
+                    {r0PreviewPct}% ({r0CorrectNum}/{r0DoneNum})
+                  </span>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingR0(false)}
+                    disabled={isSavingR0}
+                    className="h-7 text-xs"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveR0}
+                    disabled={isSavingR0 || r0DoneNum <= 0 || r0Correct === '' || r0CorrectNum > r0DoneNum}
+                    className="h-7 text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-500 text-white"
+                  >
+                    <Check className="h-3 w-3" /> {isSavingR0 ? 'Salvando...' : 'Salvar R0'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div className="p-2 rounded-lg bg-muted/40">
+                  <p className="text-[10px] text-muted-foreground">Data Inicial</p>
+                  <p className="text-xs font-bold text-foreground mt-0.5">
+                    {formatDateBR(topic.initial_date)}
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-muted/40">
+                  <p className="text-[10px] text-muted-foreground">Questões</p>
+                  <p className="text-xs font-bold text-foreground mt-0.5">
+                    {topic.initial_correct} / {topic.initial_questions}
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-muted/40">
+                  <p className="text-[10px] text-muted-foreground">Aproveitamento</p>
+                  <p className={`text-xs font-bold mt-0.5 ${topic.initial_percentage >= 80 ? 'text-emerald-400' : topic.initial_percentage >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
+                    {topic.initial_percentage}%
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Linha do Tempo das 8 Revisões */}
@@ -181,9 +311,20 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
                         </div>
 
                         {isCompleted ? (
-                          <Badge variant="concluido" className="text-[10px]">
-                            {existing.percentage}% ({existing.questions_correct}/{existing.questions_done})
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="concluido" className="text-[10px]">
+                              {existing.percentage}% ({existing.questions_correct}/{existing.questions_done})
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleOpenEditReview(existing)}
+                              className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground hover:bg-muted"
+                              title="Editar acertos e questões desta revisão"
+                            >
+                              <Pencil className="h-3 w-3" /> Editar
+                            </Button>
+                          </div>
                         ) : (
                           <Badge
                             variant={
@@ -266,6 +407,7 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
         onOpenChange={setCompleteModalOpen}
         review={selectedReviewToComplete}
         topic={topic}
+        mode={modalMode}
       />
     </>
   );

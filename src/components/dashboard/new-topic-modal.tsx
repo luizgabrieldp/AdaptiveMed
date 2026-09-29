@@ -44,13 +44,21 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   const [subjectName, setSubjectName] = useState('');
   const [initialDate, setInitialDate] = useState(getTodayDateString());
   const [initialQuestions, setInitialQuestions] = useState('25');
-  const [initialCorrect, setInitialCorrect] = useState('20');
+  const [initialCorrect, setInitialCorrect] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tags / Subáreas
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isManageAreasOpen, setIsManageAreasOpen] = useState(false);
+
+  // Reset ao abrir modal
+  useEffect(() => {
+    if (open) {
+      setInitialCorrect('');
+      setErrorMessage(null);
+    }
+  }, [open]);
 
   // Inicializa com a primeira área disponível
   useEffect(() => {
@@ -60,13 +68,15 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   }, [areas, area]);
 
   const questionsNum = parseInt(initialQuestions, 10) || 0;
-  const correctNum = parseInt(initialCorrect, 10) || 0;
+  const correctNum = initialCorrect !== '' ? parseInt(initialCorrect, 10) || 0 : 0;
   const calculatedPct =
-    questionsNum > 0 ? Math.min(100, Math.round((correctNum / questionsNum) * 1000) / 10) : 0;
+    questionsNum > 0 && initialCorrect !== '' && correctNum <= questionsNum
+      ? Math.min(100, Math.round((correctNum / questionsNum) * 1000) / 10)
+      : null;
 
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
-    accuracy: calculatedPct,
+    accuracy: calculatedPct ?? 80,
     baseQuestionsCount: questionsNum || 20,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
@@ -98,6 +108,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
     e.preventDefault();
     if (!subjectName.trim()) return;
     if (questionsNum <= 0) return;
+    if (initialCorrect === '') return;
     if (correctNum > questionsNum) return;
 
     setErrorMessage(null);
@@ -127,7 +138,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
       setTags([]);
       setTagInput('');
       setInitialQuestions('25');
-      setInitialCorrect('20');
+      setInitialCorrect('');
       setInitialDate(getTodayDateString());
     } catch (err: unknown) {
       console.error(err);
@@ -323,12 +334,16 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     Questões Feitas
                   </label>
                   <Input
-                    type="number"
-                    min="1"
-                    max="1000"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
+                    placeholder="Ex: 25"
                     value={initialQuestions}
-                    onChange={e => setInitialQuestions(e.target.value)}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setInitialQuestions(val);
+                    }}
                     className="text-sm font-semibold"
                   />
                 </div>
@@ -337,16 +352,28 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     Acertos Obtidos
                   </label>
                   <Input
-                    type="number"
-                    min="0"
-                    max={questionsNum || 1000}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
+                    placeholder="Ex: 18"
                     value={initialCorrect}
-                    onChange={e => setInitialCorrect(e.target.value)}
-                    className="text-sm font-semibold"
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setInitialCorrect(val);
+                    }}
+                    className="text-sm font-semibold text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                   />
                 </div>
               </div>
+
+              {/* Alerta de Acertos maior que Questões */}
+              {initialCorrect !== '' && correctNum > questionsNum && (
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>O número de acertos ({correctNum}) não pode ser maior que o total de questões ({questionsNum}).</span>
+                </div>
+              )}
 
               {/* Alerta de Amostragem Baixa */}
               {questionsNum > 0 && questionsNum < 10 && (
@@ -364,7 +391,9 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                   </span>
                   <span
                     className={`font-black text-sm ${
-                      calculatedPct >= 85
+                      calculatedPct === null
+                        ? 'text-muted-foreground font-normal'
+                        : calculatedPct >= 85
                         ? 'text-emerald-400'
                         : calculatedPct >= 70
                         ? 'text-blue-400'
@@ -373,7 +402,9 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                         : 'text-rose-400'
                     }`}
                   >
-                    {calculatedPct}% ({reviewCalc.diagnosis.split('(')[0].trim()})
+                    {calculatedPct !== null
+                      ? `${calculatedPct}% (${reviewCalc.diagnosis.split('(')[0].trim()})`
+                      : '— (Informe os acertos)'}
                   </span>
                 </div>
 
@@ -406,7 +437,13 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !subjectName.trim() || questionsNum <= 0}
+                disabled={
+                  isSubmitting ||
+                  !subjectName.trim() ||
+                  questionsNum <= 0 ||
+                  initialCorrect === '' ||
+                  correctNum > questionsNum
+                }
                 className="text-xs font-bold gap-1.5 shadow-md shadow-primary/20"
               >
                 {isSubmitting ? 'Salvando...' : 'Cadastrar e Agendar R1'}

@@ -132,6 +132,22 @@ export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []) {
   };
 }
 
+export type StreakRuleType =
+  | 'questions_or_mock'
+  | 'questions_only'
+  | 'questions_and_mock'
+  | 'mock_only';
+
+export interface StreakConfig {
+  minDailyQuestions: number;
+  ruleType: StreakRuleType;
+}
+
+export const DEFAULT_STREAK_CONFIG: StreakConfig = {
+  minDailyQuestions: 10,
+  ruleType: 'questions_or_mock',
+};
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -140,6 +156,7 @@ export interface Profile {
   target_cutoff_percentage?: number;
   target_year?: number;
   custom_areas?: StudyArea[];
+  streak_config?: StreakConfig;
   onboarding_completed?: boolean;
   is_subscribed?: boolean;
   subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
@@ -234,7 +251,7 @@ export interface InstitutionExam {
   id: string;
   user_id: string;
   institution_name: string;
-  exam_year: number;
+  exam_year: string | number;
   score_percentage: number;
   created_at: string;
 }
@@ -247,6 +264,7 @@ export interface UserStats {
   todayQuestionsCount: number;
   todayMockCompleted: boolean;
   streakQualifiedToday: boolean;
+  streakConfig?: StreakConfig;
   vulnerableArea: {
     area: string;
     accuracy: number;
@@ -254,3 +272,4 @@ export interface UserStats {
   } | null;
   areaAccuracy: Record<string, { correct: number; total: number; percentage: number; topicsCount: number }>;
 }
+

@@ -38,28 +38,32 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   const { recordPlannedTopicStudy, areas } = useData();
 
   const [studyDate, setStudyDate] = useState(getTodayDateString());
-  const [questionsDone, setQuestionsDone] = useState<number | ''>(20);
-  const [questionsCorrect, setQuestionsCorrect] = useState<number | ''>(16);
+  const [questionsDone, setQuestionsDone] = useState<string>('20');
+  const [questionsCorrect, setQuestionsCorrect] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultDate, setResultDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setStudyDate(getTodayDateString());
-      setQuestionsDone(20);
-      setQuestionsCorrect(16);
+      setQuestionsDone('20');
+      setQuestionsCorrect('');
       setResultDate(null);
     }
   }, [open, topic]);
 
   if (!topic) return null;
 
-  const qDone = Number(questionsDone) || 0;
-  const qCorrect = Number(questionsCorrect) || 0;
-  const percentage = qDone > 0 ? Math.round((qCorrect / qDone) * 1000) / 10 : 0;
+  const qDone = parseInt(questionsDone, 10) || 0;
+  const qCorrect = questionsCorrect !== '' ? parseInt(questionsCorrect, 10) || 0 : 0;
+  const isCorrectFilled = questionsCorrect !== '';
+  const percentage =
+    qDone > 0 && isCorrectFilled && qCorrect <= qDone
+      ? Math.round((qCorrect / qDone) * 1000) / 10
+      : null;
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
-    accuracy: percentage,
+    accuracy: percentage ?? 80,
     baseQuestionsCount: qDone || 20,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
@@ -69,7 +73,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (qDone <= 0) return;
+    if (qDone <= 0 || !isCorrectFilled || qCorrect > qDone) return;
 
     try {
       setIsSubmitting(true);
@@ -180,12 +184,16 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   Questões Feitas
                 </label>
                 <Input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
-                  placeholder="20"
+                  placeholder="Ex: 20"
                   value={questionsDone}
-                  onChange={e => setQuestionsDone(e.target.value === '' ? '' : Number(e.target.value))}
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setQuestionsDone(val);
+                  }}
                   className="text-sm font-semibold"
                 />
               </div>
@@ -195,17 +203,28 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   Questões Acertadas
                 </label>
                 <Input
-                  type="number"
-                  min={0}
-                  max={Number(questionsDone) || undefined}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
-                  placeholder="16"
+                  placeholder="Ex: 16"
                   value={questionsCorrect}
-                  onChange={e => setQuestionsCorrect(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="text-sm font-semibold"
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setQuestionsCorrect(val);
+                  }}
+                  className="text-sm font-semibold text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                 />
               </div>
             </div>
+
+            {/* Alerta de Acertos maior que Questões */}
+            {isCorrectFilled && qCorrect > qDone && (
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span>O número de acertos ({qCorrect}) não pode ser maior que o total de questões ({qDone}).</span>
+              </div>
+            )}
 
             {/* Alerta de Amostragem Baixa */}
             {qDone > 0 && qDone < 10 && (
@@ -223,7 +242,9 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                 </span>
                 <span
                   className={
-                    percentage >= 85
+                    percentage === null
+                      ? 'text-muted-foreground font-normal'
+                      : percentage >= 85
                       ? 'text-emerald-400'
                       : percentage >= 70
                       ? 'text-blue-400'
@@ -232,7 +253,9 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                       : 'text-rose-400'
                   }
                 >
-                  {percentage}% ({reviewCalc.diagnosis.split('(')[0].trim()})
+                  {percentage !== null
+                    ? `${percentage}% (${reviewCalc.diagnosis.split('(')[0].trim()})`
+                    : '— (Informe os acertos)'}
                 </span>
               </div>
 
@@ -254,7 +277,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
             <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
               <Button
                 type="submit"
-                disabled={isSubmitting || qDone <= 0}
+                disabled={isSubmitting || qDone <= 0 || !isCorrectFilled || qCorrect > qDone}
                 className="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
               >
                 <CheckCircle2 className="h-4 w-4" />

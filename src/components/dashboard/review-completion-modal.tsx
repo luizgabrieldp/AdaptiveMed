@@ -29,6 +29,7 @@ interface ReviewCompletionModalProps {
   onOpenChange: (open: boolean) => void;
   review: TopicReview | null;
   topic?: StudyTopic;
+  mode?: 'complete' | 'edit';
 }
 
 export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
@@ -36,36 +37,46 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   onOpenChange,
   review,
   topic,
+  mode,
 }) => {
-  const { completeReview } = useData();
+  const { completeReview, updateCompletedReview } = useData();
   const [questionsDone, setQuestionsDone] = useState<string>('20');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number } | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number; isEdit?: boolean } | null>(null);
+
+  const isEdit = mode === 'edit' || (mode !== 'complete' && Boolean(review?.completed_date));
 
   React.useEffect(() => {
     if (review && open) {
-      const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
-      setQuestionsDone(suggested);
-      const estCorrect = Math.max(1, Math.round(Number(suggested) * 0.8));
-      setQuestionsCorrect(String(estCorrect));
+      if (isEdit || review.completed_date) {
+        setQuestionsDone(review.questions_done != null ? String(review.questions_done) : '20');
+        setQuestionsCorrect(review.questions_correct != null ? String(review.questions_correct) : '16');
+      } else {
+        const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
+        setQuestionsDone(suggested);
+        setQuestionsCorrect('');
+      }
       setSuccessInfo(null);
     }
-  }, [review, open]);
+  }, [review, open, isEdit]);
 
   if (!review) return null;
 
   const doneNum = parseInt(questionsDone, 10) || 0;
-  const correctNum = parseInt(questionsCorrect, 10) || 0;
+  const correctNum = questionsCorrect !== '' ? parseInt(questionsCorrect, 10) || 0 : 0;
+  const isCorrectFilled = questionsCorrect !== '';
   const calculatedPct =
-    doneNum > 0 ? Math.min(100, Math.round((correctNum / doneNum) * 1000) / 10) : 0;
+    doneNum > 0 && isCorrectFilled && correctNum <= doneNum
+      ? Math.min(100, Math.round((correctNum / doneNum) * 1000) / 10)
+      : null;
 
   // Cálculo científico do próximo ciclo
   const baseCount = topic?.base_questions_count || topic?.initial_questions || 20;
   const prevInterval = review.previous_interval_days || 7;
   const nextReviewCalc = calculateNextReview({
     currentCycle: review.review_number,
-    accuracy: calculatedPct,
+    accuracy: calculatedPct ?? 80,
     baseQuestionsCount: baseCount,
     previousIntervalDays: prevInterval,
   });
@@ -77,32 +88,36 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (doneNum <= 0) return;
-    if (correctNum > doneNum) return;
+    if (doneNum <= 0 || !isCorrectFilled || correctNum > doneNum) return;
 
     try {
       setIsSubmitting(true);
-      const res = await completeReview(review.id, doneNum, correctNum);
+      if (isEdit) {
+        await updateCompletedReview(review.id, doneNum, correctNum);
+        setSuccessInfo({ nextDate: estimatedNextDate || undefined, pct: calculatedPct ?? 0, isEdit: true });
+      } else {
+        const res = await completeReview(review.id, doneNum, correctNum);
 
-      // Efeito festivo de gamificação
-      try {
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#3B82F6', '#10B981', '#F59E0B'],
-        });
-      } catch {
-        // Fallback silencioso se canvas-confetti não estiver disponível
+        // Efeito festivo de gamificação
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#3B82F6', '#10B981', '#F59E0B'],
+          });
+        } catch {
+          // Fallback silencioso se canvas-confetti não estiver disponível
+        }
+
+        setSuccessInfo({ nextDate: res.nextReviewDate, pct: calculatedPct ?? 0, isEdit: false });
       }
-
-      setSuccessInfo({ nextDate: res.nextReviewDate, pct: calculatedPct });
 
       setTimeout(() => {
         setIsSubmitting(false);
         setSuccessInfo(null);
         onOpenChange(false);
-      }, 1500);
+      }, 1200);
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -118,7 +133,9 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               <CheckCircle2 className="h-10 w-10 animate-bounce" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-foreground">Revisão Concluída!</h3>
+              <h3 className="text-xl font-bold text-foreground">
+                {successInfo.isEdit ? 'Rendimento Atualizado!' : 'Revisão Concluída!'}
+              </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 Aproveitamento de <span className="font-bold text-emerald-400">{successInfo.pct}%</span>
               </p>
@@ -140,10 +157,12 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 <span>Ciclo de Revisão R{review.review_number}</span>
               </div>
               <DialogTitle className="text-xl">
-                {topic?.subject_name || 'Concluir Revisão'}
+                {isEdit ? `Editar Rendimento (R${review.review_number})` : (topic?.subject_name || 'Concluir Revisão')}
               </DialogTitle>
               <DialogDescription>
-                Informe o número de questões realizadas e acertos para o algoritmo calcular a data ótima da próxima revisão.
+                {isEdit
+                  ? `Ajuste as questões feitas e acertos de "${topic?.subject_name || 'Assunto'}". O aproveitamento e o agendamento adaptativo serão recalculados.`
+                  : 'Informe o número de questões realizadas e acertos para o algoritmo calcular a data ótima da próxima revisão.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -166,12 +185,15 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     Questões Feitas
                   </label>
                   <Input
-                    type="number"
-                    min="1"
-                    max="500"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     value={questionsDone}
-                    onChange={e => setQuestionsDone(e.target.value)}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setQuestionsDone(val);
+                    }}
                     className="font-bold text-base"
                     placeholder="Ex: 20"
                   />
@@ -181,24 +203,48 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     Questões Acertadas
                   </label>
                   <Input
-                    type="number"
-                    min="0"
-                    max={questionsDone || '500'}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     value={questionsCorrect}
-                    onChange={e => setQuestionsCorrect(e.target.value)}
-                    className="font-bold text-base text-emerald-400"
-                    placeholder="Ex: 17"
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setQuestionsCorrect(val);
+                    }}
+                    className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
+                    placeholder="Ex: 16"
                   />
                 </div>
               </div>
+
+              {/* Alerta de Acertos maior que Questões */}
+              {isCorrectFilled && correctNum > doneNum && (
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                  <span>O número de acertos ({correctNum}) não pode ser maior que o total de questões ({doneNum}).</span>
+                </div>
+              )}
 
               {/* Pré-visualização Adaptativa Científica em Tempo Real */}
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-muted-foreground">Diagnóstico de Retenção:</span>
-                  <span className={`font-bold text-xs ${calculatedPct >= 85 ? 'text-emerald-400' : calculatedPct >= 70 ? 'text-blue-400' : calculatedPct >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
-                    {calculatedPct}% ({nextReviewCalc.diagnosis.split('(')[0].trim()})
+                  <span
+                    className={`font-bold text-xs ${
+                      calculatedPct === null
+                        ? 'text-muted-foreground font-normal'
+                        : calculatedPct >= 85
+                        ? 'text-emerald-400'
+                        : calculatedPct >= 70
+                        ? 'text-blue-400'
+                        : calculatedPct >= 50
+                        ? 'text-amber-400'
+                        : 'text-rose-400'
+                    }`}
+                  >
+                    {calculatedPct !== null
+                      ? `${calculatedPct}% (${nextReviewCalc.diagnosis.split('(')[0].trim()})`
+                      : '— (Informe os acertos)'}
                   </span>
                 </div>
 
@@ -242,11 +288,11 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               <Button
                 type="submit"
                 variant="success"
-                disabled={isSubmitting || doneNum <= 0 || correctNum > doneNum}
+                disabled={isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
                 className="gap-1.5 font-bold"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                {isSubmitting ? 'Salvando...' : 'Gravar e Agendar Próximo'}
+                {isSubmitting ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Gravar e Agendar Próximo'}
               </Button>
             </DialogFooter>
           </form>

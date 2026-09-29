@@ -341,60 +341,63 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   return (
     <div className="space-y-4">
       {/* Barra de Controles da Semana */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-2xl bg-card border border-border shadow-xs">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3.5 p-4 rounded-2xl bg-card border border-border shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
             <CalendarDays className="h-5 w-5" />
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-foreground">Grade Semanal</h3>
-              <Badge variant="outline" className="text-xs font-semibold">
+              <Badge variant="outline" className="text-xs font-semibold shrink-0">
                 {weekDays[0].dayNumber}/{weekDays[0].monthNumber} a {weekDays[6].dayNumber}/{weekDays[6].monthNumber}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 md:line-clamp-1">
               Arraste assuntos da lista lateral diretamente para o dia que estudou, ou clique no card para registrar seu rendimento.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center space-x-1.5 sm:space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekOffset(prev => prev - 1)}
-            className="h-8 w-8 p-0"
-            title="Semana anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 md:pt-0">
+          {/* Navegador de Semanas Compacto */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setWeekOffset(prev => prev - 1)}
+              className="h-7 w-7 p-0"
+              title="Semana anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
 
-          <Button
-            variant={weekOffset === 0 ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setWeekOffset(0)}
-            className="h-8 text-xs font-semibold px-3"
-          >
-            Esta Semana
-          </Button>
+            <Button
+              variant={weekOffset === 0 ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setWeekOffset(0)}
+              className="h-7 text-xs font-semibold px-2.5"
+            >
+              Esta Semana
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekOffset(prev => prev + 1)}
-            className="h-8 w-8 p-0"
-            title="Próxima semana"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setWeekOffset(prev => prev + 1)}
+              className="h-7 w-7 p-0"
+              title="Próxima semana"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
           <Button
             variant="outline"
             size="sm"
             onClick={handleAutoScheduleWeek}
             disabled={isAutoScheduling}
-            className="h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 shadow-xs"
+            className="h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 shadow-xs shrink-0"
             title="Distribui os assuntos pendentes de Segunda a Sexta, priorizando alta relevância da banca"
           >
             <Sparkles className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
@@ -404,7 +407,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
           <Button
             size="sm"
             onClick={() => handleOpenPlanForDate()}
-            className="h-8 text-xs font-bold gap-1 shadow-sm"
+            className="h-8 text-xs font-bold gap-1 shadow-sm shrink-0 whitespace-nowrap"
           >
             <Plus className="h-3.5 w-3.5" /> Programar Estudo
           </Button>

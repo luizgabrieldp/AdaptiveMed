@@ -1,4 +1,4 @@
-import { ReviewStatus, ReviewCalculationInput, ReviewCalculationResult } from '@/types/database';
+import { ReviewStatus, ReviewCalculationInput, ReviewCalculationResult, StreakConfig, DEFAULT_STREAK_CONFIG } from '@/types/database';
 
 /**
  * Normaliza o valor de porcentagem para uma escala de 0 a 100.
@@ -261,7 +261,8 @@ export function calculateQualifiedStreak(
   topics: Array<{ initial_date: string; initial_questions: number; is_planned?: boolean }>,
   reviews: Array<{ completed_date: string | null; questions_done: number | null }>,
   mockExams: Array<{ exam_date: string }>,
-  referenceDate?: string
+  referenceDate?: string,
+  streakConfig?: StreakConfig
 ): {
   currentStreak: number;
   todayQuestionsCount: number;
@@ -269,6 +270,23 @@ export function calculateQualifiedStreak(
   streakQualifiedToday: boolean;
 } {
   const today = referenceDate || getTodayDateString();
+  const config = streakConfig || DEFAULT_STREAK_CONFIG;
+  const minQ = config.minDailyQuestions ?? 10;
+  const ruleType = config.ruleType ?? 'questions_or_mock';
+
+  const isQualified = (q: number, m: number): boolean => {
+    switch (ruleType) {
+      case 'questions_only':
+        return q >= minQ;
+      case 'mock_only':
+        return m >= 1;
+      case 'questions_and_mock':
+        return q >= minQ && m >= 1;
+      case 'questions_or_mock':
+      default:
+        return q >= minQ || m >= 1;
+    }
+  };
 
   const dailyQuestions: Record<string, number> = {};
   const dailyMocks: Record<string, number> = {};
@@ -299,9 +317,9 @@ export function calculateQualifiedStreak(
 
   const todayQuestionsCount = dailyQuestions[today] || 0;
   const todayMockCompleted = (dailyMocks[today] || 0) >= 1;
-  const streakQualifiedToday = todayQuestionsCount >= 10 || todayMockCompleted;
+  const streakQualifiedToday = isQualified(todayQuestionsCount, todayMockCompleted ? 1 : 0);
 
-  // Dias que qualificam: >= 10 questões OU >= 1 simulado
+  // Dias que qualificam com base na regra configurada
   const allDates = new Set([
     ...Object.keys(dailyQuestions),
     ...Object.keys(dailyMocks),
@@ -311,7 +329,7 @@ export function calculateQualifiedStreak(
   allDates.forEach(date => {
     const q = dailyQuestions[date] || 0;
     const m = dailyMocks[date] || 0;
-    if (q >= 10 || m >= 1) {
+    if (isQualified(q, m)) {
       qualifyingDates.push(date);
     }
   });
@@ -325,3 +343,4 @@ export function calculateQualifiedStreak(
     streakQualifiedToday,
   };
 }
+

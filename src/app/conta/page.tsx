@@ -26,7 +26,9 @@ import {
   KeyRound,
   Link2,
   Lock,
+  Flame,
 } from 'lucide-react';
+import { StreakRuleType, DEFAULT_STREAK_CONFIG } from '@/types/database';
 
 interface SubscriptionData {
   isSubscribed: boolean;
@@ -37,8 +39,33 @@ interface SubscriptionData {
   amount: string;
 }
 
+const STREAK_RULES: { id: StreakRuleType; label: string; description: string; badge?: string }[] = [
+  {
+    id: 'questions_or_mock',
+    label: 'Questões OU Simulado',
+    description: 'Atingir a meta diária de questões OU concluir um simulado mantém a ofensiva ativa.',
+    badge: 'Padrão',
+  },
+  {
+    id: 'questions_only',
+    label: 'Apenas Questões',
+    description: 'Exige atingir a meta diária de questões (simulados isolados não contam).',
+  },
+  {
+    id: 'questions_and_mock',
+    label: 'Questões E Simulado',
+    description: 'Exige atingir a meta diária de questões E concluir ao menos um simulado no dia.',
+    badge: 'Hardcore',
+  },
+  {
+    id: 'mock_only',
+    label: 'Apenas Simulado',
+    description: 'Apenas dias em que você realiza simulado mantêm a ofensiva ativa.',
+  },
+];
+
 export default function ContaPage() {
-  const { profile, user, isDemoMode, signOut } = useData();
+  const { profile, user, isDemoMode, signOut, streakConfig, updateStreakConfig, stats } = useData();
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [isLoadingSub, setIsLoadingSub] = useState<boolean>(true);
   const [cancelModalOpen, setCancelModalOpen] = useState<boolean>(false);
@@ -52,6 +79,39 @@ export default function ContaPage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+
+  // Estados da Regra da Ofensiva (Streak)
+  const currentStreakConfig = streakConfig || profile?.streak_config || DEFAULT_STREAK_CONFIG;
+  const [selectedRuleType, setSelectedRuleType] = useState<StreakRuleType>(currentStreakConfig.ruleType);
+  const [selectedMinQuestions, setSelectedMinQuestions] = useState<number>(currentStreakConfig.minDailyQuestions || 10);
+  const [isUpdatingStreak, setIsUpdatingStreak] = useState(false);
+  const [streakSuccessMessage, setStreakSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (streakConfig) {
+      setSelectedRuleType(streakConfig.ruleType);
+      setSelectedMinQuestions(streakConfig.minDailyQuestions);
+    }
+  }, [streakConfig]);
+
+  const handleSaveStreakConfig = async (newRule?: StreakRuleType, newMin?: number) => {
+    const finalRule = newRule || selectedRuleType;
+    const finalMin = newMin !== undefined ? newMin : selectedMinQuestions;
+    try {
+      setIsUpdatingStreak(true);
+      setStreakSuccessMessage(null);
+      await updateStreakConfig({
+        ruleType: finalRule,
+        minDailyQuestions: finalMin,
+      });
+      setStreakSuccessMessage('Regra da ofensiva salva com sucesso!');
+      setTimeout(() => setStreakSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Erro ao atualizar regra de streak:', err);
+    } finally {
+      setIsUpdatingStreak(false);
+    }
+  };
 
   const fetchSubscription = async () => {
     try {
@@ -393,6 +453,190 @@ export default function ContaPage() {
                   </Button>
                 )}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD: REGRA DA OFENSIVA DIÁRIA (STREAK) */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-500">
+                  <Flame className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">Regra da Ofensiva Diária (Streak)</CardTitle>
+                  <CardDescription className="text-xs">
+                    Configure os critérios e meta de questões para validar seus dias consecutivos de estudo
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/25">
+                  <Flame className="h-4 w-4 fill-amber-400" />
+                  {stats.currentStreak} {stats.currentStreak === 1 ? 'dia' : 'dias'} de ofensiva
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5 space-y-5">
+            {/* Status do Dia Atual */}
+            <div
+              className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                stats.streakQualifiedToday
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                  : 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+              }`}
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                  {stats.streakQualifiedToday ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span className="text-emerald-400">Ofensiva de hoje garantida! Parabéns pelo foco.</span>
+                    </>
+                  ) : (
+                    <>
+                      <Flame className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span className="text-amber-300">Ofensiva de hoje pendente — continue praticando para manter o fogo aceso!</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Progresso hoje: <strong className="text-foreground">{stats.todayQuestionsCount}</strong> questões feitas • Simulado hoje: <strong className="text-foreground">{stats.todayMockCompleted ? 'Sim (Concluído)' : 'Não'}</strong>
+                </p>
+              </div>
+
+              <Badge
+                variant={stats.streakQualifiedToday ? 'concluido' : 'atrasado'}
+                className="self-start sm:self-auto text-[10px] font-semibold shrink-0"
+              >
+                {stats.streakQualifiedToday ? 'Qualificado Hoje' : 'Pendente'}
+              </Badge>
+            </div>
+
+            {/* Seleção do Critério da Ofensiva */}
+            <div className="space-y-2.5">
+              <label className="text-xs font-bold text-foreground">
+                Critério de Validação da Ofensiva
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {STREAK_RULES.map(rule => {
+                  const isSelected = selectedRuleType === rule.id;
+                  return (
+                    <button
+                      key={rule.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRuleType(rule.id);
+                        handleSaveStreakConfig(rule.id, selectedMinQuestions);
+                      }}
+                      className={`text-left p-3 rounded-xl border transition-all flex flex-col justify-between cursor-pointer ${
+                        isSelected
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                          : 'border-border bg-card hover:bg-muted/40'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className={`text-xs font-bold ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                            {rule.label}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {rule.badge && (
+                              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                                {rule.badge}
+                              </span>
+                            )}
+                            {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                          {rule.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Meta Mínima de Questões */}
+            {selectedRuleType !== 'mock_only' && (
+              <div className="space-y-2.5 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground">
+                    Meta Mínima Diária de Questões
+                  </label>
+                  <span className="text-xs font-extrabold text-primary">
+                    🎯 {selectedMinQuestions} questões/dia
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[5, 10, 15, 20, 30, 50].map(q => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMinQuestions(q);
+                        handleSaveStreakConfig(selectedRuleType, q);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                        selectedMinQuestions === q
+                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          : 'bg-muted/50 border-border text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {q} questões
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-1.5 sm:ml-auto">
+                    <span className="text-[11px] text-muted-foreground">Outro valor:</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min="1"
+                      max="500"
+                      value={selectedMinQuestions}
+                      onChange={e => {
+                        const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                        setSelectedMinQuestions(val);
+                      }}
+                      onBlur={() => handleSaveStreakConfig(selectedRuleType, selectedMinQuestions)}
+                      className="w-16 h-8 text-xs font-bold rounded-lg border border-border bg-card px-2 text-center text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Feedback e Botão de Salvar */}
+            <div className="flex items-center justify-between pt-2 border-t border-border/60">
+              <div className="text-xs text-muted-foreground">
+                {streakSuccessMessage ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {streakSuccessMessage}
+                  </span>
+                ) : (
+                  <span>A alteração passa a valer imediatamente no cálculo diário.</span>
+                )}
+              </div>
+
+              <Button
+                size="sm"
+                onClick={() => handleSaveStreakConfig()}
+                disabled={isUpdatingStreak}
+                className="h-8 text-xs font-bold gap-1.5 shadow-xs"
+              >
+                {isUpdatingStreak && <Loader2 className="h-3 w-3 animate-spin" />}
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Salvar Regra</span>
+              </Button>
             </div>
           </CardContent>
         </Card>

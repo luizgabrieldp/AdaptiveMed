@@ -20,45 +20,58 @@ interface NewInstitutionModalProps {
   defaultInstitution?: string;
 }
 
-const COMMON_INSTITUTIONS = ['USP-SP', 'ENARE', 'UNICAMP', 'SUS-SP', 'UFRJ', 'UNIFESP', 'UFMG', 'SCMRP'];
-
 export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
   open,
   onOpenChange,
   defaultInstitution,
 }) => {
   const { addInstitutionExam } = useData();
-  const [institution, setInstitution] = useState(defaultInstitution || 'USP-SP');
-  const [customInst, setCustomInst] = useState('');
+  const [institution, setInstitution] = useState(defaultInstitution || '');
   const [examYear, setExamYear] = useState('2025');
-  const [scorePercentage, setScorePercentage] = useState('80.0');
+  const [scorePercentage, setScorePercentage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (open) {
+      if (defaultInstitution) {
+        setInstitution(defaultInstitution);
+      }
+      setScorePercentage('');
+    }
+  }, [defaultInstitution, open]);
+
+  const scoreNum = parseFloat(scorePercentage.replace(',', '.'));
+  const isScoreValid = scorePercentage !== '' && !isNaN(scoreNum) && scoreNum >= 0 && scoreNum <= 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalInstName = institution === 'OUTRA' ? customInst.trim() : institution;
-    const yearNum = parseInt(examYear, 10);
-    const scoreNum = parseFloat(scorePercentage);
+    const finalInstName = institution.trim().toUpperCase();
+    const cleanYear = examYear.trim();
 
-    if (!finalInstName || isNaN(yearNum) || isNaN(scoreNum)) return;
+    if (!finalInstName || !cleanYear || !isScoreValid) return;
 
     try {
       setIsSubmitting(true);
       await addInstitutionExam({
-        institution_name: finalInstName.toUpperCase(),
-        exam_year: yearNum,
+        institution_name: finalInstName,
+        exam_year: cleanYear,
         score_percentage: scoreNum,
       });
 
       setIsSubmitting(false);
       onOpenChange(false);
-      setCustomInst('');
-      setScorePercentage('80.0');
+      if (!defaultInstitution) setInstitution('');
+      setScorePercentage('');
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
     }
   };
+
+  const isFormValid =
+    institution.trim().length > 0 &&
+    examYear.trim().length > 0 &&
+    isScoreValid;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -78,57 +91,32 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
           <div className="space-y-4 my-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">
-                Instituição / Banca
+                Instituição / Banca Examinadora
               </label>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {COMMON_INSTITUTIONS.map(inst => (
-                  <button
-                    key={inst}
-                    type="button"
-                    onClick={() => setInstitution(inst)}
-                    className={`text-xs px-2.5 py-1 rounded-md border font-semibold transition-all ${
-                      institution === inst
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {inst}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setInstitution('OUTRA')}
-                  className={`text-xs px-2.5 py-1 rounded-md border font-semibold transition-all ${
-                    institution === 'OUTRA'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  Outra...
-                </button>
-              </div>
-
-              {institution === 'OUTRA' && (
-                <Input
-                  type="text"
-                  required
-                  placeholder="Digite a sigla da banca (ex: AMP, AMRIGS, PSU-MG)"
-                  value={customInst}
-                  onChange={e => setCustomInst(e.target.value)}
-                />
-              )}
+              <Input
+                type="text"
+                required
+                placeholder="Ex: SURCE, UFRN, SES-PE, ENARE, USP-SP..."
+                value={institution}
+                onChange={e => setInstitution(e.target.value)}
+                className="font-semibold text-sm"
+                autoFocus
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Digite a sigla ou nome da banca examinadora desejada.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">
-                  Ano da Prova
+                  Ano ou Semestre da Prova
                 </label>
                 <Input
-                  type="number"
-                  min="2010"
-                  max="2030"
+                  type="text"
+                  inputMode="decimal"
                   required
+                  placeholder="Ex: 2024, 24.1, 24.2..."
                   value={examYear}
                   onChange={e => setExamYear(e.target.value)}
                   className="font-bold text-base"
@@ -140,14 +128,13 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
                   Nota / Acerto (%)
                 </label>
                 <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
+                  type="text"
+                  inputMode="decimal"
                   required
+                  placeholder="Ex: 80.0"
                   value={scorePercentage}
                   onChange={e => setScorePercentage(e.target.value)}
-                  className="font-bold text-base text-emerald-400"
+                  className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35"
                 />
               </div>
             </div>
@@ -162,7 +149,7 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="font-bold">
+            <Button type="submit" disabled={isSubmitting || !isFormValid} className="font-bold">
               {isSubmitting ? 'Salvando...' : 'Salvar Prova'}
             </Button>
           </DialogFooter>
@@ -171,3 +158,4 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
     </Dialog>
   );
 };
+

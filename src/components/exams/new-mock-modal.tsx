@@ -25,17 +25,34 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
   const [examName, setExamName] = useState('');
   const [examDate, setExamDate] = useState(getTodayDateString());
   const [totalQuestions, setTotalQuestions] = useState('100');
-  const [correctAnswers, setCorrectAnswers] = useState('75');
+  const [correctAnswers, setCorrectAnswers] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  React.useEffect(() => {
+    if (open) {
+      setCorrectAnswers('');
+      setExamDate(getTodayDateString());
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
   const totalNum = parseInt(totalQuestions, 10) || 0;
-  const correctNum = parseInt(correctAnswers, 10) || 0;
+  const correctNum = correctAnswers !== '' ? parseInt(correctAnswers, 10) || 0 : 0;
   const calculatedPct =
-    totalNum > 0 ? Math.min(100, Math.round((correctNum / totalNum) * 1000) / 10) : 0;
+    totalNum > 0 && correctAnswers !== '' && correctNum <= totalNum
+      ? Math.min(100, Math.round((correctNum / totalNum) * 1000) / 10)
+      : null;
+
+  const isFormValid =
+    examName.trim().length > 0 &&
+    totalNum > 0 &&
+    correctAnswers !== '' &&
+    correctNum >= 0 &&
+    correctNum <= totalNum;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!examName.trim() || totalNum <= 0 || correctNum > totalNum) return;
+    if (!isFormValid) return;
 
     try {
       setIsSubmitting(true);
@@ -50,7 +67,7 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
       onOpenChange(false);
       setExamName('');
       setTotalQuestions('100');
-      setCorrectAnswers('75');
+      setCorrectAnswers('');
       setExamDate(getTodayDateString());
     } catch (err) {
       console.error(err);
@@ -105,12 +122,16 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
                   Total de Questões
                 </label>
                 <Input
-                  type="number"
-                  min="1"
-                  max="300"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
+                  placeholder="100"
                   value={totalQuestions}
-                  onChange={e => setTotalQuestions(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setTotalQuestions(val);
+                  }}
                   className="font-bold text-base"
                 />
               </div>
@@ -120,21 +141,31 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
                   Acertos
                 </label>
                 <Input
-                  type="number"
-                  min="0"
-                  max={totalQuestions || '300'}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
+                  placeholder="Ex: 75"
                   value={correctAnswers}
-                  onChange={e => setCorrectAnswers(e.target.value)}
-                  className="font-bold text-base text-emerald-400"
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setCorrectAnswers(val);
+                  }}
+                  className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                 />
               </div>
             </div>
 
+            {correctAnswers !== '' && correctNum > totalNum && (
+              <p className="text-xs text-rose-400 font-medium">
+                O número de acertos ({correctNum}) não pode ser maior que o total ({totalNum}).
+              </p>
+            )}
+
             <div className="p-3 rounded-xl bg-muted/40 border border-border flex justify-between items-center text-xs">
               <span className="text-muted-foreground">Aproveitamento Final:</span>
               <span className="font-extrabold text-base text-primary">
-                {calculatedPct}%
+                {calculatedPct !== null ? `${calculatedPct}%` : '—'}
               </span>
             </div>
           </div>
@@ -150,7 +181,7 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || !examName.trim() || totalNum <= 0 || correctNum > totalNum}
+              disabled={isSubmitting || !isFormValid}
               className="font-bold"
             >
               {isSubmitting ? 'Salvando...' : 'Salvar Simulado'}
@@ -161,3 +192,4 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
     </Dialog>
   );
 };
+

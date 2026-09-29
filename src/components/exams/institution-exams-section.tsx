@@ -48,7 +48,9 @@ export const InstitutionExamsSection: React.FC = () => {
     if (!selectedInst) return [];
     return institutionExams
       .filter(i => i.institution_name === selectedInst)
-      .sort((a, b) => a.exam_year - b.exam_year);
+      .sort((a, b) =>
+        String(a.exam_year).localeCompare(String(b.exam_year), undefined, { numeric: true })
+      );
   }, [institutionExams, selectedInst]);
 
   // Dados para o gráfico temporal de anos (2018 a 2026)
