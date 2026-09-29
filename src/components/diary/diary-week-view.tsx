@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,10 +14,13 @@ import {
 import { ReviewCompletionModal } from '@/components/dashboard/review-completion-modal';
 import { RecordPlannedStudyModal } from './record-planned-study-modal';
 import { PlanTopicModal } from './plan-topic-modal';
+import { EditPlannedTopicModal } from './edit-planned-topic-modal';
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Plus,
   CheckCircle2,
   Clock,
@@ -29,6 +32,7 @@ import {
   Sparkles,
   CalendarX,
   AlertCircle,
+  Edit2,
 } from 'lucide-react';
 
 interface DiaryWeekViewProps {
@@ -59,6 +63,21 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
 
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planModalDate, setPlanModalDate] = useState<string | undefined>(undefined);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedTopicToEdit, setSelectedTopicToEdit] = useState<StudyTopic | null>(null);
+
+  // Seção de concluídos na lista lateral
+  const [showCompletedSection, setShowCompletedSection] = useState(true);
+
+  // Ref para auto-scroll na coluna de hoje
+  const todayColRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (todayColRef.current && weekOffset === 0) {
+      todayColRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [weekOffset]);
 
   // Estado visual de Drop
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
@@ -117,12 +136,12 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     return set;
   }, [prevalentTopics]);
 
-  // Itens alocados em cada dia da semana (Revisões e Estudos com dia definido)
+  // Itens alocados em cada dia da semana (Revisões, Estudos Planejados e Estudos Iniciais Concluídos)
   const dayItemsMap = useMemo(() => {
     const map = new Map<
       string,
       Array<{
-        type: 'review' | 'planned_study';
+        type: 'review' | 'planned_study' | 'initial_study_done';
         id: string;
         topic?: StudyTopic;
         review?: TopicReview;
@@ -137,7 +156,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
 
     weekDays.forEach(d => map.set(d.dateStr, []));
 
-    // Revisões
+    // 1. Revisões
     reviews.forEach(r => {
       if (map.has(r.scheduled_date)) {
         const topic = topicMap.get(r.topic_id);
@@ -164,7 +183,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
       }
     });
 
-    // Estudos programados para um dia desta semana
+    // 2. Estudos programados para um dia desta semana
     topics.forEach(t => {
       if (t.is_planned && t.planned_date && map.has(t.planned_date)) {
         const isHigh =
@@ -185,8 +204,35 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
       }
     });
 
+    // 3. Estudos Iniciais Realizados (R0 Concluído) - permanecem no dia em que foram feitos!
+    topics.forEach(t => {
+      if (!t.is_planned && t.initial_date && map.has(t.initial_date)) {
+        const isHigh =
+          highPrevalenceNames.has(t.subject_name.toLowerCase()) ||
+          Boolean(t.tags?.some(tag => tag.toLowerCase().includes('alta')));
+
+        map.get(t.initial_date)!.push({
+          type: 'initial_study_done',
+          id: t.id,
+          topic: t,
+          subjectName: t.subject_name,
+          area: t.area,
+          badgeText: 'R0 Concluído',
+          isCompleted: true,
+          isHighPrevalence: isHigh,
+          isOverdue: false,
+        });
+      }
+    });
+
     return map;
   }, [weekDays, reviews, topics, topicMap, highPrevalenceNames, todayStr]);
+
+  // Assuntos concluídos nesta semana (para exibição na barra lateral)
+  const weeklyCompletedTopics = useMemo(() => {
+    const weekDateSet = new Set(weekDays.map(d => d.dateStr));
+    return topics.filter(t => !t.is_planned && t.initial_date && weekDateSet.has(t.initial_date));
+  }, [topics, weekDays]);
 
   // Lista lateral: "Assuntos da Semana" (Sem data fixa OU alocado para esta semana OU pendente de semanas passadas)
   const weeklyBacklogTopics = useMemo(() => {
@@ -242,7 +288,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   };
 
   const handleOpenItem = (item: {
-    type: 'review' | 'planned_study';
+    type: 'review' | 'planned_study' | 'initial_study_done';
     topic?: StudyTopic;
     review?: TopicReview;
   }) => {
@@ -252,6 +298,9 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     } else if (item.type === 'planned_study' && item.topic) {
       setSelectedPlannedTopic(item.topic);
       setRecordStudyModalOpen(true);
+    } else if (item.type === 'initial_study_done' && item.topic) {
+      setSelectedTopicToEdit(item.topic);
+      setEditModalOpen(true);
     }
   };
 
@@ -345,17 +394,17 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
             size="sm"
             onClick={handleAutoScheduleWeek}
             disabled={isAutoScheduling}
-            className="h-8 text-xs font-bold gap-1.5 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 shadow-xs ml-1"
+            className="h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 shadow-xs"
             title="Distribui os assuntos pendentes de Segunda a Sexta, priorizando alta relevância da banca"
           >
             <Sparkles className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
-            {isAutoScheduling ? 'Distribuindo...' : 'Auto-Estudo (Programar Semana)'}
+            {isAutoScheduling ? 'Distribuindo...' : 'Auto-Estudo'}
           </Button>
 
           <Button
             size="sm"
             onClick={() => handleOpenPlanForDate()}
-            className="h-8 text-xs font-bold gap-1 shadow-sm ml-1"
+            className="h-8 text-xs font-bold gap-1 shadow-sm"
           >
             <Plus className="h-3.5 w-3.5" /> Programar Estudo
           </Button>
@@ -374,6 +423,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
               return (
                 <div
                   key={day.dateStr}
+                  ref={day.isToday ? todayColRef : undefined}
                   onDragOver={e => handleDragOver(e, day.dateStr)}
                   onDragLeave={e => handleDragLeave(e, day.dateStr)}
                   onDrop={e => handleDropOnDay(e, day.dateStr)}
@@ -427,6 +477,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       ) : (
                         items.map(item => {
                           const style = getAreaStyle(item.area, areas);
+                          const isInitialDone = item.type === 'initial_study_done';
 
                           return (
                             <div
@@ -439,7 +490,9 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               }}
                               onClick={() => handleOpenItem(item)}
                               className={`p-2.5 rounded-xl border text-xs space-y-1.5 cursor-pointer transition-all hover:scale-[1.02] shadow-2xs group/item ${
-                                item.isCompleted
+                                isInitialDone
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60'
+                                  : item.isCompleted
                                   ? 'bg-emerald-500/10 border-emerald-500/25 opacity-75'
                                   : item.isOverdue
                                   ? 'bg-rose-500/10 border-rose-500/35 hover:border-rose-500/60'
@@ -456,6 +509,23 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 </span>
 
                                 <div className="flex items-center gap-1">
+                                  {/* Botão de edição para estudos planejados ou concluídos */}
+                                  {item.topic && (
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setSelectedTopicToEdit(item.topic!);
+                                        setEditModalOpen(true);
+                                      }}
+                                      className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/20 transition-all"
+                                      title="Editar assunto"
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+
+                                  {/* Botão de desagendar do dia */}
                                   {item.type === 'planned_study' && item.topic && (
                                     <button
                                       type="button"
@@ -464,14 +534,17 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                         updatePlannedTopicDate(item.topic!.id, null);
                                       }}
                                       className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground hover:text-amber-400 hover:bg-amber-500/20 transition-all"
-                                      title="Desagendar deste dia (mantém nos Assuntos da Semana)"
+                                      title="Remover deste dia (mantém nos Assuntos da Semana)"
                                     >
                                       <CalendarX className="h-3 w-3" />
                                     </button>
                                   )}
+
                                   <span
                                     className={`text-[9px] font-bold px-1 py-0.5 rounded ${
-                                      item.isCompleted
+                                      isInitialDone
+                                        ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/30'
+                                        : item.isCompleted
                                         ? 'text-emerald-400 bg-emerald-500/15'
                                         : item.type === 'planned_study'
                                         ? 'text-amber-400 bg-amber-500/15'
@@ -489,6 +562,14 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 {item.subjectName}
                               </p>
 
+                              {/* Rendimento se R0 concluído */}
+                              {isInitialDone && item.topic && (
+                                <div className="text-[10px] text-emerald-400 font-semibold flex items-center justify-between">
+                                  <span>{item.topic.initial_correct}/{item.topic.initial_questions} questões</span>
+                                  <span className="font-bold">{item.topic.initial_percentage}%</span>
+                                </div>
+                              )}
+
                               <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
                                 {item.isHighPrevalence && (
                                   <span className="inline-flex items-center gap-0.5 font-bold text-amber-400 text-[9px]">
@@ -496,8 +577,8 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                   </span>
                                 )}
 
-                                <span className="font-semibold text-primary hover:underline ml-auto">
-                                  {item.isCompleted ? 'Ver detalhes' : 'Concluir →'}
+                                <span className={`font-semibold ml-auto ${isInitialDone ? 'text-emerald-400' : 'text-primary hover:underline'}`}>
+                                  {isInitialDone ? 'Concluído ✓' : item.isCompleted ? 'Ver detalhes' : 'Concluir →'}
                                 </span>
                               </div>
                             </div>
@@ -575,14 +656,28 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => deleteTopic(topic.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 transition-opacity"
-                          title="Remover assunto"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTopicToEdit(topic);
+                              setEditModalOpen(true);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary transition-opacity"
+                            title="Editar assunto"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteTopic(topic.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 transition-opacity"
+                            title="Remover assunto"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
 
                       <p className="text-xs font-bold text-foreground leading-snug">
@@ -624,6 +719,76 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                 })
               )}
             </div>
+
+            {/* Seção Recolhível de Assuntos Concluídos nesta semana */}
+            {weeklyCompletedTopics.length > 0 && (
+              <div className="pt-3 border-t border-border/60 mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCompletedSection(prev => !prev)}
+                  className="flex items-center justify-between w-full py-1.5 px-2 rounded-lg hover:bg-muted/60 text-xs font-bold transition-colors select-none"
+                >
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Concluídos nesta semana ({weeklyCompletedTopics.length})
+                  </span>
+                  {showCompletedSection ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+
+                {showCompletedSection && (
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1 scrollbar-thin">
+                    {weeklyCompletedTopics.map(topic => {
+                      const style = getAreaStyle(topic.area, areas);
+                      return (
+                        <div
+                          key={topic.id}
+                          className="p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 space-y-1.5 shadow-2xs group"
+                        >
+                          <div className="flex items-start justify-between gap-1.5">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {topic.area.split(' ')[0]}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTopicToEdit(topic);
+                                  setEditModalOpen(true);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary transition-opacity"
+                                title="Editar assunto"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                R0 Feito
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs font-bold text-foreground leading-snug">
+                            {topic.subject_name}
+                          </p>
+
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                            <span>{formatDateBR(topic.initial_date)}</span>
+                            <span className="font-bold text-emerald-400">
+                              {topic.initial_correct}/{topic.initial_questions} ({topic.initial_percentage}%)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <Button
               onClick={() => handleOpenPlanForDate()}
@@ -717,6 +882,12 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
         open={planModalOpen}
         onOpenChange={setPlanModalOpen}
         defaultDate={planModalDate}
+      />
+
+      <EditPlannedTopicModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        topic={selectedTopicToEdit}
       />
     </div>
   );

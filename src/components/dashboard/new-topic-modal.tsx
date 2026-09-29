@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   calculateNextReviewInterval,
+  calculateNextReview,
   getTodayDateString,
   addDaysToDate,
   formatDateBR,
@@ -27,6 +28,9 @@ import {
   Tag,
   X,
   Plus,
+  AlertTriangle,
+  Info,
+  BrainCircuit,
 } from 'lucide-react';
 
 interface NewTopicModalProps {
@@ -60,7 +64,12 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   const calculatedPct =
     questionsNum > 0 ? Math.min(100, Math.round((correctNum / questionsNum) * 1000) / 10) : 0;
 
-  const r1Interval = calculateNextReviewInterval(calculatedPct, 1);
+  const reviewCalc = calculateNextReview({
+    currentCycle: 0,
+    accuracy: calculatedPct,
+    baseQuestionsCount: questionsNum || 20,
+  });
+  const r1Interval = reviewCalc.nextIntervalDays;
   const r1EstimatedDate = addDaysToDate(initialDate, r1Interval);
 
   const handleAddTag = (tagToAdd?: string) => {
@@ -299,6 +308,14 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                 />
               </div>
 
+              {/* Callout de Recomendação Científica */}
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-blue-200/90 leading-relaxed">
+                  <strong>Recomendação AdaptiveMed:</strong> Resolva no mínimo <strong>15 a 20 questões</strong> no primeiro contato para garantir significância estatística na sua curva de esquecimento inicial.
+                </p>
+              </div>
+
               {/* Questões e Acertos */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -312,7 +329,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     required
                     value={initialQuestions}
                     onChange={e => setInitialQuestions(e.target.value)}
-                    className="text-sm"
+                    className="text-sm font-semibold"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -326,34 +343,53 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     required
                     value={initialCorrect}
                     onChange={e => setInitialCorrect(e.target.value)}
-                    className="text-sm"
+                    className="text-sm font-semibold"
                   />
                 </div>
               </div>
 
-              {/* Box de Previsão Adaptativa */}
+              {/* Alerta de Amostragem Baixa */}
+              {questionsNum > 0 && questionsNum < 10 && (
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                  <span>Amostragem baixa (&lt; 10 questões) para cálculo preciso de retenção. Sugerimos resolver mais questões.</span>
+                </div>
+              )}
+
+              {/* Box de Previsão Adaptativa Científica */}
               <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-muted-foreground">Aproveitamento Inicial:</span>
+                  <span className="font-semibold text-muted-foreground flex items-center gap-1">
+                    <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Diagnóstico Inicial:
+                  </span>
                   <span
                     className={`font-black text-sm ${
-                      calculatedPct >= 80
+                      calculatedPct >= 85
                         ? 'text-emerald-400'
-                        : calculatedPct >= 65
+                        : calculatedPct >= 70
                         ? 'text-blue-400'
+                        : calculatedPct >= 50
+                        ? 'text-amber-400'
                         : 'text-rose-400'
                     }`}
                   >
-                    {calculatedPct}%
+                    {calculatedPct}% ({reviewCalc.diagnosis.split('(')[0].trim()})
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
                   <span className="text-muted-foreground flex items-center gap-1">
-                    <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Previsão de R1:
+                    <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Agendamento de R1:
                   </span>
                   <span className="font-bold text-foreground">
-                    {r1Interval === 1 ? 'Amanhã (24h)' : `Em ${r1Interval} dias`} ({formatDateBR(r1EstimatedDate)})
+                    +{r1Interval} dias ({formatDateBR(r1EstimatedDate)})
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
+                  <span className="text-muted-foreground">Meta Sugerida para R1:</span>
+                  <span className="font-bold text-amber-400">
+                    🎯 {reviewCalc.recommendedQuestions} questões
                   </span>
                 </div>
               </div>

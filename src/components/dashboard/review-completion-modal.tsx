@@ -15,12 +15,14 @@ import { Input } from '@/components/ui/input';
 import { TopicReview, StudyTopic } from '@/types/database';
 import {
   calculateNextReviewInterval,
+  calculateNextReview,
+  diffInDays,
   getTodayDateString,
   addDaysToDate,
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { useData } from '@/lib/store/data-context';
-import { CheckCircle2, Sparkles, BrainCircuit } from 'lucide-react';
+import { CheckCircle2, Sparkles, BrainCircuit, Target } from 'lucide-react';
 
 interface ReviewCompletionModalProps {
   open: boolean;
@@ -41,6 +43,16 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number } | null>(null);
 
+  React.useEffect(() => {
+    if (review && open) {
+      const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
+      setQuestionsDone(suggested);
+      const estCorrect = Math.max(1, Math.round(Number(suggested) * 0.8));
+      setQuestionsCorrect(String(estCorrect));
+      setSuccessInfo(null);
+    }
+  }, [review, open]);
+
   if (!review) return null;
 
   const doneNum = parseInt(questionsDone, 10) || 0;
@@ -48,11 +60,18 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const calculatedPct =
     doneNum > 0 ? Math.min(100, Math.round((correctNum / doneNum) * 1000) / 10) : 0;
 
-  // Cálculo antecipado do próximo ciclo
-  const nextCycleNumber = review.review_number < 8 ? review.review_number + 1 : null;
-  const nextInterval = nextCycleNumber
-    ? calculateNextReviewInterval(calculatedPct, nextCycleNumber)
-    : 0;
+  // Cálculo científico do próximo ciclo
+  const baseCount = topic?.base_questions_count || topic?.initial_questions || 20;
+  const prevInterval = review.previous_interval_days || 7;
+  const nextReviewCalc = calculateNextReview({
+    currentCycle: review.review_number,
+    accuracy: calculatedPct,
+    baseQuestionsCount: baseCount,
+    previousIntervalDays: prevInterval,
+  });
+
+  const nextCycleNumber = review.review_number < 8 ? nextReviewCalc.nextCycle : null;
+  const nextInterval = nextReviewCalc.nextIntervalDays;
   const today = getTodayDateString();
   const estimatedNextDate = nextCycleNumber ? addDaysToDate(today, nextInterval) : null;
 
@@ -129,6 +148,18 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
             </DialogHeader>
 
             <div className="space-y-4 my-4">
+              {/* Meta Recomendada para a Revisão Atual */}
+              {review.recommended_questions ? (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                    <Target className="h-4 w-4 text-amber-400" /> Meta Científica (R{review.review_number}):
+                  </span>
+                  <span className="font-black text-amber-400">
+                    🎯 {review.recommended_questions} questões
+                  </span>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground">
@@ -162,25 +193,34 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 </div>
               </div>
 
-              {/* Pré-visualização Adaptativa em Tempo Real */}
+              {/* Pré-visualização Adaptativa Científica em Tempo Real */}
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Taxa de Acerto:</span>
-                  <span className={`font-bold text-sm ${calculatedPct >= 80 ? 'text-emerald-400' : calculatedPct >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
-                    {calculatedPct}%
+                  <span className="text-muted-foreground">Diagnóstico de Retenção:</span>
+                  <span className={`font-bold text-xs ${calculatedPct >= 85 ? 'text-emerald-400' : calculatedPct >= 70 ? 'text-blue-400' : calculatedPct >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {calculatedPct}% ({nextReviewCalc.diagnosis.split('(')[0].trim()})
                   </span>
                 </div>
 
                 {nextCycleNumber && estimatedNextDate && (
-                  <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Sparkles className="h-3.5 w-3.5 text-blue-400" />
-                      Próxima Revisão (R{nextCycleNumber}):
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      +{nextInterval} dias ({formatDateBR(estimatedNextDate)})
-                    </span>
-                  </div>
+                  <>
+                    <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                        Próxima Revisão (R{nextCycleNumber}):
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        +{nextInterval} dias ({formatDateBR(estimatedNextDate)})
+                      </span>
+                    </div>
+
+                    <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Meta para R{nextCycleNumber}:</span>
+                      <span className="font-bold text-amber-400">
+                        🎯 {nextReviewCalc.recommendedQuestions} questões recomendadas
+                      </span>
+                    </div>
+                  </>
                 )}
                 {review.review_number === 8 && (
                   <p className="text-[11px] text-emerald-400 font-medium pt-1 border-t border-border/60">

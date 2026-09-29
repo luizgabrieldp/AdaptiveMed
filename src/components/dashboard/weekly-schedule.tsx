@@ -135,6 +135,12 @@ export const WeeklySchedule: React.FC = () => {
           highPrevalenceNames.has(subjectName.toLowerCase()) ||
           Boolean(topic?.tags?.some(t => t.toLowerCase().includes('alta')));
 
+        const badgeText = isCompleted
+          ? `R${r.review_number} Concluída`
+          : r.recommended_questions
+          ? `R${r.review_number} (🎯 ${r.recommended_questions} Qs)`
+          : `R${r.review_number}`;
+
         map.get(r.scheduled_date)!.push({
           type: 'review',
           id: r.id,
@@ -142,7 +148,7 @@ export const WeeklySchedule: React.FC = () => {
           review: r,
           subjectName,
           area,
-          badgeText: isCompleted ? `R${r.review_number} Concluída` : `R${r.review_number}`,
+          badgeText,
           isCompleted,
           isHighPrevalence: isHigh,
           isOverdue: statusInfo.status === 'ATRASADO',
@@ -168,6 +174,27 @@ export const WeeklySchedule: React.FC = () => {
           isCompleted: false,
           isHighPrevalence: isHigh,
           isOverdue: planDate < todayStr,
+        });
+      }
+    });
+
+    // 3. Estudos Iniciais Realizados (R0 Concluído) - permanecem na agenda
+    topics.forEach(t => {
+      if (!t.is_planned && t.initial_date && map.has(t.initial_date)) {
+        const isHigh =
+          highPrevalenceNames.has(t.subject_name.toLowerCase()) ||
+          Boolean(t.tags?.some(tag => tag.toLowerCase().includes('alta')));
+
+        map.get(t.initial_date)!.push({
+          type: 'initial_study_done' as any,
+          id: t.id,
+          topic: t,
+          subjectName: t.subject_name,
+          area: t.area,
+          badgeText: 'R0 Concluído',
+          isCompleted: true,
+          isHighPrevalence: isHigh,
+          isOverdue: false,
         });
       }
     });

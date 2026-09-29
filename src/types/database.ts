@@ -164,6 +164,7 @@ export interface StudyTopic {
   planned_date?: string;
   is_weekly_goal?: boolean;
   notes?: string;
+  base_questions_count?: number;
   created_at: string;
 }
 
@@ -191,7 +192,24 @@ export interface TopicReview {
   questions_done: number | null;
   questions_correct: number | null;
   percentage: number | null;
+  recommended_questions?: number;
+  previous_interval_days?: number;
+  diagnosis?: string;
   created_at: string;
+}
+
+export interface ReviewCalculationInput {
+  currentCycle: number; // 0 para Estudo Inicial, 1 para R1, etc.
+  accuracy: number; // 0 a 100
+  baseQuestionsCount: number;
+  previousIntervalDays?: number;
+}
+
+export interface ReviewCalculationResult {
+  nextIntervalDays: number;
+  nextCycle: number;
+  recommendedQuestions: number;
+  diagnosis: string;
 }
 
 export interface TopicWithReviews extends StudyTopic {

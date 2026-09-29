@@ -24,6 +24,8 @@ import {
 } from './demo-data';
 import {
   calculateNextReviewInterval,
+  calculateNextReview,
+  diffInDays,
   getTodayDateString,
   addDaysToDate,
   calculateStreak,
@@ -52,6 +54,7 @@ interface DataContextType {
     initial_questions: number;
     initial_correct: number;
   }) => Promise<void>;
+  updateTopic: (topicId: string, data: Partial<StudyTopic>) => Promise<void>;
   addPlannedTopic: (data: {
     area: string;
     subject_name: string;
@@ -507,12 +510,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initial_questions: data.initial_questions,
       initial_correct: data.initial_correct,
       initial_percentage: percentage,
+      base_questions_count: data.initial_questions,
       created_at: new Date().toISOString(),
     };
 
-    // Calcula o primeiro ciclo de revisão (R1)
-    const intervalDays = calculateNextReviewInterval(percentage, 1);
-    const r1ScheduledDate = addDaysToDate(data.initial_date, intervalDays);
+    // Calcula o primeiro ciclo de revisão (R1) usando o motor científico
+    const reviewCalc = calculateNextReview({
+      currentCycle: 0,
+      accuracy: percentage,
+      baseQuestionsCount: data.initial_questions,
+    });
+    const r1ScheduledDate = addDaysToDate(data.initial_date, reviewCalc.nextIntervalDays);
 
     const r1Review: TopicReview = {
       id: isDemoMode ? `rev-${Date.now()}-1` : crypto.randomUUID(),
@@ -524,6 +532,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_done: null,
       questions_correct: null,
       percentage: null,
+      recommended_questions: reviewCalc.recommendedQuestions,
+      previous_interval_days: reviewCalc.nextIntervalDays,
+      diagnosis: reviewCalc.diagnosis,
       created_at: new Date().toISOString(),
     };
 
@@ -608,8 +619,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? Math.round((data.questions_correct / data.questions_done) * 1000) / 10
         : 0;
 
-    const intervalDays = calculateNextReviewInterval(percentage, 1);
-    const r1ScheduledDate = addDaysToDate(data.study_date, intervalDays);
+    const reviewCalc = calculateNextReview({
+      currentCycle: 0,
+      accuracy: percentage,
+      baseQuestionsCount: data.questions_done,
+    });
+    const r1ScheduledDate = addDaysToDate(data.study_date, reviewCalc.nextIntervalDays);
 
     const targetTopic = topics.find(t => t.id === topicId);
     const userId = user?.id || 'demo-user-id';
@@ -621,6 +636,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_questions: data.questions_done,
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
+          base_questions_count: data.questions_done,
           is_planned: false,
         }
       : {
@@ -632,6 +648,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_questions: data.questions_done,
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
+          base_questions_count: data.questions_done,
           is_planned: false,
           created_at: new Date().toISOString(),
         };
@@ -646,6 +663,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_done: null,
       questions_correct: null,
       percentage: null,
+      recommended_questions: reviewCalc.recommendedQuestions,
+      previous_interval_days: reviewCalc.nextIntervalDays,
+      diagnosis: reviewCalc.diagnosis,
       created_at: new Date().toISOString(),
     };
 
@@ -675,6 +695,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             initial_questions: data.questions_done,
             initial_correct: data.questions_correct,
             initial_percentage: percentage,
+            base_questions_count: data.questions_done,
             is_planned: false,
           })
           .eq('id', topicId);
@@ -686,6 +707,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return { nextReviewDate: r1ScheduledDate };
+  };
+
+  // AÇÃO 1.2b: Editar Conteúdo / Tópico de Estudo (nome, área, tags, data prevista, notas)
+  const updateTopic = async (topicId: string, data: Partial<StudyTopic>) => {
+    setTopics(prev => {
+      const updated = prev.map(t => (t.id === topicId ? { ...t, ...data } : t));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      try {
+        const supabase = createClient();
+        const updatePromise = supabase
+          .from('study_topics')
+          .update(data)
+          .eq('id', topicId);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase update topic timeout')), 2500)
+        );
+        await Promise.race([updatePromise, timeoutPromise]);
+      } catch (err) {
+        console.warn('Erro ao sincronizar updateTopic:', err);
+      }
+    }
   };
 
   // AÇÃO 1.3: Alternar se assunto é meta da semana
@@ -815,7 +863,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return sorted.length;
   };
 
-  // AÇÃO 2: Concluir Revisão e Agendar Próximo Ciclo (Adaptativo)
+  // AÇÃO 2: Concluir Revisão e Agendar Próximo Ciclo (Adaptativo Científico)
   const completeReview = async (
     reviewId: string,
     questionsDone: number,
@@ -828,33 +876,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentReview = reviews.find(r => r.id === reviewId);
     if (!currentReview) throw new Error('Revisão não encontrada');
 
+    const targetTopic = topics.find(t => t.id === currentReview.topic_id);
+    const baseQuestions = targetTopic?.base_questions_count || targetTopic?.initial_questions || 20;
+
+    // Intervalo anterior: se tiver previous_interval_days gravado usa ele, senão calcula a diferença de dias
+    let prevInterval = currentReview.previous_interval_days;
+    if (!prevInterval && targetTopic?.initial_date) {
+      prevInterval = Math.max(1, diffInDays(currentReview.scheduled_date, targetTopic.initial_date));
+    }
+    if (!prevInterval) prevInterval = 7;
+
+    const reviewCalc = calculateNextReview({
+      currentCycle: currentReview.review_number,
+      accuracy: percentage,
+      baseQuestionsCount: baseQuestions,
+      previousIntervalDays: prevInterval,
+    });
+
     const updatedReview: TopicReview = {
       ...currentReview,
       completed_date: today,
       questions_done: questionsDone,
       questions_correct: questionsCorrect,
       percentage,
+      diagnosis: reviewCalc.diagnosis,
     };
 
     let nextReviewObj: TopicReview | null = null;
     let nextScheduledDate: string | undefined = undefined;
 
-    // Se o ciclo concluído for menor que 8, agenda o ciclo seguinte (reviewNumber + 1)
-    if (currentReview.review_number < 8) {
-      const nextReviewNumber = currentReview.review_number + 1;
-      const intervalDays = calculateNextReviewInterval(percentage, nextReviewNumber);
-      nextScheduledDate = addDaysToDate(today, intervalDays);
+    // Se o próximo ciclo for <= 8 e a revisão atual < 8, agenda o próximo ciclo
+    if (reviewCalc.nextCycle <= 8 && currentReview.review_number < 8) {
+      nextScheduledDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
 
       nextReviewObj = {
-        id: isDemoMode ? `rev-${Date.now()}-${nextReviewNumber}` : crypto.randomUUID(),
+        id: isDemoMode ? `rev-${Date.now()}-${reviewCalc.nextCycle}` : crypto.randomUUID(),
         topic_id: currentReview.topic_id,
         user_id: currentReview.user_id,
-        review_number: nextReviewNumber,
+        review_number: reviewCalc.nextCycle,
         scheduled_date: nextScheduledDate,
         completed_date: null,
         questions_done: null,
         questions_correct: null,
         percentage: null,
+        recommended_questions: reviewCalc.recommendedQuestions,
+        previous_interval_days: reviewCalc.nextIntervalDays,
+        diagnosis: reviewCalc.diagnosis,
         created_at: new Date().toISOString(),
       };
     }
@@ -868,6 +935,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           questions_done: questionsDone,
           questions_correct: questionsCorrect,
           percentage,
+          diagnosis: reviewCalc.diagnosis,
         })
         .eq('id', reviewId);
       if (updErr) throw updErr;
@@ -1185,6 +1253,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isDemoMode,
         stats,
         addTopic,
+        updateTopic,
         addPlannedTopic,
         recordPlannedTopicStudy,
         updateTopicWeeklyGoal,

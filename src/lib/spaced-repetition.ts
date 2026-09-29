@@ -1,4 +1,4 @@
-import { ReviewStatus } from '@/types/database';
+import { ReviewStatus, ReviewCalculationInput, ReviewCalculationResult } from '@/types/database';
 
 /**
  * Normaliza o valor de porcentagem para uma escala de 0 a 100.
@@ -12,39 +12,108 @@ export function normalizePercentage(percentage: number): number {
 }
 
 /**
- * Motor de Repetição Espaçada Adaptativa (Algoritmo da Planilha)
+ * Motor Científico de Repetição Espaçada e Volume Adaptativo de Questões
  * 
- * - Se reviewNumber === 1 (Intervalo entre o Contato Inicial e a 1ª Revisão):
- *   * Acerto < 60%: somar 3 dias.
- *   * Acerto entre 60% e 65%: somar 10 dias.
- *   * Acerto entre 66% e 70%: somar 13 dias.
- *   * Acerto entre 71% e 80%: somar 20 dias.
- *   * Acerto > 80%: somar 23 dias.
+ * Fase 1: Estudo Inicial (Primeiro Contato / R0) -> R1
+ *   - < 50%: +2 dias | Ruptura Crítica (Reforço Imediato) | 50% da base (mín 10 Qs)
+ *   - 50% a 69%: +4 dias | Retenção Instável (Risco de Esquecimento) | 65% da base (mín 12 Qs)
+ *   - 70% a 84%: +7 dias | Dificuldade Desejável (Consolidação Ótima) | 45% da base (mín 10 Qs)
+ *   - 85% a 94%: +14 dias | Fixação Eficaz | 30% da base (mín 8 Qs)
+ *   - >= 95%: +21 dias | Domínio Pleno | 20% da base (mín 5 Qs)
  * 
- * - Se reviewNumber >= 2 (Intervalo entre revisões subsequentes, 2ª a 8ª):
- *   * Acerto < 60%: somar 7 dias.
- *   * Acerto entre 60% e 65%: somar 13 dias.
- *   * Acerto entre 66% e 70%: somar 18 dias.
- *   * Acerto entre 71% e 80%: somar 25 dias.
- *   * Acerto > 80%: somar 30 dias.
+ * Fase 2: Revisões Subsequentes (R1 a R7 -> agendando até R8)
+ *   - >= 85%: Expansão agressiva (Intervalo Anterior * 2.2, min 14d, max 60d) | 25% da base (mín 6 Qs)
+ *   - 70% a 84%: Expansão moderada (Intervalo Anterior * 1.6, min 10d, max 60d) | 45% da base (mín 10 Qs)
+ *   - 50% a 69%: Trava de intervalo (5 dias fixos para recuperação rápida) | 65% da base (mín 12 Qs)
+ *   - < 50%: Reset / Lapse (2 dias, penalidade de ciclo: volta 1 nível) | 50% da base (mín 10 Qs)
  */
-export function calculateNextReviewInterval(percentage: number, reviewNumber: number): number {
-  const normPct = normalizePercentage(percentage);
+export function calculateNextReview(input: ReviewCalculationInput): ReviewCalculationResult {
+  const { currentCycle, accuracy: rawAccuracy, baseQuestionsCount, previousIntervalDays = 7 } = input;
+  const accuracy = normalizePercentage(rawAccuracy);
+  const base = Math.max(baseQuestionsCount || 20, 10);
 
-  if (reviewNumber <= 1) {
-    if (normPct < 60) return 3;
-    if (normPct <= 65) return 10;
-    if (normPct <= 70) return 13;
-    if (normPct <= 80) return 20;
-    return 23;
+  // FASE 1: Estudo Inicial -> R1
+  if (currentCycle === 0) {
+    if (accuracy < 50) {
+      return {
+        nextIntervalDays: 2,
+        nextCycle: 1,
+        recommendedQuestions: Math.max(10, Math.round(base * 0.5)),
+        diagnosis: 'Ruptura Crítica (Reforço Imediato)',
+      };
+    } else if (accuracy < 70) {
+      return {
+        nextIntervalDays: 4,
+        nextCycle: 1,
+        recommendedQuestions: Math.max(12, Math.round(base * 0.65)),
+        diagnosis: 'Retenção Instável (Risco de Esquecimento)',
+      };
+    } else if (accuracy < 85) {
+      return {
+        nextIntervalDays: 7,
+        nextCycle: 1,
+        recommendedQuestions: Math.max(10, Math.round(base * 0.45)),
+        diagnosis: 'Dificuldade Desejável (Consolidação Ótima)',
+      };
+    } else if (accuracy < 95) {
+      return {
+        nextIntervalDays: 14,
+        nextCycle: 1,
+        recommendedQuestions: Math.max(8, Math.round(base * 0.3)),
+        diagnosis: 'Fixação Eficaz',
+      };
+    } else {
+      return {
+        nextIntervalDays: 21,
+        nextCycle: 1,
+        recommendedQuestions: Math.max(5, Math.round(base * 0.2)),
+        diagnosis: 'Domínio Pleno',
+      };
+    }
   }
 
-  // reviewNumber >= 2
-  if (normPct < 60) return 7;
-  if (normPct <= 65) return 13;
-  if (normPct <= 70) return 18;
-  if (normPct <= 80) return 25;
-  return 30;
+  // FASE 2: Revisões Subsequentes (R1 a R7 -> agendando até R8)
+  let nextInterval: number;
+  let nextCycle = Math.min(currentCycle + 1, 8);
+  let recommendedQuestions: number;
+  let diagnosis: string;
+
+  if (accuracy < 50) {
+    nextInterval = 2;
+    nextCycle = Math.max(1, currentCycle - 1); // Penalidade de lapse
+    recommendedQuestions = Math.max(10, Math.round(base * 0.5));
+    diagnosis = 'Lapse de Memória (Reset Preventivo)';
+  } else if (accuracy < 70) {
+    nextInterval = 5;
+    recommendedQuestions = Math.max(12, Math.round(base * 0.65));
+    diagnosis = 'Alerta de Retenção (Intervalo Travado)';
+  } else if (accuracy < 85) {
+    nextInterval = Math.min(60, Math.max(10, Math.round(previousIntervalDays * 1.6)));
+    recommendedQuestions = Math.max(10, Math.round(base * 0.45));
+    diagnosis = 'Retenção Consolidada (Expansão Moderada)';
+  } else {
+    // >= 85%
+    nextInterval = Math.min(60, Math.max(14, Math.round(previousIntervalDays * 2.2)));
+    recommendedQuestions = Math.max(6, Math.round(base * 0.25));
+    diagnosis = 'Alta Estabilidade (Expansão Agressiva)';
+  }
+
+  return {
+    nextIntervalDays: nextInterval,
+    nextCycle,
+    recommendedQuestions,
+    diagnosis,
+  };
+}
+
+export function calculateNextReviewInterval(percentage: number, reviewNumber: number): number {
+  const result = calculateNextReview({
+    currentCycle: reviewNumber <= 1 ? 0 : reviewNumber - 1,
+    accuracy: percentage,
+    baseQuestionsCount: 20,
+    previousIntervalDays: reviewNumber <= 1 ? 7 : 14,
+  });
+  return result.nextIntervalDays;
 }
 
 /**

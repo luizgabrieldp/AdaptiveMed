@@ -243,6 +243,31 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
       }
     });
 
+    // 3. Estudos Iniciais Realizados (R0 Concluído) - permanecem no calendário mensal!
+    topics.forEach(t => {
+      if (!t.is_planned && t.initial_date) {
+        const isHigh =
+          highPrevalenceNames.has(t.subject_name.toLowerCase()) ||
+          Boolean(t.tags?.some(tag => tag.toLowerCase().includes('alta')));
+
+        if (!map.has(t.initial_date)) {
+          map.set(t.initial_date, []);
+        }
+
+        map.get(t.initial_date)!.push({
+          type: 'initial_study_done' as any,
+          id: t.id,
+          topic: t,
+          subjectName: t.subject_name,
+          area: t.area,
+          badgeText: 'R0 Concluído',
+          isCompleted: true,
+          isHighPrevalence: isHigh,
+          isOverdue: false,
+        });
+      }
+    });
+
     return map;
   }, [reviews, topics, topicMap, highPrevalenceNames, todayStr]);
 

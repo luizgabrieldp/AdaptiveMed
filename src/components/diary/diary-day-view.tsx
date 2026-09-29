@@ -73,6 +73,11 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
     });
   }, [topics, selectedDate]);
 
+  // Estudos iniciais (R0) concluídos neste dia
+  const dayCompletedTopics = useMemo(() => {
+    return topics.filter(t => !t.is_planned && t.initial_date === selectedDate);
+  }, [topics, selectedDate]);
+
   const handlePrevDay = () => onDateChange(addDaysToDate(selectedDate, -1));
   const handleNextDay = () => onDateChange(addDaysToDate(selectedDate, 1));
   const handleToday = () => onDateChange(todayStr);
@@ -206,6 +211,11 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
                           R{review.review_number}
                         </span>
+                        {review.recommended_questions && (
+                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded">
+                            🎯 {review.recommended_questions} Qs
+                          </span>
+                        )}
                         <Badge
                           variant={isDone ? 'concluido' : statusInfo.status === 'ATRASADO' ? 'atrasado' : 'hoje'}
                           className="text-[9px] py-0 px-1.5"
@@ -217,6 +227,12 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                       <p className="font-bold text-xs text-foreground truncate">
                         {topic?.subject_name || 'Assunto'}
                       </p>
+
+                      {isDone && review.questions_done && (
+                        <p className="text-[10px] text-emerald-400 font-semibold">
+                          {review.questions_correct}/{review.questions_done} questões ({review.percentage}%)
+                        </p>
+                      )}
                     </div>
 
                     {!isDone && (
@@ -238,7 +254,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
           </CardContent>
         </Card>
 
-        {/* Card 2: Estudos Pré-Programados no Dia */}
+        {/* Card 2: Estudos no Dia (Concluídos e Programados) */}
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex items-center justify-between">
@@ -246,21 +262,21 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                 <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
                   <BookOpen className="h-4 w-4" />
                 </div>
-                <CardTitle className="text-sm font-bold">Estudos Programados</CardTitle>
+                <CardTitle className="text-sm font-bold">Estudos do Dia (R0)</CardTitle>
               </div>
               <Badge variant="outline" className="text-xs">
-                {dayPlannedTopics.length}
+                {dayCompletedTopics.length + dayPlannedTopics.length}
               </Badge>
             </div>
             <CardDescription className="text-xs">
-              Assuntos planejados para o primeiro contato de estudo neste dia.
+              Primeiro contato com a matéria (concluídos e pendentes).
             </CardDescription>
           </CardHeader>
 
           <CardContent className="p-4 space-y-2.5">
-            {dayPlannedTopics.length === 0 ? (
+            {dayCompletedTopics.length === 0 && dayPlannedTopics.length === 0 ? (
               <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
-                <p className="italic">Nenhum estudo programado para este dia.</p>
+                <p className="italic">Nenhum estudo programado ou concluído neste dia.</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -271,47 +287,85 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                 </Button>
               </div>
             ) : (
-              dayPlannedTopics.map(t => {
-                const style = getAreaStyle(t.area, areas);
+              <>
+                {/* Estudos Concluídos (R0 Feito) */}
+                {dayCompletedTopics.map(t => {
+                  const style = getAreaStyle(t.area, areas);
 
-                return (
-                  <div
-                    key={t.id}
-                    className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
-                        >
-                          {t.area}
-                        </span>
-                        <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30">
-                          Pendente de Estudo
-                        </Badge>
-                        {t.is_weekly_goal && (
-                          <span className="text-[9px] font-bold text-amber-300">
-                            • Meta da Semana
+                  return (
+                    <div
+                      key={t.id}
+                      className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                          >
+                            {t.area}
                           </span>
-                        )}
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                            R0 Concluído
+                          </span>
+                        </div>
+
+                        <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+
+                        <p className="text-[10px] text-emerald-400 font-semibold">
+                          {t.initial_correct}/{t.initial_questions} questões ({t.initial_percentage}%)
+                        </p>
                       </div>
 
-                      <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+                      <span className="text-xs font-bold text-emerald-400 self-start sm:self-center">
+                        Concluído ✓
+                      </span>
                     </div>
+                  );
+                })}
 
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedPlannedTopic(t);
-                        setRecordStudyModalOpen(true);
-                      }}
-                      className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center bg-amber-600 hover:bg-amber-500 text-white"
+                {/* Estudos Pendentes Programados */}
+                {dayPlannedTopics.map(t => {
+                  const style = getAreaStyle(t.area, areas);
+
+                  return (
+                    <div
+                      key={t.id}
+                      className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Questões
-                    </Button>
-                  </div>
-                );
-              })
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                          >
+                            {t.area}
+                          </span>
+                          <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30">
+                            A Estudar
+                          </Badge>
+                          {t.is_weekly_goal && (
+                            <span className="text-[9px] font-bold text-amber-300">
+                              • Meta da Semana
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedPlannedTopic(t);
+                          setRecordStudyModalOpen(true);
+                        }}
+                        className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center bg-amber-600 hover:bg-amber-500 text-white"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Questões
+                      </Button>
+                    </div>
+                  );
+                })}
+              </>
             )}
           </CardContent>
         </Card>

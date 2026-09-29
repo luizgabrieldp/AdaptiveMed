@@ -16,11 +16,12 @@ import { useData } from '@/lib/store/data-context';
 import { StudyTopic, getAreaStyle } from '@/types/database';
 import {
   calculateNextReviewInterval,
+  calculateNextReview,
   getTodayDateString,
   addDaysToDate,
   formatDateBR,
 } from '@/lib/spaced-repetition';
-import { CheckCircle2, Sparkles, BrainCircuit, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Sparkles, BrainCircuit, ArrowRight, AlertTriangle, Info } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface RecordPlannedStudyModalProps {
@@ -56,7 +57,12 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   const qDone = Number(questionsDone) || 0;
   const qCorrect = Number(questionsCorrect) || 0;
   const percentage = qDone > 0 ? Math.round((qCorrect / qDone) * 1000) / 10 : 0;
-  const r1Interval = calculateNextReviewInterval(percentage, 1);
+  const reviewCalc = calculateNextReview({
+    currentCycle: 0,
+    accuracy: percentage,
+    baseQuestionsCount: qDone || 20,
+  });
+  const r1Interval = reviewCalc.nextIntervalDays;
   const estimatedR1Date = addDaysToDate(studyDate || getTodayDateString(), r1Interval);
 
   const areaStyle = getAreaStyle(topic.area, areas);
@@ -145,6 +151,14 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
               </p>
             </div>
 
+            {/* Callout de Recomendação Científica */}
+            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
+              <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-200/90 leading-relaxed">
+                <strong>Recomendação AdaptiveMed:</strong> Resolva no mínimo <strong>15 a 20 questões</strong> no primeiro estudo para garantir significância estatística na sua taxa de retenção inicial.
+              </p>
+            </div>
+
             {/* Data em que estudou */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">
@@ -193,29 +207,46 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
               </div>
             </div>
 
-            {/* Prévia da Repetição Espaçada Adaptativa */}
-            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs space-y-2">
+            {/* Alerta de Amostragem Baixa */}
+            {qDone > 0 && qDone < 10 && (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>Amostragem baixa (&lt; 10 questões) para cálculo preciso de retenção. Sugerimos mais questões para maior precisão diagnóstica.</span>
+              </div>
+            )}
+
+            {/* Prévia da Repetição Espaçada Adaptativa Científica */}
+            <div className="p-3 rounded-xl bg-muted/50 border border-border text-xs space-y-2">
               <div className="flex items-center justify-between font-bold">
-                <span className="text-blue-300 flex items-center gap-1">
-                  <BrainCircuit className="h-3.5 w-3.5" /> Acurácia Calculada:
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Diagnóstico:
                 </span>
                 <span
                   className={
-                    percentage >= 80
+                    percentage >= 85
                       ? 'text-emerald-400'
-                      : percentage >= 65
+                      : percentage >= 70
                       ? 'text-blue-400'
-                      : 'text-amber-400'
+                      : percentage >= 50
+                      ? 'text-amber-400'
+                      : 'text-rose-400'
                   }
                 >
-                  {percentage}%
+                  {percentage}% ({reviewCalc.diagnosis.split('(')[0].trim()})
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-blue-500/20">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/60">
                 <span>Próxima Revisão (R1):</span>
                 <span className="font-bold text-foreground">
                   +{r1Interval} dias ({formatDateBR(estimatedR1Date)})
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                <span>Meta Sugerida para R1:</span>
+                <span className="font-bold text-amber-400">
+                  🎯 {reviewCalc.recommendedQuestions} questões
                 </span>
               </div>
             </div>
