@@ -8,11 +8,9 @@ import { WeeklySchedule } from '@/components/dashboard/weekly-schedule';
 import { AreaPerformanceChart } from '@/components/dashboard/area-chart';
 import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
-import { downloadICalendar } from '@/lib/export/ical-generator';
 import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
 import { formatGreetingName } from '@/lib/utils';
 import {
-  Calendar,
   Download,
   HeartPulse,
   BookOpen,
@@ -68,16 +66,6 @@ export default function DashboardPage() {
               title="Baixar planilha de dados em CSV / Excel"
             >
               <Download className="h-3.5 w-3.5" /> CSV
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadICalendar(topics, reviews)}
-              className="text-xs gap-1.5"
-              title="Exportar para Google Calendar / Apple Calendar"
-            >
-              <Calendar className="h-3.5 w-3.5 text-blue-400" /> Sincronizar Calendário
             </Button>
 
             <Link href="/diario">

@@ -34,9 +34,9 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
 
   const [area, setArea] = useState(defaultArea || areas[0]?.name || 'Clínica Médica');
   const [subjectName, setSubjectName] = useState(defaultSubject || '');
+  const [hasSpecificDate, setHasSpecificDate] = useState(Boolean(defaultDate));
   const [plannedDate, setPlannedDate] = useState(defaultDate || getTodayDateString());
   const [tagInput, setTagInput] = useState('');
-  const [isWeeklyGoal, setIsWeeklyGoal] = useState(true);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,9 +59,9 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
       await addPlannedTopic({
         area,
         subject_name: subjectName.trim(),
-        planned_date: plannedDate,
+        planned_date: hasSpecificDate && plannedDate ? plannedDate : undefined,
         tags,
-        is_weekly_goal: isWeeklyGoal,
+        is_weekly_goal: true,
         notes: notes.trim() || undefined,
       });
 
@@ -147,47 +147,48 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
             )}
           </div>
 
-          {/* Data Prevista para Estudo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">
-                Data do Estudo
-              </label>
-              <Input
-                type="date"
-                required
-                value={plannedDate}
-                onChange={e => setPlannedDate(e.target.value)}
-                className="text-xs"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                <Tag className="h-3 w-3" /> Subáreas / Tags (opcional)
-              </label>
-              <Input
-                type="text"
-                placeholder="Ex: Gastro, Esofagite"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                className="text-xs"
-              />
-            </div>
+          {/* Subáreas / Tags */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+              <Tag className="h-3 w-3" /> Subáreas / Tags (opcional)
+            </label>
+            <Input
+              type="text"
+              placeholder="Ex: Gastro, Esofagite"
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              className="text-xs"
+            />
           </div>
 
-          {/* Checkbox: Meta da Semana */}
-          <div className="p-3 rounded-xl bg-muted/40 border border-border flex items-center space-x-2.5 cursor-pointer">
-            <input
-              type="checkbox"
-              id="weekly-goal-check"
-              checked={isWeeklyGoal}
-              onChange={e => setIsWeeklyGoal(e.target.checked)}
-              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <label htmlFor="weekly-goal-check" className="text-xs font-medium cursor-pointer select-none">
-              Adicionar à <strong className="text-foreground">Meta da Semana</strong> (exibida no Dashboard e no Diário)
-            </label>
+          {/* Data Prevista (Opcional) */}
+          <div className="p-3 rounded-xl bg-muted/40 border border-border space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="has-date-toggle" className="text-xs font-semibold text-foreground flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  id="has-date-toggle"
+                  checked={hasSpecificDate}
+                  onChange={e => setHasSpecificDate(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span>Definir dia específico nesta semana (opcional)</span>
+              </label>
+            </div>
+
+            {hasSpecificDate ? (
+              <Input
+                type="date"
+                required={hasSpecificDate}
+                value={plannedDate}
+                onChange={e => setPlannedDate(e.target.value)}
+                className="text-xs bg-card"
+              />
+            ) : (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                O tema entrará na lista de <strong className="text-foreground">Assuntos da Semana</strong>. Você poderá arrastá-lo para a coluna de qualquer dia ou clicar em registrar quando estudá-lo.
+              </p>
+            )}
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">

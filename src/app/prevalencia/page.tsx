@@ -48,6 +48,7 @@ export default function PrevalenciaPage() {
 
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('TODAS');
   const [selectedPrevalenceFilter, setSelectedPrevalenceFilter] = useState<string>('TODAS');
+  const [selectedBancaFilter, setSelectedBancaFilter] = useState<string>('TODAS');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modais de Criação / Edição de Assunto Prevalente
@@ -60,6 +61,20 @@ export default function PrevalenciaPage() {
   const [formPrevalence, setFormPrevalence] = useState<'ALTA' | 'MEDIA' | 'BAIXA'>('ALTA');
   const [formBanca, setFormBanca] = useState('');
   const [formNotes, setFormNotes] = useState('');
+
+  // Lista de bancas únicas cadastradas para o filtro
+  const availableBancas = useMemo(() => {
+    const set = new Set<string>();
+    prevalentTopics.forEach(p => {
+      if (p.banca && p.banca.trim()) {
+        p.banca.split(/[/,;]/).forEach(b => {
+          const clean = b.trim();
+          if (clean) set.add(clean);
+        });
+      }
+    });
+    return Array.from(set).sort();
+  }, [prevalentTopics]);
 
   // Modal de Agendamento no Diário
   const [planModalOpen, setPlanModalOpen] = useState(false);
@@ -97,6 +112,12 @@ export default function PrevalenciaPage() {
       // Filtro de prevalência
       if (selectedPrevalenceFilter !== 'TODAS' && item.prevalence_level !== selectedPrevalenceFilter) {
         return false;
+      }
+      // Filtro de banca
+      if (selectedBancaFilter !== 'TODAS') {
+        if (!item.banca || !item.banca.toLowerCase().includes(selectedBancaFilter.toLowerCase())) {
+          return false;
+        }
       }
       // Busca por texto
       if (searchQuery.trim()) {
@@ -158,7 +179,7 @@ export default function PrevalenciaPage() {
     setFormArea(areas[0]?.name || 'Clínica Médica');
     setFormSubjectName('');
     setFormPrevalence('ALTA');
-    setFormBanca('ENARE / USP');
+    setFormBanca(''); // Não pré-preenche nenhuma banca por padrão
     setFormNotes('');
     setEditModalOpen(true);
   };
@@ -174,29 +195,83 @@ export default function PrevalenciaPage() {
     setEditModalOpen(true);
   };
 
-  // Salvar Criação ou Edição
+  // Reordenação Automática por Nível de Incidência (ALTA -> MÉDIA -> BAIXA)
+  const handleSortByHierarchy = async () => {
+    const weight: Record<string, number> = { ALTA: 1, MEDIA: 2, BAIXA: 3 };
+    const sorted = [...prevalentTopics].sort((a, b) => {
+      const wA = weight[a.prevalence_level] || 2;
+      const wB = weight[b.prevalence_level] || 2;
+      if (wA !== wB) return wA - wB;
+      return a.rank_order - b.rank_order;
+    });
+    await reorderPrevalentTopics(sorted.map(s => s.id));
+  };
+
+  // Salvar Criação ou Edição com Hierarquia Automática
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formSubjectName.trim()) return;
 
+    const weight: Record<string, number> = { ALTA: 1, MEDIA: 2, BAIXA: 3 };
+    const cleanBanca = formBanca.trim() ? formBanca.trim() : undefined;
+    const cleanNotes = formNotes.trim() ? formNotes.trim() : undefined;
+
     if (editingItem) {
-      await updatePrevalentTopic(editingItem.id, {
+      const updated = {
         area: formArea,
         subject_name: formSubjectName.trim(),
         prevalence_level: formPrevalence,
-        banca: formBanca.trim() || undefined,
-        frequency_notes: formNotes.trim() || undefined,
+        banca: cleanBanca,
+        frequency_notes: cleanNotes,
+      };
+      await updatePrevalentTopic(editingItem.id, updated);
+
+      // Reordena automaticamente para manter ALTA no topo, MEDIA no meio e BAIXA abaixo
+      const updatedList = prevalentTopics.map(p =>
+        p.id === editingItem.id ? { ...p, ...updated } : p
+      );
+      updatedList.sort((a, b) => {
+        const wA = weight[a.prevalence_level] || 2;
+        const wB = weight[b.prevalence_level] || 2;
+        if (wA !== wB) return wA - wB;
+        return a.rank_order - b.rank_order;
       });
+      await reorderPrevalentTopics(updatedList.map(p => p.id));
     } else {
-      const maxRank = prevalentTopics.reduce((max, p) => Math.max(max, p.rank_order || 0), 0);
+      // Inserção de novo assunto
+      const tempId = `temp-${Date.now()}`;
+      const newEntry: PrevalentTopic = {
+        id: tempId,
+        area: formArea,
+        subject_name: formSubjectName.trim(),
+        prevalence_level: formPrevalence,
+        rank_order: 9999,
+        banca: cleanBanca,
+        frequency_notes: cleanNotes,
+        created_at: new Date().toISOString(),
+      };
+
+      const combined = [...prevalentTopics, newEntry];
+      combined.sort((a, b) => {
+        const wA = weight[a.prevalence_level] || 2;
+        const wB = weight[b.prevalence_level] || 2;
+        if (wA !== wB) return wA - wB;
+        return a.rank_order - b.rank_order;
+      });
+
+      const assignedRank = combined.findIndex(c => c.id === tempId) + 1;
       await addPrevalentTopic({
         area: formArea,
         subject_name: formSubjectName.trim(),
         prevalence_level: formPrevalence,
-        rank_order: maxRank + 1,
-        banca: formBanca.trim() || undefined,
-        frequency_notes: formNotes.trim() || undefined,
+        rank_order: assignedRank,
+        banca: cleanBanca,
+        frequency_notes: cleanNotes,
       });
+
+      // Normaliza as ordens de todos os itens
+      const finalIds = combined.map(c => c.id);
+      await reorderPrevalentTopics(finalIds);
     }
 
     setEditModalOpen(false);
@@ -322,26 +397,55 @@ export default function PrevalenciaPage() {
             </div>
 
             {/* Filtro por Nível de Prevalência */}
-            <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto">
-              <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1 mr-1">
-                <Filter className="h-3 w-3" /> Nível:
-              </span>
-              {(['TODAS', 'ALTA', 'MEDIA', 'BAIXA'] as const).map(level => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setSelectedPrevalenceFilter(level)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    selectedPrevalenceFilter === level
-                      ? level === 'ALTA'
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        : 'bg-primary text-primary-foreground shadow-xs'
-                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                  }`}
-                >
-                  {level === 'TODAS' ? 'Todos' : level}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {availableBancas.length > 0 && (
+                <div className="flex items-center gap-1.5 mr-2">
+                  <span className="text-[11px] text-muted-foreground font-semibold">Banca:</span>
+                  <select
+                    value={selectedBancaFilter}
+                    onChange={e => setSelectedBancaFilter(e.target.value)}
+                    className="h-7 text-xs rounded-lg border border-border bg-card px-2 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="TODAS">Todas as Bancas</option>
+                    {availableBancas.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1 mr-1">
+                  <Filter className="h-3 w-3" /> Nível:
+                </span>
+                {(['TODAS', 'ALTA', 'MEDIA', 'BAIXA'] as const).map(level => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setSelectedPrevalenceFilter(level)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      selectedPrevalenceFilter === level
+                        ? level === 'ALTA'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                    }`}
+                  >
+                    {level === 'TODAS' ? 'Todos' : level}
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSortByHierarchy}
+                className="h-7 text-[11px] font-semibold gap-1 text-muted-foreground hover:text-foreground ml-1"
+                title="Reorganiza a lista: Alta incidência no topo, Média no meio e Baixa no fim"
+              >
+                <Sparkles className="h-3 w-3 text-amber-400" />
+                Auto-Hierarquia
+              </Button>
             </div>
           </div>
 
@@ -631,7 +735,7 @@ export default function PrevalenciaPage() {
               <Input
                 value={formBanca}
                 onChange={e => setFormBanca(e.target.value)}
-                placeholder="Ex: ENARE / USP / UNICAMP"
+                placeholder="Ex: ENARE, USP, UNICAMP..."
                 className="text-xs"
               />
             </div>

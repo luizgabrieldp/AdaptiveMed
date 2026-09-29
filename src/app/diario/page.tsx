@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { getTodayDateString, formatDateBR } from '@/lib/spaced-repetition';
 import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
-import { downloadICalendar } from '@/lib/export/ical-generator';
 import {
   Calendar,
   CalendarDays,
@@ -87,16 +86,6 @@ export default function DiarioPage() {
             >
               <Download className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="hidden sm:inline">Exportar</span> CSV
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadICalendar(topics, reviews)}
-              className="text-xs gap-1.5"
-            >
-              <Calendar className="h-3.5 w-3.5 text-blue-400" />
-              <span className="hidden sm:inline">Sincronizar</span> .ICS
             </Button>
 
             <Button

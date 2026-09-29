@@ -55,7 +55,7 @@ interface DataContextType {
   addPlannedTopic: (data: {
     area: string;
     subject_name: string;
-    planned_date: string;
+    planned_date?: string;
     tags?: string[];
     is_weekly_goal?: boolean;
     notes?: string;
@@ -69,6 +69,7 @@ interface DataContextType {
     }
   ) => Promise<{ nextReviewDate?: string }>;
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
+  updatePlannedTopicDate: (topicId: string, planned_date: string | null) => Promise<void>;
   addArea: (name: string, colorHex: string) => Promise<void>;
   updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
   deleteArea: (id: string) => Promise<void>;
@@ -512,13 +513,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addPlannedTopic = async (data: {
     area: string;
     subject_name: string;
-    planned_date: string;
+    planned_date?: string;
     tags?: string[];
     is_weekly_goal?: boolean;
     notes?: string;
   }) => {
     const topicId = isDemoMode ? `topic-${Date.now()}` : crypto.randomUUID();
     const userId = user?.id || 'demo-user-id';
+    const fallbackDate = new Date().toISOString().split('T')[0];
 
     const newTopic: StudyTopic = {
       id: topicId,
@@ -526,7 +528,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       area: data.area,
       subject_name: data.subject_name.trim(),
       tags: data.tags || [],
-      initial_date: data.planned_date,
+      initial_date: data.planned_date || fallbackDate,
       planned_date: data.planned_date,
       initial_questions: 0,
       initial_correct: 0,
@@ -632,6 +634,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase
         .from('study_topics')
         .update({ is_weekly_goal })
+        .eq('id', topicId);
+    }
+  };
+
+  // AÇÃO 1.4: Mover / Agendar assunto planejado para data específica (Drag & Drop)
+  const updatePlannedTopicDate = async (topicId: string, planned_date: string | null) => {
+    setTopics(prev =>
+      prev.map(t => (t.id === topicId ? { ...t, planned_date: planned_date || undefined } : t))
+    );
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase
+        .from('study_topics')
+        .update({ planned_date })
         .eq('id', topicId);
     }
   };
@@ -975,6 +991,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addPlannedTopic,
         recordPlannedTopicStudy,
         updateTopicWeeklyGoal,
+        updatePlannedTopicDate,
         addArea,
         updateArea,
         deleteArea,

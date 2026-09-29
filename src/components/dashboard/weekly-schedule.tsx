@@ -269,22 +269,22 @@ export const WeeklySchedule: React.FC = () => {
 
       {/* Grid Principal: 7 Dias + Bloco de Metas da Semana */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Coluna 1-3: Agenda de Segunda a Domingo */}
-        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-2.5">
-          {weekDays.map(day => {
-            const items = dayScheduleMap.get(day.dateStr) || [];
-            const areaStyleMap = areas;
+        {/* Coluna 1-3: Agenda de Segunda a Domingo com Colunas Mais Largas e Rolagem Horizontal */}
+        <div className="lg:col-span-3 overflow-x-auto pb-2 scrollbar-thin">
+          <div className="flex gap-3 min-w-[1050px]">
+            {weekDays.map(day => {
+              const items = dayScheduleMap.get(day.dateStr) || [];
 
-            return (
-              <div
-                key={day.dateStr}
-                onClick={() => handleNavigateToDay(day.dateStr)}
-                className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[170px] group ${
-                  day.isToday
-                    ? 'bg-blue-500/10 border-blue-500/50 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/30'
-                    : 'bg-card border-border hover:border-border/80 hover:bg-muted/40'
-                }`}
-              >
+              return (
+                <div
+                  key={day.dateStr}
+                  onClick={() => handleNavigateToDay(day.dateStr)}
+                  className={`flex-1 min-w-[200px] p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[220px] group ${
+                    day.isToday
+                      ? 'bg-blue-500/5 border-blue-500/40 shadow-xs'
+                      : 'bg-card border-border hover:border-border/80 hover:bg-muted/30'
+                  }`}
+                >
                 {/* Header do Dia */}
                 <div className="border-b border-border/60 pb-2 mb-2 flex items-center justify-between">
                   <div>
@@ -377,6 +377,7 @@ export const WeeklySchedule: React.FC = () => {
               </div>
             );
           })}
+          </div>
         </div>
 
         {/* Coluna 4: Bloco "Meta da Semana de Assuntos para Ver" */}

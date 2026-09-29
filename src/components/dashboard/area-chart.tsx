@@ -80,11 +80,11 @@ export const AreaPerformanceChart: React.FC = () => {
         </div>
       </CardHeader>
 
-      <CardContent className="pt-2">
-        <div className="h-[280px] w-full">
+      <CardContent className="pt-1 pb-3">
+        <div className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             {chartType === 'bar' ? (
-              <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 20 }}>
+              <BarChart data={chartData} margin={{ top: 15, right: 10, left: -20, bottom: 10 }}>
                 <XAxis
                   dataKey="shortName"
                   stroke="#64748B"
