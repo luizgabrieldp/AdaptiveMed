@@ -83,18 +83,29 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
     }
   };
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subjectName.trim()) return;
     if (questionsNum <= 0) return;
     if (correctNum > questionsNum) return;
 
+    setErrorMessage(null);
+
+    // Se o usuário digitou uma tag/subárea mas não clicou em "+ Adicionar", inclui automaticamente
+    const cleanTag = tagInput.trim();
+    const finalTags = [...tags];
+    if (cleanTag && !finalTags.includes(cleanTag)) {
+      finalTags.push(cleanTag);
+    }
+
     try {
       setIsSubmitting(true);
       await addTopic({
         area: area || (areas[0]?.name ?? 'Geral'),
         subject_name: subjectName.trim(),
-        tags,
+        tags: finalTags,
         initial_date: initialDate,
         initial_questions: questionsNum,
         initial_correct: correctNum,
@@ -109,8 +120,10 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
       setInitialQuestions('25');
       setInitialCorrect('20');
       setInitialDate(getTodayDateString());
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
+      const msg = err instanceof Error ? err.message : 'Erro ao cadastrar assunto no banco de dados.';
+      setErrorMessage(msg);
       setIsSubmitting(false);
     }
   };
@@ -130,6 +143,12 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                 Cadastre o conteúdo estudado, atribua subáreas/tags e configure seu rendimento inicial.
               </DialogDescription>
             </DialogHeader>
+
+            {errorMessage && (
+              <div className="p-3 my-2 text-xs rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 font-medium">
+                {errorMessage}
+              </div>
+            )}
 
             <div className="space-y-4 my-4">
               {/* Seletor de Grande Área */}

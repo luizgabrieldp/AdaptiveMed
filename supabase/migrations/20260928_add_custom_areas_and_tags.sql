@@ -12,3 +12,6 @@ alter table public.study_topics
 
 -- 3. Cria índice para buscas rápidas por tag
 create index if not exists idx_study_topics_tags on public.study_topics using gin(tags);
+
+-- 4. Remove a restrição estrita das 5 áreas padrão para permitir áreas personalizadas criadas pelo usuário
+alter table public.study_topics drop constraint if exists study_topics_area_check;
