@@ -33,7 +33,7 @@ const PLANS: Record<string, PlanConfig> = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { planId = 'monthly', email } = body;
+    const { planId = 'monthly', email, userId } = body;
 
     const plan = PLANS[planId] || PLANS.monthly;
     const origin = req.headers.get('origin') || 'https://adaptive-med.vercel.app';
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (!stripe) {
       return NextResponse.json(
         {
-          url: `${origin}/signup?plan=${planId}&notice=stripe_pending`,
+          url: `${origin}/pagamento/sucesso?session_id=demo_session&plan=${planId}&notice=stripe_pending`,
           isPendingConfig: true,
           message:
             'A integração com Stripe foi ativada na aplicação. Para processar cobranças reais, defina STRIPE_SECRET_KEY nas variáveis da Vercel.',
@@ -54,9 +54,14 @@ export async function POST(req: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
+      client_reference_id: userId || undefined,
       customer_email: email || undefined,
       allow_promotion_codes: true, // HABILITA O CAMPO DE CUPOM DE DESCONTO NO CHECKOUT STRIPE
       payment_method_collection: 'if_required', // CUPOM 100% NÃO EXIGE CARTÃO DE CRÉDITO!
+      metadata: {
+        userId: userId || '',
+        planId,
+      },
       line_items: [
         {
           price_data: {
@@ -73,8 +78,8 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${origin}/signup?session_id={CHECKOUT_SESSION_ID}&plan=${planId}`,
-      cancel_url: `${origin}/#planos`,
+      success_url: `${origin}/pagamento/sucesso?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/pagamento`,
     });
 
     return NextResponse.json({ url: session.url });
@@ -96,12 +101,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'session_id é obrigatório' }, { status: 400 });
     }
 
-    if (!stripe) {
+    if (!stripe || sessionId === 'demo_session') {
       // Modo de teste ou pendência de configuração
       return NextResponse.json({
         valid: true,
         status: 'complete',
         customer_email: null,
+        userId: null,
       });
     }
 
@@ -118,6 +124,8 @@ export async function GET(req: NextRequest) {
       customer_email: session.customer_details?.email || session.customer_email,
       subscription_id: session.subscription,
       customer_id: session.customer,
+      userId: session.client_reference_id || session.metadata?.userId || null,
+      planId: session.metadata?.planId || 'monthly',
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

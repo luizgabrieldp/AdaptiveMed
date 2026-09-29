@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { CancelSubscriptionModal } from '@/components/subscription/cancel-subscription-modal';
+import { createClient } from '@/lib/supabase/client';
 import {
   CreditCard,
   User,
@@ -22,6 +23,9 @@ import {
   RefreshCw,
   Loader2,
   Target,
+  KeyRound,
+  Link2,
+  Lock,
 } from 'lucide-react';
 
 interface SubscriptionData {
@@ -41,6 +45,13 @@ export default function ContaPage() {
   const [portalLoading, setPortalLoading] = useState<boolean>(false);
   const [reactivateLoading, setReactivateLoading] = useState<boolean>(false);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Estados de segurança (senha e Google)
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
 
   const fetchSubscription = async () => {
     try {
@@ -128,6 +139,73 @@ export default function ContaPage() {
     });
     fetchSubscription();
   };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordNotice(null);
+
+    if (newPassword.length < 6) {
+      setPasswordNotice({ type: 'error', message: 'A senha deve ter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordNotice({ type: 'error', message: 'As senhas digitadas não conferem.' });
+      return;
+    }
+
+    try {
+      setIsUpdatingPassword(true);
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      setPasswordNotice({ type: 'success', message: 'Sua senha foi alterada com sucesso!' });
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPasswordNotice({ type: 'error', message: err.message || 'Erro ao atualizar senha.' });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleLinkGoogle = async () => {
+    try {
+      setIsLinkingGoogle(true);
+      setActionNotice(null);
+      const supabase = createClient();
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'https://adaptive-med.vercel.app';
+
+      const { error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: {
+          redirectTo: `${origin}/auth/callback?next=/conta`,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+    } catch (err: any) {
+      setActionNotice({
+        type: 'error',
+        message: err.message || 'Erro ao conectar conta Google.',
+      });
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const isGoogleLinked = Boolean(
+    user?.app_metadata?.providers?.includes('google') ||
+    user?.identities?.some((i: any) => i.provider === 'google')
+  );
 
   const formattedPeriodEnd = subData?.currentPeriodEnd
     ? new Date(subData.currentPeriodEnd).toLocaleDateString('pt-BR')
@@ -392,6 +470,147 @@ export default function ContaPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* CARD: SEGURANÇA & MÉTODOS DE ACESSO */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold">Segurança & Métodos de Acesso</CardTitle>
+                <CardDescription className="text-xs">
+                  Altere sua senha de acesso e vincule sua conta do Google
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5 space-y-6">
+            {/* Vínculo com Conta Google */}
+            <div className="p-4 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-foreground">Acesso com Conta Google</span>
+                  {isGoogleLinked ? (
+                    <Badge variant="concluido" className="text-[10px] gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Conectado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      Não Conectado
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isGoogleLinked
+                    ? 'Sua conta do Google está vinculada. Você pode entrar clicando em "Continuar com o Google" a qualquer momento.'
+                    : 'Conecte sua conta do Google para poder fazer login com apenas 1 clique no futuro.'}
+                </p>
+              </div>
+
+              {!isGoogleLinked && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLinkGoogle}
+                  disabled={isLinkingGoogle}
+                  className="text-xs h-9 gap-2 shrink-0 border-border hover:bg-muted font-semibold"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                  <span>{isLinkingGoogle ? 'Conectando...' : 'Conectar Conta Google'}</span>
+                </Button>
+              )}
+            </div>
+
+            {/* Formulário de Alteração de Senha */}
+            <form onSubmit={handleUpdatePassword} className="space-y-4 pt-2 border-t border-border">
+              <div className="space-y-1">
+                <span className="font-bold text-sm text-foreground">Definir ou Alterar Senha</span>
+                <p className="text-xs text-muted-foreground">
+                  Crie ou altere uma senha para poder acessar também digitando seu e-mail e senha.
+                </p>
+              </div>
+
+              {passwordNotice && (
+                <div
+                  className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                    passwordNotice.type === 'success'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      : 'bg-destructive/15 border-destructive/30 text-destructive'
+                  }`}
+                >
+                  {passwordNotice.type === 'success' ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>{passwordNotice.message}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Nova Senha (mínimo 6 caracteres)
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full h-9 rounded-lg border border-border bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Confirmar Nova Senha
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full h-9 rounded-lg border border-border bg-card px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isUpdatingPassword || !newPassword}
+                  className="text-xs font-bold gap-1.5 h-9"
+                >
+                  {isUpdatingPassword && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>Salvar Nova Senha</span>
+                </Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
 

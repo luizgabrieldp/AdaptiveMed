@@ -54,10 +54,7 @@ export default function LoginPage() {
               (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
 
             if (!hasActivePlan) {
-              supabase.auth.signOut().then(() => {
-                setContractWarning(true);
-                setUncontractedEmail(userEmail);
-              });
+              router.replace('/pagamento');
               return;
             }
 
@@ -89,10 +86,7 @@ export default function LoginPage() {
               (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
 
             if (!hasActivePlan) {
-              supabase.auth.signOut().then(() => {
-                setContractWarning(true);
-                setUncontractedEmail(userEmail);
-              });
+              router.replace('/pagamento');
               return;
             }
 
@@ -142,7 +136,13 @@ export default function LoginPage() {
 
       if (error) {
         setIsLoading(false);
-        setErrorMessage('E-mail ou senha inválidos. Verifique seus dados.');
+        if (error.message.toLowerCase().includes('invalid login credentials')) {
+          setErrorMessage(
+            'E-mail ou senha incorretos. Se você criou sua conta pelo Google, clique em "Continuar com o Google" abaixo.'
+          );
+        } else {
+          setErrorMessage(error.message);
+        }
         return;
       }
 
@@ -159,12 +159,10 @@ export default function LoginPage() {
           isAdmin ||
           (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
 
-        // Se a conta não tiver assinatura paga ativa
+        // Se a conta não tiver assinatura paga ativa, vai direto para a tela de pagamento já autenticado
         if (!hasActivePlan) {
-          await supabase.auth.signOut();
           setIsLoading(false);
-          setContractWarning(true);
-          setUncontractedEmail(cleanEmail);
+          router.push('/pagamento');
           return;
         }
 

@@ -60,29 +60,10 @@ export default function LandingPage() {
   }, []);
 
   const handleCheckout = async (planId: 'monthly' | 'annual') => {
-    try {
-      setCheckoutLoading(planId);
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          email: user?.email,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        // Fallback para signup se houver redirecionamento
-        router.push(`/signup?plan=${planId}`);
-      }
-    } catch (err) {
-      console.error(err);
+    if (user) {
+      router.push(`/pagamento?plan=${planId}`);
+    } else {
       router.push(`/signup?plan=${planId}`);
-    } finally {
-      setCheckoutLoading(null);
     }
   };
 

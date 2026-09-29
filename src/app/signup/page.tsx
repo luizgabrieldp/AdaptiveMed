@@ -89,11 +89,15 @@ export default function SignupPage() {
 
       // Se logado diretamente (confirmação desativada ou automática)
       if (data.session) {
-        router.push('/onboarding');
+        if (sessionVerified || sessionId) {
+          router.push('/onboarding');
+        } else {
+          router.push(`/pagamento?plan=${planId || 'annual'}`);
+        }
         router.refresh();
       } else {
         setSuccessMessage(
-          'Conta criada com sucesso! Você já pode efetuar o login para personalizar suas metas.'
+          'Conta criada com sucesso! Você já pode efetuar o login para ativar seu plano.'
         );
         setIsLoading(false);
       }
@@ -122,7 +126,7 @@ export default function SignupPage() {
 
       const callbackNext = sessionId
         ? `/auth/callback?next=/onboarding&session_id=${encodeURIComponent(sessionId)}`
-        : `/auth/callback?next=/onboarding`;
+        : `/auth/callback?next=/pagamento${planId ? `?plan=${planId}` : ''}`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

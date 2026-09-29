@@ -62,15 +62,9 @@ export async function GET(request: NextRequest) {
           Boolean(sessionId) ||
           (profile && (profile.is_subscribed || profile.subscription_status === 'active'));
 
-        // Se NÃO tem contrato ativo, desloga e manda para a tela de login com aviso explícito
+        // Se NÃO tem plano ativo, mantém o usuário logado e direciona para o pagamento
         if (!hasActivePlan) {
-          await supabase.auth.signOut();
-          return NextResponse.redirect(
-            new URL(
-              `/#planos?reason=inactive_account&email=${encodeURIComponent(user.email || '')}`,
-              requestUrl.origin
-            )
-          );
+          return NextResponse.redirect(new URL('/pagamento', requestUrl.origin));
         }
 
         if (profile && !profile.onboarding_completed) {

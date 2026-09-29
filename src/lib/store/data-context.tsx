@@ -198,7 +198,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAreas(DEFAULT_STUDY_AREAS);
         }
 
-        // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas
+        // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas de estudo
         if (
           !profData.is_subscribed &&
           profData.subscription_status !== 'active' &&
@@ -212,8 +212,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             path.startsWith('/evolucao') ||
             path.startsWith('/onboarding')
           ) {
-            await supabase.auth.signOut();
-            window.location.href = '/#planos?reason=inactive_account';
+            window.location.href = '/pagamento';
             return;
           }
         }

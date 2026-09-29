@@ -15,7 +15,9 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/revisoes') ||
     path.startsWith('/evolucao') ||
     path.startsWith('/simulados') ||
-    path.startsWith('/onboarding');
+    path.startsWith('/onboarding') ||
+    path.startsWith('/conta') ||
+    path.startsWith('/pagamento');
 
   // Verifica cookie de demonstração / bypass local para testes
   const isDemoActive = request.cookies.get('adaptivemed_demo')?.value === 'true';
