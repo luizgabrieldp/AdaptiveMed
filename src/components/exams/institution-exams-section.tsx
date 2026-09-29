@@ -30,16 +30,22 @@ export const InstitutionExamsSection: React.FC = () => {
   const { institutionExams, deleteInstitutionExam } = useData();
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Lista única de instituições existentes
+  // Lista única de instituições existentes cadastradas pelo estudante
   const availableInstitutions = useMemo(() => {
-    const list = Array.from(new Set(institutionExams.map(i => i.institution_name))).sort();
-    return list.length > 0 ? list : ['USP-SP', 'ENARE', 'UNICAMP', 'SUS-SP'];
+    return Array.from(new Set(institutionExams.map(i => i.institution_name))).sort();
   }, [institutionExams]);
 
-  const [selectedInst, setSelectedInst] = useState<string>(availableInstitutions[0] || 'USP-SP');
+  const [selectedInst, setSelectedInst] = useState<string>(availableInstitutions[0] || '');
+
+  React.useEffect(() => {
+    if (availableInstitutions.length > 0 && (!selectedInst || !availableInstitutions.includes(selectedInst))) {
+      setSelectedInst(availableInstitutions[0]);
+    }
+  }, [availableInstitutions, selectedInst]);
 
   // Filtra as provas da instituição selecionada e ordena por ano
   const filteredExams = useMemo(() => {
+    if (!selectedInst) return [];
     return institutionExams
       .filter(i => i.institution_name === selectedInst)
       .sort((a, b) => a.exam_year - b.exam_year);
@@ -83,36 +89,58 @@ export const InstitutionExamsSection: React.FC = () => {
         </Button>
       </div>
 
-      {/* Seletor de Instituições */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {availableInstitutions.map(inst => {
-          const isSelected = selectedInst === inst;
-          const count = institutionExams.filter(i => i.institution_name === inst).length;
+      {/* Estado Vazio Elegante quando não há provas de banca cadastradas */}
+      {institutionExams.length === 0 ? (
+        <Card className="p-12 text-center border-dashed border-border space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+            <Building2 className="h-7 w-7" />
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <h3 className="text-base font-bold text-foreground">Nenhuma prova de banca cadastrada</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Você ainda não registrou notas de provas oficiais na íntegra. Cadastre suas provas da USP, ENARE, UNICAMP ou de qualquer concurso para acompanhar seu gráfico histórico de pontuação ano a ano.
+            </p>
+          </div>
+          <Button
+            onClick={() => setModalOpen(true)}
+            size="sm"
+            className="font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
+          >
+            <Plus className="h-4 w-4" /> Registrar Primeira Prova de Banca
+          </Button>
+        </Card>
+      ) : (
+        <>
+          {/* Seletor de Instituições */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {availableInstitutions.map(inst => {
+              const isSelected = selectedInst === inst;
+              const count = institutionExams.filter(i => i.institution_name === inst).length;
 
-          return (
-            <button
-              key={inst}
-              onClick={() => setSelectedInst(inst)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${
-                isSelected
-                  ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
-                  : 'bg-card border-border text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {inst} ({count})
-            </button>
-          );
-        })}
-      </div>
+              return (
+                <button
+                  key={inst}
+                  onClick={() => setSelectedInst(inst)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap border ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
+                      : 'bg-card border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {inst} ({count})
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Gráfico Temporal de Linha */}
-      <Card className="border-border p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-          <div>
-            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              Evolução Histórica na {selectedInst}
-            </h3>
+          {/* Gráfico Temporal de Linha */}
+          <Card className="border-border p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+              <div>
+                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Evolução Histórica na {selectedInst}
+                </h3>
             <p className="text-xs text-muted-foreground">
               Pontuação obtida por ano de prova oficial
             </p>
@@ -241,6 +269,8 @@ export const InstitutionExamsSection: React.FC = () => {
           })}
         </TableBody>
       </Table>
+      </>
+      )}
 
       <NewInstitutionModal
         open={modalOpen}

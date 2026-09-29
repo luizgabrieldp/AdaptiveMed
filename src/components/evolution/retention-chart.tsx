@@ -2,6 +2,16 @@
 
 import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { useData } from '@/lib/store/data-context';
 import {
   ResponsiveContainer,
@@ -14,12 +24,15 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, Sparkles, Filter, BrainCircuit } from 'lucide-react';
+import { TrendingUp, Sparkles, Filter, BrainCircuit, Target, Pencil, Check } from 'lucide-react';
 
 export const RetentionChart: React.FC = () => {
-  const { topics, reviews, profile, areas } = useData();
+  const { topics, reviews, profile, areas, updateProfile } = useData();
   const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('TODAS');
   const targetCutoff = profile?.target_cutoff_percentage || 80;
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [metaInput, setMetaInput] = useState<number>(targetCutoff);
+  const [isSavingMeta, setIsSavingMeta] = useState(false);
 
   // Calcula a média de retenção para cada etapa: Contato Inicial, R1, R2, ..., R8
   const chartData = useMemo(() => {
@@ -107,21 +120,41 @@ export const RetentionChart: React.FC = () => {
           </CardDescription>
         </div>
 
-        {/* Filtro por Grande Área */}
-        <div className="flex items-center space-x-2 text-xs">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            value={selectedAreaFilter}
-            onChange={e => setSelectedAreaFilter(e.target.value)}
-            className="h-8 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="TODAS">Média Geral (Todas)</option>
-            {areas.map(a => (
-              <option key={a.id} value={a.name}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Badge & Botão de Edição de Meta */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
+            <Target className="h-3.5 w-3.5 text-amber-400" />
+            <span>Sua Meta: <strong className="text-amber-200">{targetCutoff}%</strong></span>
+            <button
+              type="button"
+              onClick={() => {
+                setMetaInput(targetCutoff);
+                setEditModalOpen(true);
+              }}
+              className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-amber-400 hover:text-amber-200 underline transition-colors"
+              title="Clique para alterar sua meta de corte"
+            >
+              <Pencil className="h-2.5 w-2.5" />
+              Editar
+            </button>
+          </div>
+
+          {/* Filtro por Grande Área */}
+          <div className="flex items-center space-x-1.5 text-xs">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            <select
+              value={selectedAreaFilter}
+              onChange={e => setSelectedAreaFilter(e.target.value)}
+              className="h-8 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="TODAS">Média Geral (Todas)</option>
+              {areas.map(a => (
+                <option key={a.id} value={a.name}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </CardHeader>
 
@@ -222,6 +255,78 @@ export const RetentionChart: React.FC = () => {
           </p>
         </div>
       </CardContent>
+
+      {/* Modal de Alteração de Meta */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <div className="flex items-center space-x-2">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+                <Target className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold">Alterar Meta de Corte</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Defina o percentual de acertos almejado para sua aprovação.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">
+                Porcentagem Alvo (%)
+              </label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min={50}
+                  max={100}
+                  step={1}
+                  value={metaInput}
+                  onChange={e => setMetaInput(Number(e.target.value))}
+                  className="pr-8 text-sm font-bold"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                  %
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Sugestão das bancas de alta concorrência (USP/ENARE): entre 80% e 85%.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+            <Button
+              type="button"
+              disabled={isSavingMeta}
+              onClick={async () => {
+                try {
+                  setIsSavingMeta(true);
+                  await updateProfile({ target_cutoff_percentage: Number(metaInput) });
+                  setEditModalOpen(false);
+                } finally {
+                  setIsSavingMeta(false);
+                }
+              }}
+              className="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
+            >
+              <Check className="h-4 w-4" />
+              {isSavingMeta ? 'Salvando...' : 'Salvar Nova Meta'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setEditModalOpen(false)}
+              className="w-full sm:w-auto text-xs text-muted-foreground"
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

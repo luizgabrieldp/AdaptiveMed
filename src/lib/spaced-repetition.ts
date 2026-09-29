@@ -182,3 +182,77 @@ export function calculateStreak(activityDates: string[], referenceDate?: string)
 
   return streak;
 }
+
+/**
+ * Regra da Ofensiva:
+ * O estudante só pontua a ofensiva do dia se realizar pelo menos 10 questões
+ * (soma de questões feitas em estudos/revisões daquele dia) OU concluir 1 simulado no dia.
+ */
+export function calculateQualifiedStreak(
+  topics: Array<{ initial_date: string; initial_questions: number; is_planned?: boolean }>,
+  reviews: Array<{ completed_date: string | null; questions_done: number | null }>,
+  mockExams: Array<{ exam_date: string }>,
+  referenceDate?: string
+): {
+  currentStreak: number;
+  todayQuestionsCount: number;
+  todayMockCompleted: boolean;
+  streakQualifiedToday: boolean;
+} {
+  const today = referenceDate || getTodayDateString();
+
+  const dailyQuestions: Record<string, number> = {};
+  const dailyMocks: Record<string, number> = {};
+
+  // Questões de estudos iniciais não planejados
+  topics.forEach(t => {
+    if (!t.is_planned && t.initial_questions > 0 && t.initial_date) {
+      const d = t.initial_date.slice(0, 10);
+      dailyQuestions[d] = (dailyQuestions[d] || 0) + t.initial_questions;
+    }
+  });
+
+  // Questões de revisões concluídas
+  reviews.forEach(r => {
+    if (r.completed_date && r.questions_done && r.questions_done > 0) {
+      const d = r.completed_date.slice(0, 10);
+      dailyQuestions[d] = (dailyQuestions[d] || 0) + r.questions_done;
+    }
+  });
+
+  // Simulados concluídos
+  mockExams.forEach(m => {
+    if (m.exam_date) {
+      const d = m.exam_date.slice(0, 10);
+      dailyMocks[d] = (dailyMocks[d] || 0) + 1;
+    }
+  });
+
+  const todayQuestionsCount = dailyQuestions[today] || 0;
+  const todayMockCompleted = (dailyMocks[today] || 0) >= 1;
+  const streakQualifiedToday = todayQuestionsCount >= 10 || todayMockCompleted;
+
+  // Dias que qualificam: >= 10 questões OU >= 1 simulado
+  const allDates = new Set([
+    ...Object.keys(dailyQuestions),
+    ...Object.keys(dailyMocks),
+  ]);
+
+  const qualifyingDates: string[] = [];
+  allDates.forEach(date => {
+    const q = dailyQuestions[date] || 0;
+    const m = dailyMocks[date] || 0;
+    if (q >= 10 || m >= 1) {
+      qualifyingDates.push(date);
+    }
+  });
+
+  const currentStreak = calculateStreak(qualifyingDates, today);
+
+  return {
+    currentStreak,
+    todayQuestionsCount,
+    todayMockCompleted,
+    streakQualifiedToday,
+  };
+}

@@ -12,12 +12,14 @@ import {
   DEFAULT_STUDY_AREAS,
   COLOR_PALETTE,
   UserStats,
+  PrevalentTopic,
 } from '@/types/database';
 import {
   getInitialDemoTopics,
   getInitialDemoReviews,
   getInitialDemoMockExams,
   getInitialDemoInstitutionExams,
+  getInitialDemoPrevalentTopics,
   INITIAL_DEMO_PROFILE,
 } from './demo-data';
 import {
@@ -25,6 +27,7 @@ import {
   getTodayDateString,
   addDaysToDate,
   calculateStreak,
+  calculateQualifiedStreak,
 } from '@/lib/spaced-repetition';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -33,6 +36,7 @@ interface DataContextType {
   reviews: TopicReview[];
   mockExams: MockExam[];
   institutionExams: InstitutionExam[];
+  prevalentTopics: PrevalentTopic[];
   profile: Profile | null;
   areas: StudyArea[];
   allTags: string[];
@@ -48,6 +52,23 @@ interface DataContextType {
     initial_questions: number;
     initial_correct: number;
   }) => Promise<void>;
+  addPlannedTopic: (data: {
+    area: string;
+    subject_name: string;
+    planned_date: string;
+    tags?: string[];
+    is_weekly_goal?: boolean;
+    notes?: string;
+  }) => Promise<void>;
+  recordPlannedTopicStudy: (
+    topicId: string,
+    data: {
+      study_date: string;
+      questions_done: number;
+      questions_correct: number;
+    }
+  ) => Promise<{ nextReviewDate?: string }>;
+  updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
   addArea: (name: string, colorHex: string) => Promise<void>;
   updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
   deleteArea: (id: string) => Promise<void>;
@@ -71,6 +92,10 @@ interface DataContextType {
     score_percentage: number;
   }) => Promise<void>;
   deleteInstitutionExam: (examId: string) => Promise<void>;
+  addPrevalentTopic: (data: Omit<PrevalentTopic, 'id' | 'created_at'>) => Promise<void>;
+  updatePrevalentTopic: (id: string, data: Partial<PrevalentTopic>) => Promise<void>;
+  deletePrevalentTopic: (id: string) => Promise<void>;
+  reorderPrevalentTopics: (orderedIds: string[]) => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   resetToDemo: () => void;
   signInDemo: () => void;
@@ -84,6 +109,7 @@ const LOCAL_STORAGE_KEYS = {
   REVIEWS: 'adaptivemed_reviews_v1',
   MOCK_EXAMS: 'adaptivemed_mock_exams_v1',
   INST_EXAMS: 'adaptivemed_inst_exams_v1',
+  PREVALENT_TOPICS: 'adaptivemed_prevalent_topics_v1',
   PROFILE: 'adaptivemed_profile_v1',
   AREAS: 'adaptivemed_areas_v1',
   DEMO_ACTIVE: 'adaptivemed_demo_active',
@@ -94,6 +120,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reviews, setReviews] = useState<TopicReview[]>([]);
   const [mockExams, setMockExams] = useState<MockExam[]>([]);
   const [institutionExams, setInstitutionExams] = useState<InstitutionExam[]>([]);
+  const [prevalentTopics, setPrevalentTopics] = useState<PrevalentTopic[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [areas, setAreas] = useState<StudyArea[]>(DEFAULT_STUDY_AREAS);
   const [user, setUser] = useState<any>(null);
@@ -141,6 +168,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setReviews([]);
         setMockExams([]);
         setInstitutionExams([]);
+        setPrevalentTopics([]);
         setProfile(null);
         setAreas(DEFAULT_STUDY_AREAS);
         return;
@@ -150,6 +178,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedReviews = localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS);
       const storedMocks = localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS);
       const storedInsts = localStorage.getItem(LOCAL_STORAGE_KEYS.INST_EXAMS);
+      const storedPrevalent = localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS);
       const storedProfile = localStorage.getItem(LOCAL_STORAGE_KEYS.PROFILE);
       const storedAreas = localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS);
 
@@ -158,6 +187,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setReviews(JSON.parse(storedReviews));
         setMockExams(storedMocks ? JSON.parse(storedMocks) : getInitialDemoMockExams());
         setInstitutionExams(storedInsts ? JSON.parse(storedInsts) : getInitialDemoInstitutionExams());
+        setPrevalentTopics(storedPrevalent ? JSON.parse(storedPrevalent) : getInitialDemoPrevalentTopics());
         setProfile(storedProfile ? JSON.parse(storedProfile) : INITIAL_DEMO_PROFILE);
         setAreas(storedAreas ? JSON.parse(storedAreas) : DEFAULT_STUDY_AREAS);
       } else {
@@ -249,12 +279,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dReviews = getInitialDemoReviews();
     const dMocks = getInitialDemoMockExams();
     const dInsts = getInitialDemoInstitutionExams();
+    const dPrevalent = getInitialDemoPrevalentTopics();
     const dProf = INITIAL_DEMO_PROFILE;
 
     setTopics(dTopics);
     setReviews(dReviews);
     setMockExams(dMocks);
     setInstitutionExams(dInsts);
+    setPrevalentTopics(dPrevalent);
     setProfile(dProf);
     setAreas(DEFAULT_STUDY_AREAS);
     setIsDemoMode(true);
@@ -264,6 +296,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(dReviews));
       localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(dMocks));
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(dInsts));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(dPrevalent));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(dProf));
       localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEFAULT_STUDY_AREAS));
       localStorage.setItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE, 'true');
@@ -291,6 +324,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setReviews([]);
     setMockExams([]);
     setInstitutionExams([]);
+    setPrevalentTopics([]);
     setProfile(null);
     if (typeof window !== 'undefined') {
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
@@ -321,8 +355,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
       localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(mockExams));
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(institutionExams));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(prevalentTopics));
     }
-  }, [topics, reviews, mockExams, institutionExams, isDemoMode]);
+  }, [topics, reviews, mockExams, institutionExams, prevalentTopics, isDemoMode]);
 
   // GESTÃO DE GRANDES ÁREAS CUSTOMIZADAS
   const addArea = async (name: string, colorHex: string) => {
@@ -471,6 +506,134 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setTopics(prev => [newTopic, ...prev]);
     setReviews(prev => [...prev, r1Review]);
+  };
+
+  // AÇÃO 1.1: Adicionar Assunto Planejado para Estudo Futuro
+  const addPlannedTopic = async (data: {
+    area: string;
+    subject_name: string;
+    planned_date: string;
+    tags?: string[];
+    is_weekly_goal?: boolean;
+    notes?: string;
+  }) => {
+    const topicId = isDemoMode ? `topic-${Date.now()}` : crypto.randomUUID();
+    const userId = user?.id || 'demo-user-id';
+
+    const newTopic: StudyTopic = {
+      id: topicId,
+      user_id: userId,
+      area: data.area,
+      subject_name: data.subject_name.trim(),
+      tags: data.tags || [],
+      initial_date: data.planned_date,
+      planned_date: data.planned_date,
+      initial_questions: 0,
+      initial_correct: 0,
+      initial_percentage: 0,
+      is_planned: true,
+      is_weekly_goal: data.is_weekly_goal ?? false,
+      notes: data.notes,
+      created_at: new Date().toISOString(),
+    };
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase.from('study_topics').insert(newTopic);
+    }
+
+    setTopics(prev => [newTopic, ...prev]);
+  };
+
+  // AÇÃO 1.2: Registrar Estudo de Assunto Planejado (Dispara Algoritmo Adaptativo R1)
+  const recordPlannedTopicStudy = async (
+    topicId: string,
+    data: {
+      study_date: string;
+      questions_done: number;
+      questions_correct: number;
+    }
+  ): Promise<{ nextReviewDate?: string }> => {
+    const percentage =
+      data.questions_done > 0
+        ? Math.round((data.questions_correct / data.questions_done) * 1000) / 10
+        : 0;
+
+    const intervalDays = calculateNextReviewInterval(percentage, 1);
+    const r1ScheduledDate = addDaysToDate(data.study_date, intervalDays);
+
+    const targetTopic = topics.find(t => t.id === topicId);
+    const userId = user?.id || 'demo-user-id';
+
+    const updatedTopic: StudyTopic = targetTopic
+      ? {
+          ...targetTopic,
+          initial_date: data.study_date,
+          initial_questions: data.questions_done,
+          initial_correct: data.questions_correct,
+          initial_percentage: percentage,
+          is_planned: false,
+        }
+      : {
+          id: topicId,
+          user_id: userId,
+          area: 'Clínica Médica',
+          subject_name: 'Assunto',
+          initial_date: data.study_date,
+          initial_questions: data.questions_done,
+          initial_correct: data.questions_correct,
+          initial_percentage: percentage,
+          is_planned: false,
+          created_at: new Date().toISOString(),
+        };
+
+    const r1Review: TopicReview = {
+      id: isDemoMode ? `rev-${Date.now()}-1` : crypto.randomUUID(),
+      topic_id: topicId,
+      user_id: userId,
+      review_number: 1,
+      scheduled_date: r1ScheduledDate,
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      created_at: new Date().toISOString(),
+    };
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase
+        .from('study_topics')
+        .update({
+          initial_date: data.study_date,
+          initial_questions: data.questions_done,
+          initial_correct: data.questions_correct,
+          initial_percentage: percentage,
+          is_planned: false,
+        })
+        .eq('id', topicId);
+
+      await supabase.from('topic_reviews').insert(r1Review);
+    }
+
+    setTopics(prev => prev.map(t => (t.id === topicId ? updatedTopic : t)));
+    setReviews(prev => [...prev, r1Review]);
+
+    return { nextReviewDate: r1ScheduledDate };
+  };
+
+  // AÇÃO 1.3: Alternar se assunto é meta da semana
+  const updateTopicWeeklyGoal = async (topicId: string, is_weekly_goal: boolean) => {
+    setTopics(prev =>
+      prev.map(t => (t.id === topicId ? { ...t, is_weekly_goal } : t))
+    );
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      await supabase
+        .from('study_topics')
+        .update({ is_weekly_goal })
+        .eq('id', topicId);
+    }
   };
 
   // AÇÃO 2: Concluir Revisão e Agendar Próximo Ciclo (Adaptativo)
@@ -632,6 +795,53 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstitutionExams(prev => prev.filter(i => i.id !== examId));
   };
 
+  // AÇÃO 6: Gestão de Assuntos Prevalentes da Banca
+  const addPrevalentTopic = async (data: Omit<PrevalentTopic, 'id' | 'created_at'>) => {
+    const newPrev: PrevalentTopic = {
+      id: isDemoMode ? `prev-${Date.now()}` : crypto.randomUUID(),
+      user_id: user?.id || 'demo-user-id',
+      ...data,
+      created_at: new Date().toISOString(),
+    };
+    const updated = [...prevalentTopics, newPrev];
+    setPrevalentTopics(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+  };
+
+  const updatePrevalentTopic = async (id: string, data: Partial<PrevalentTopic>) => {
+    const updated = prevalentTopics.map(p => (p.id === id ? { ...p, ...data } : p));
+    setPrevalentTopics(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+  };
+
+  const deletePrevalentTopic = async (id: string) => {
+    const updated = prevalentTopics.filter(p => p.id !== id);
+    setPrevalentTopics(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+  };
+
+  const reorderPrevalentTopics = async (orderedIds: string[]) => {
+    const rankMap = new Map<string, number>();
+    orderedIds.forEach((id, index) => rankMap.set(id, index + 1));
+    const updated = prevalentTopics
+      .map(p => {
+        const newRank = rankMap.get(p.id);
+        return newRank !== undefined ? { ...p, rank_order: newRank } : p;
+      })
+      .sort((a, b) => a.rank_order - b.rank_order);
+
+    setPrevalentTopics(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+    }
+  };
+
   // Estatísticas Dinâmicas Computadas
   const stats = useMemo<UserStats>(() => {
     const today = getTodayDateString();
@@ -642,23 +852,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     const todayReviewsCount = todayPending.length;
 
-    // 2. Coleta de datas de atividade para cálculo do Streak
-    const activityDates: string[] = [];
-    topics.forEach(t => activityDates.push(t.initial_date));
-    reviews.forEach(r => {
-      if (r.completed_date) activityDates.push(r.completed_date);
-    });
-    mockExams.forEach(m => activityDates.push(m.exam_date));
-
-    const currentStreak = calculateStreak(activityDates, today);
+    // 2. Ofensiva do Dia (Streak) Qualificada:
+    // O estudante só pontua se fizer pelo menos 10 questões no dia OU concluir 1 simulado
+    const {
+      currentStreak,
+      todayQuestionsCount,
+      todayMockCompleted,
+      streakQualifiedToday,
+    } = calculateQualifiedStreak(topics, reviews, mockExams, today);
 
     // 3. Taxa Global de Acertos & Total de Questões
     let totalQuestions = 0;
     let totalCorrect = 0;
 
     topics.forEach(t => {
-      totalQuestions += t.initial_questions;
-      totalCorrect += t.initial_correct;
+      if (!t.is_planned) {
+        totalQuestions += t.initial_questions;
+        totalCorrect += t.initial_correct;
+      }
     });
 
     reviews.forEach(r => {
@@ -676,7 +887,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const overallAccuracy =
       totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 1000) / 10 : 0;
 
-    // 4. Acurácia por Grande Área & Identificação de Vulnerabilidade (Dinâmico para qualquer disciplina)
+    // 4. Acurácia por Grande Área & Identificação de Vulnerabilidade
     const areaStats: Record<
       string,
       { correct: number; total: number; percentage: number; topicsCount: number }
@@ -687,12 +898,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     topics.forEach(t => {
-      if (!areaStats[t.area]) {
-        areaStats[t.area] = { correct: 0, total: 0, percentage: 0, topicsCount: 0 };
+      if (!t.is_planned) {
+        if (!areaStats[t.area]) {
+          areaStats[t.area] = { correct: 0, total: 0, percentage: 0, topicsCount: 0 };
+        }
+        areaStats[t.area].correct += t.initial_correct;
+        areaStats[t.area].total += t.initial_questions;
+        areaStats[t.area].topicsCount += 1;
       }
-      areaStats[t.area].correct += t.initial_correct;
-      areaStats[t.area].total += t.initial_questions;
-      areaStats[t.area].topicsCount += 1;
     });
 
     // Adiciona revisões concluídas para a respectiva área
@@ -735,6 +948,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentStreak,
       overallAccuracy,
       totalQuestions,
+      todayQuestionsCount,
+      todayMockCompleted,
+      streakQualifiedToday,
       vulnerableArea,
       areaAccuracy: areaStats,
     };
@@ -747,6 +963,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reviews,
         mockExams,
         institutionExams,
+        prevalentTopics,
         profile,
         areas,
         allTags,
@@ -755,6 +972,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isDemoMode,
         stats,
         addTopic,
+        addPlannedTopic,
+        recordPlannedTopicStudy,
+        updateTopicWeeklyGoal,
         addArea,
         updateArea,
         deleteArea,
@@ -765,6 +985,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteMockExam,
         addInstitutionExam,
         deleteInstitutionExam,
+        addPrevalentTopic,
+        updatePrevalentTopic,
+        deletePrevalentTopic,
+        reorderPrevalentTopics,
         updateProfile,
         resetToDemo,
         signInDemo,

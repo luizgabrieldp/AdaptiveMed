@@ -94,113 +94,124 @@ export const MockExamsSection: React.FC = () => {
         </Button>
       </div>
 
-      {/* Grid de KPIs Automáticos */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="p-4 border-border bg-card">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Média Geral
-          </p>
-          <div className="flex items-baseline space-x-1.5 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-foreground">
-              {kpis.media}%
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            Em {mockExams.length} {mockExams.length === 1 ? 'simulado' : 'simulados'}
-          </p>
-        </Card>
-
-        <Card className="p-4 border-border bg-card">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Maior Nota
-          </p>
-          <div className="flex items-baseline space-x-1.5 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-400">
-              {kpis.maior}%
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-            <Award className="h-3 w-3 text-emerald-400" /> Recorde pessoal
-          </p>
-        </Card>
-
-        <Card className="p-4 border-border bg-card">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Menor Nota
-          </p>
-          <div className="flex items-baseline space-x-1.5 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-amber-400">
-              {kpis.menor}%
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Ponto de partida</p>
-        </Card>
-
-        <Card className="p-4 border-border bg-card">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Acima de 80%
-          </p>
-          <div className="flex items-baseline space-x-1.5 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-blue-400">
-              {kpis.distribuicao.gt90 + kpis.distribuicao.f80_90}
-            </span>
-            <span className="text-xs text-muted-foreground">provas</span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Zona competitiva</p>
-        </Card>
-      </div>
-
-      {/* Distribuição por Faixas de Corte */}
-      <Card className="border-border p-4">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
-          <BarChart2 className="h-4 w-4 text-primary" /> Distribuição por Faixas de Corte
-        </h4>
-
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <p className="text-emerald-400 font-extrabold text-lg">{kpis.distribuicao.gt90}</p>
-            <p className="text-[11px] font-semibold text-foreground mt-0.5">&gt; 90%</p>
-            <p className="text-[10px] text-muted-foreground">Excelência</p>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-            <p className="text-blue-400 font-extrabold text-lg">{kpis.distribuicao.f80_90}</p>
-            <p className="text-[11px] font-semibold text-foreground mt-0.5">80% a 90%</p>
-            <p className="text-[10px] text-muted-foreground">Aprovado USP/ENARE</p>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-            <p className="text-indigo-400 font-extrabold text-lg">{kpis.distribuicao.f70_80}</p>
-            <p className="text-[11px] font-semibold text-foreground mt-0.5">70% a 80%</p>
-            <p className="text-[10px] text-muted-foreground">Competitivo</p>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <p className="text-amber-400 font-extrabold text-lg">{kpis.distribuicao.f50_70}</p>
-            <p className="text-[11px] font-semibold text-foreground mt-0.5">50% a 70%</p>
-            <p className="text-[10px] text-muted-foreground">Intermediário</p>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 col-span-2 sm:col-span-1">
-            <p className="text-rose-400 font-extrabold text-lg">{kpis.distribuicao.lt50}</p>
-            <p className="text-[11px] font-semibold text-foreground mt-0.5">&lt; 50%</p>
-            <p className="text-[10px] text-muted-foreground">Alerta Crítico</p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tabela de Simulados */}
+      {/* Se não houver simulados registrados, exibe empty state elegante sem cards zerados fictícios */}
       {mockExams.length === 0 ? (
-        <div className="p-8 text-center rounded-2xl bg-card border border-dashed border-border space-y-2">
-          <p className="text-sm font-bold text-foreground">Nenhum simulado registrado</p>
-          <p className="text-xs text-muted-foreground">
-            Cadastre seu primeiro simulado geral para gerar as estatísticas e faixas de corte.
-          </p>
-          <Button onClick={() => setModalOpen(true)} size="sm" className="mt-2 text-xs">
-            Cadastrar Simulado
+        <Card className="p-12 text-center border-dashed border-border space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
+            <GraduationCap className="h-7 w-7" />
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <h3 className="text-base font-bold text-foreground">Nenhum simulado cadastrado</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Você ainda não registrou nenhum simulado geral. Cadastre seu primeiro simulado para acompanhar suas faixas de corte, média global e recordes pessoais.
+            </p>
+          </div>
+          <Button
+            onClick={() => setModalOpen(true)}
+            size="sm"
+            className="font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
+          >
+            <Plus className="h-4 w-4" /> Registrar Primeiro Simulado
           </Button>
-        </div>
+        </Card>
       ) : (
+        <>
+          {/* Grid de KPIs Automáticos */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="p-4 border-border bg-card">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Média Geral
+              </p>
+              <div className="flex items-baseline space-x-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-foreground">
+                  {kpis.media}%
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Em {mockExams.length} {mockExams.length === 1 ? 'simulado' : 'simulados'}
+              </p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Maior Nota
+              </p>
+              <div className="flex items-baseline space-x-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-emerald-400">
+                  {kpis.maior}%
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                <Award className="h-3 w-3 text-emerald-400" /> Recorde pessoal
+              </p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Menor Nota
+              </p>
+              <div className="flex items-baseline space-x-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-amber-400">
+                  {kpis.menor}%
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">Ponto de partida</p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Acima de 80%
+              </p>
+              <div className="flex items-baseline space-x-1.5 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-blue-400">
+                  {kpis.distribuicao.gt90 + kpis.distribuicao.f80_90}
+                </span>
+                <span className="text-xs text-muted-foreground">provas</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">Zona competitiva</p>
+            </Card>
+          </div>
+
+          {/* Distribuição por Faixas de Corte */}
+          <Card className="border-border p-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+              <BarChart2 className="h-4 w-4 text-primary" /> Distribuição por Faixas de Corte
+            </h4>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <p className="text-emerald-400 font-extrabold text-lg">{kpis.distribuicao.gt90}</p>
+                <p className="text-[11px] font-semibold text-foreground mt-0.5">&gt; 90%</p>
+                <p className="text-[10px] text-muted-foreground">Excelência</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <p className="text-blue-400 font-extrabold text-lg">{kpis.distribuicao.f80_90}</p>
+                <p className="text-[11px] font-semibold text-foreground mt-0.5">80% a 90%</p>
+                <p className="text-[10px] text-muted-foreground">Aprovado USP/ENARE</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                <p className="text-indigo-400 font-extrabold text-lg">{kpis.distribuicao.f70_80}</p>
+                <p className="text-[11px] font-semibold text-foreground mt-0.5">70% a 80%</p>
+                <p className="text-[10px] text-muted-foreground">Competitivo</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <p className="text-amber-400 font-extrabold text-lg">{kpis.distribuicao.f50_70}</p>
+                <p className="text-[11px] font-semibold text-foreground mt-0.5">50% a 70%</p>
+                <p className="text-[10px] text-muted-foreground">Intermediário</p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 col-span-2 sm:col-span-1">
+                <p className="text-rose-400 font-extrabold text-lg">{kpis.distribuicao.lt50}</p>
+                <p className="text-[11px] font-semibold text-foreground mt-0.5">&lt; 50%</p>
+                <p className="text-[10px] text-muted-foreground">Alerta Crítico</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Tabela de Simulados */}
         <Table>
           <TableHeader>
             <TableRow>
@@ -254,6 +265,7 @@ export const MockExamsSection: React.FC = () => {
             })}
           </TableBody>
         </Table>
+        </>
       )}
 
       <NewMockModal open={modalOpen} onOpenChange={setModalOpen} />

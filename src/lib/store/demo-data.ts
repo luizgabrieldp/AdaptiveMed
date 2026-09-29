@@ -4,6 +4,7 @@ import {
   MockExam,
   InstitutionExam,
   Profile,
+  PrevalentTopic,
 } from '@/types/database';
 import { getTodayDateString, addDaysToDate } from '@/lib/spaced-repetition';
 
@@ -99,6 +100,34 @@ export function getInitialDemoTopics(): StudyTopic[] {
       initial_correct: 20,
       initial_percentage: 66.7,
       created_at: addDaysToDate(today, -2),
+    },
+    {
+      id: 'topic-8',
+      user_id: 'demo-user-id',
+      area: 'Clínica Médica',
+      subject_name: 'Diabetes Mellitus: Diagnóstico e Manejo Ambulatorial',
+      initial_date: today,
+      planned_date: today,
+      initial_questions: 0,
+      initial_correct: 0,
+      initial_percentage: 0,
+      is_planned: true,
+      is_weekly_goal: true,
+      created_at: today,
+    },
+    {
+      id: 'topic-9',
+      user_id: 'demo-user-id',
+      area: 'Pediatria',
+      subject_name: 'Calendário Nacional de Vacinação do PNI',
+      initial_date: addDaysToDate(today, 2),
+      planned_date: addDaysToDate(today, 2),
+      initial_questions: 0,
+      initial_correct: 0,
+      initial_percentage: 0,
+      is_planned: true,
+      is_weekly_goal: true,
+      created_at: today,
     },
   ];
 }
@@ -307,3 +336,179 @@ export function getInitialDemoInstitutionExams(): InstitutionExam[] {
     { id: 'inst-19', user_id: 'demo-user-id', institution_name: 'SUS-SP', exam_year: 2025, score_percentage: 86.0, created_at: today },
   ];
 }
+
+export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
+  const today = getTodayDateString();
+  return [
+    // Clínica Médica
+    {
+      id: 'prev-1',
+      area: 'Clínica Médica',
+      subject_name: 'Hipertensão Arterial Sistêmica e Crise Hipertensiva',
+      prevalence_level: 'ALTA',
+      rank_order: 1,
+      banca: 'ENARE / USP',
+      frequency_notes: 'Tema recorrente em todas as edições (estratificação e conduta)',
+      created_at: today,
+    },
+    {
+      id: 'prev-2',
+      area: 'Clínica Médica',
+      subject_name: 'Diabetes Mellitus: Critérios Diagnósticos e Metas Terapêuticas',
+      prevalence_level: 'ALTA',
+      rank_order: 2,
+      banca: 'USP / UNICAMP',
+      frequency_notes: 'Foco em novas classes de hipoglicemiantes (iSGLT2 e GLP-1)',
+      created_at: today,
+    },
+    {
+      id: 'prev-3',
+      area: 'Clínica Médica',
+      subject_name: 'Síndrome Coronariana Aguda (com e sem supra de ST)',
+      prevalence_level: 'ALTA',
+      rank_order: 3,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Tempo porta-balão, ECG e terapia antitrombótica',
+      created_at: today,
+    },
+    {
+      id: 'prev-4',
+      area: 'Clínica Médica',
+      subject_name: 'Pneumonia Adquirida na Comunidade (PAC) e Escore CURB-65',
+      prevalence_level: 'MEDIA',
+      rank_order: 4,
+      banca: 'SUS-SP / ENARE',
+      frequency_notes: 'Critérios de internação e antibioticoterapia empírica',
+      created_at: today,
+    },
+
+    // Cirurgia Geral
+    {
+      id: 'prev-5',
+      area: 'Cirurgia Geral',
+      subject_name: 'Abdome Agudo Inflamatório: Apendicite Aguda',
+      prevalence_level: 'ALTA',
+      rank_order: 1,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Diagnóstico clínico vs tomográfico e conduta operatória',
+      created_at: today,
+    },
+    {
+      id: 'prev-6',
+      area: 'Cirurgia Geral',
+      subject_name: 'Trauma Torácico e Abdominal (ATLS 10ª Edição)',
+      prevalence_level: 'ALTA',
+      rank_order: 2,
+      banca: 'USP / ENARE',
+      frequency_notes: 'Indicações de FAST, laparotomia de emergência e drenagem de tórax',
+      created_at: today,
+    },
+    {
+      id: 'prev-7',
+      area: 'Cirurgia Geral',
+      subject_name: 'Doença Litiásica Biliar: Colecistite e Coledocolitíase',
+      prevalence_level: 'MEDIA',
+      rank_order: 3,
+      banca: 'UNICAMP / SUS-SP',
+      frequency_notes: 'Critérios de Tokyo, momento cirúrgico e CPRE',
+      created_at: today,
+    },
+
+    // Pediatria
+    {
+      id: 'prev-8',
+      area: 'Pediatria',
+      subject_name: 'Calendário Nacional de Imunização e Vacinação Infantil',
+      prevalence_level: 'ALTA',
+      rank_order: 1,
+      banca: 'ENARE / SUS-SP',
+      frequency_notes: 'Esquemas vacinais, eventos adversos e contraindicações',
+      created_at: today,
+    },
+    {
+      id: 'prev-9',
+      area: 'Pediatria',
+      subject_name: 'Bronquiolite Viral Aguda e Crises de Asma na Infância',
+      prevalence_level: 'ALTA',
+      rank_order: 2,
+      banca: 'USP / UNICAMP',
+      frequency_notes: 'Manejo oxigenoterapia de suporte e broncodilatadores',
+      created_at: today,
+    },
+    {
+      id: 'prev-10',
+      area: 'Pediatria',
+      subject_name: 'Diarreia Aguda e Terapia de Reidratação Oral (Planos A, B e C)',
+      prevalence_level: 'MEDIA',
+      rank_order: 3,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Reidratação endovenosa rápida e uso de zinco',
+      created_at: today,
+    },
+
+    // Ginecologia e Obstetrícia
+    {
+      id: 'prev-11',
+      area: 'Ginecologia e Obstetrícia',
+      subject_name: 'Síndromes Hipertensivas da Gestação (Pré-eclâmpsia e Eclâmpsia)',
+      prevalence_level: 'ALTA',
+      rank_order: 1,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Uso de Sulfato de Magnésio (Zuspan/Pritchard) e anti-hipertensivos',
+      created_at: today,
+    },
+    {
+      id: 'prev-12',
+      area: 'Ginecologia e Obstetrícia',
+      subject_name: 'Hemorragias da Primeira Metade da Gestação',
+      prevalence_level: 'ALTA',
+      rank_order: 2,
+      banca: 'USP / ENARE',
+      frequency_notes: 'Diagnóstico diferencial: Abortamento, Gravidez Ectópica e Mola',
+      created_at: today,
+    },
+    {
+      id: 'prev-13',
+      area: 'Ginecologia e Obstetrícia',
+      subject_name: 'Rastreamento de Câncer de Colo Uterino e Mama',
+      prevalence_level: 'MEDIA',
+      rank_order: 3,
+      banca: 'SUS-SP / UNICAMP',
+      frequency_notes: 'Diretrizes do Ministério da Saúde / INCA',
+      created_at: today,
+    },
+
+    // Medicina Preventiva
+    {
+      id: 'prev-14',
+      area: 'Medicina Preventiva',
+      subject_name: 'Estudos Epidemiológicos: Coorte, Caso-Controle e Ensaio Clínico',
+      prevalence_level: 'ALTA',
+      rank_order: 1,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Vieses, cálculo de Risco Relativo e Odds Ratio',
+      created_at: today,
+    },
+    {
+      id: 'prev-15',
+      area: 'Medicina Preventiva',
+      subject_name: 'Testes Diagnósticos: Sensibilidade, Especificidade, VPP e VPN',
+      prevalence_level: 'ALTA',
+      rank_order: 2,
+      banca: 'ENARE / USP',
+      frequency_notes: 'Influência da prevalência nos valores preditivos',
+      created_at: today,
+    },
+    {
+      id: 'prev-16',
+      area: 'Medicina Preventiva',
+      subject_name: 'Sistema Único de Saúde (SUS): Princípios, Leis 8.080 e 8.142',
+      prevalence_level: 'ALTA',
+      rank_order: 3,
+      banca: 'Todas as Bancas',
+      frequency_notes: 'Universalidade, equidade, integralidade e controle social',
+      created_at: today,
+    },
+  ];
+}
+

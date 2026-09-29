@@ -88,15 +88,23 @@ export const BentoGrid: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Consistência diária para consolidação de memória
+              {stats.streakQualifiedToday
+                ? 'Ofensiva de hoje garantida com sucesso!'
+                : `Hoje: ${stats.todayQuestionsCount}/10 questões ou 1 simulado`}
             </p>
           </div>
 
           <div className="pt-2 border-t border-border/60 flex items-center justify-between">
-            <span className="text-[11px] font-medium text-amber-300 flex items-center gap-1">
-              <Sparkles className="h-3 w-3" /> Foco ininterrupto
-            </span>
-            <span className="text-[11px] text-muted-foreground">Ritmo ideal</span>
+            {stats.streakQualifiedToday ? (
+              <Badge variant="concluido" className="text-[10px]">
+                Pontuou Hoje
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-[10px] text-amber-300 bg-amber-500/10 border-amber-500/20">
+                Faltam {Math.max(0, 10 - stats.todayQuestionsCount)} questões
+              </Badge>
+            )}
+            <span className="text-[11px] text-muted-foreground">Regra 10 Qs / 1 Sim</span>
           </div>
         </CardContent>
       </Card>

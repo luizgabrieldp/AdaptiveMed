@@ -160,10 +160,26 @@ export interface StudyTopic {
   initial_questions: number;
   initial_correct: number;
   initial_percentage: number;
+  is_planned?: boolean;
+  planned_date?: string;
+  is_weekly_goal?: boolean;
+  notes?: string;
   created_at: string;
 }
 
-export type ReviewStatus = 'CONCLUÍDO' | 'ATRASADO' | 'REVISAR HOJE' | 'PROGRAMADO';
+export interface PrevalentTopic {
+  id: string;
+  user_id?: string;
+  area: string;
+  subject_name: string;
+  prevalence_level: 'ALTA' | 'MEDIA' | 'BAIXA';
+  rank_order: number;
+  banca?: string;
+  frequency_notes?: string;
+  created_at: string;
+}
+
+export type ReviewStatus = 'CONCLUÍDO' | 'ATRASADO' | 'REVISAR HOJE' | 'PROGRAMADO' | 'PENDENTE DE ESTUDO';
 
 export interface TopicReview {
   id: string;
@@ -210,6 +226,9 @@ export interface UserStats {
   currentStreak: number;
   overallAccuracy: number;
   totalQuestions: number;
+  todayQuestionsCount: number;
+  todayMockCompleted: boolean;
+  streakQualifiedToday: boolean;
   vulnerableArea: {
     area: string;
     accuracy: number;

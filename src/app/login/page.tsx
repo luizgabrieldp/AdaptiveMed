@@ -6,9 +6,27 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { useData } from '@/lib/store/data-context';
-import { Stethoscope, ArrowRight, Lock, Mail, AlertCircle, AlertTriangle } from 'lucide-react';
+import {
+  Stethoscope,
+  ArrowRight,
+  Lock,
+  Mail,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+} from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,6 +38,12 @@ export default function LoginPage() {
   const [uncontractedEmail, setUncontractedEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google' | null>(null);
+
+  // Estados de Esqueci minha Senha
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetNotice, setResetNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // DETECÇÃO AUTOMÁTICA DE SESSÃO ATIVA (ELIMINA A NECESSIDADE DE 2 CLIQUES)
   React.useEffect(() => {
@@ -176,6 +200,57 @@ export default function LoginPage() {
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro inesperado ao efetuar login.');
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetNotice(null);
+    const cleanResetEmail = resetEmail.trim().toLowerCase();
+
+    if (!cleanResetEmail) {
+      setResetNotice({
+        type: 'error',
+        message: 'Por favor, digite seu e-mail cadastrado.',
+      });
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      setResetNotice({
+        type: 'success',
+        message:
+          'No modo de demonstração, utilize o login admin123 e senha admin123 para acessar.',
+      });
+      return;
+    }
+
+    try {
+      setResetLoading(true);
+      const supabase = createClient();
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'https://adaptive-med.vercel.app';
+
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanResetEmail, {
+        redirectTo: `${origin}/conta?reset=true`,
+      });
+
+      if (error) throw error;
+
+      setResetNotice({
+        type: 'success',
+        message:
+          'Enviamos um link de recuperação para seu e-mail! Verifique sua caixa de entrada e spam.',
+      });
+    } catch (err: any) {
+      setResetNotice({
+        type: 'error',
+        message: err.message || 'Erro ao enviar e-mail de recuperação.',
+      });
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -354,6 +429,17 @@ export default function LoginPage() {
                   <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <Lock className="h-3.5 w-3.5" /> Senha
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(email);
+                      setResetNotice(null);
+                      setShowForgotPassword(true);
+                    }}
+                    className="text-[11px] font-semibold text-primary hover:underline transition-colors"
+                  >
+                    Esqueci minha senha
+                  </button>
                 </div>
                 <Input
                   type="password"
@@ -386,6 +472,83 @@ export default function LoginPage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* Modal de Recuperação de Senha */}
+      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-primary/15 text-primary">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">Recuperar Senha</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Digite seu e-mail de acesso para enviarmos as instruções de redefinição.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleResetPassword} className="space-y-4 py-2">
+            {resetNotice && (
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 animate-in fade-in ${
+                  resetNotice.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-destructive/15 border-destructive/30 text-destructive'
+                }`}
+              >
+                {resetNotice.type === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                )}
+                <span>{resetNotice.message}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> E-mail cadastrado
+              </label>
+              <Input
+                type="email"
+                required
+                placeholder="seu.email@medicina.com"
+                value={resetEmail}
+                onChange={e => setResetEmail(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                type="submit"
+                disabled={resetLoading}
+                className="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
+              >
+                {resetLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Enviando link...</span>
+                  </>
+                ) : (
+                  <span>Enviar Link de Recuperação</span>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowForgotPassword(false)}
+                className="w-full sm:w-auto text-xs text-muted-foreground"
+              >
+                Voltar ao Login
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

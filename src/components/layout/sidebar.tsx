@@ -9,8 +9,6 @@ import {
   TrendingUp,
   GraduationCap,
   Calendar,
-  Sun,
-  Moon,
   LogOut,
   Flame,
   Stethoscope,
@@ -24,11 +22,13 @@ import { downloadICalendar } from '@/lib/export/ical-generator';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ManageAreasModal } from '@/components/dashboard/manage-areas-modal';
+import { NotificationManager } from '@/components/notifications/notification-manager';
+import { ThemeToggle } from './theme-toggle';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { profile, stats, topics, reviews, isDemoMode, signOut } = useData();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [manageAreasOpen, setManageAreasOpen] = useState(false);
 
   const navItems = [
@@ -40,11 +40,18 @@ export const Sidebar: React.FC = () => {
       badgeVariant: 'hoje' as const,
     },
     {
-      label: 'Diário de Revisões',
-      href: '/revisoes',
+      label: 'Diário',
+      href: '/diario',
       icon: CalendarCheck2,
       badge: topics.length > 0 ? String(topics.length) : undefined,
       badgeVariant: 'secondary' as const,
+    },
+    {
+      label: 'Assuntos Prevalentes',
+      href: '/prevalencia',
+      icon: Flame,
+      badge: 'Banca',
+      badgeVariant: 'hoje' as const,
     },
     {
       label: 'Curva & Evolução',
@@ -106,7 +113,9 @@ export const Sidebar: React.FC = () => {
         {/* Navigation Items */}
         <nav className="space-y-1.5">
           {navItems.map(item => {
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href ||
+              (item.href === '/diario' && pathname === '/revisoes');
             const Icon = item.icon;
 
             return (
@@ -173,10 +182,16 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
+        {/* Seletor de Tema Claro / Escuro / Sistema */}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground">Tema:</span>
+          <ThemeToggle />
+        </div>
+
         <div className="flex items-center justify-between">
           <Link
             href="/conta"
-            className="flex items-center space-x-3 overflow-hidden group hover:opacity-85 transition-opacity"
+            className="flex items-center space-x-3 overflow-hidden group hover:opacity-85 transition-opacity flex-1 min-w-0"
             title="Clique para gerenciar sua conta e assinatura"
           >
             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
@@ -193,16 +208,8 @@ export const Sidebar: React.FC = () => {
             </div>
           </Link>
 
-          <div className="flex items-center space-x-1 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
+          <div className="flex items-center space-x-1 shrink-0 ml-2">
+            <NotificationManager />
             <Button
               variant="ghost"
               size="icon"

@@ -36,33 +36,33 @@
   }
 
   .dark {
-    /* Paleta Médica Dark Slate (#0B0F17, #131A26, #1E293B) */
-    --background: #0B0F17;
+    /* Paleta Médica Dark Slate de Alto Contraste */
+    --background: #090D16;
     --foreground: #F8FAFC;
 
-    --card: #131A26;
+    --card: #111827;
     --card-foreground: #F8FAFC;
 
-    --popover: #131A26;
+    --popover: #111827;
     --popover-foreground: #F8FAFC;
 
     --primary: #3B82F6;
     --primary-foreground: #FFFFFF;
 
-    --secondary: #1E293B;
-    --secondary-foreground: #E2E8F0;
+    --secondary: #1B2436;
+    --secondary-foreground: #F1F5F9;
 
-    --muted: #1E293B;
-    --muted-foreground: #94A3B8;
+    --muted: #162030;
+    --muted-foreground: #9EADC8;
 
-    --accent: #1E293B;
+    --accent: #1F2C42;
     --accent-foreground: #F8FAFC;
 
     --destructive: #EF4444;
     --destructive-foreground: #FFFFFF;
 
-    --border: #1E293B;
-    --input: #1E293B;
+    --border: #202D42;
+    --input: #1A2538;
     --ring: #60A5FA;
   }
 }

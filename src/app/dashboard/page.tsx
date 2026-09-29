@@ -1,28 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { BentoGrid } from '@/components/dashboard/bento-grid';
-import { CriticalQueue } from '@/components/dashboard/critical-queue';
+import { WeeklySchedule } from '@/components/dashboard/weekly-schedule';
 import { AreaPerformanceChart } from '@/components/dashboard/area-chart';
-import { NewTopicModal } from '@/components/dashboard/new-topic-modal';
 import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
 import { downloadICalendar } from '@/lib/export/ical-generator';
 import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
 import { formatGreetingName } from '@/lib/utils';
 import {
-  Plus,
   Calendar,
   Download,
-  Sparkles,
-  RefreshCw,
   HeartPulse,
+  BookOpen,
+  ArrowRight,
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { profile, topics, reviews, resetToDemo, isDemoMode } = useData();
-  const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const { profile, topics, reviews } = useData();
 
   const todayFormatted = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
@@ -82,31 +80,28 @@ export default function DashboardPage() {
               <Calendar className="h-3.5 w-3.5 text-blue-400" /> Sincronizar Calendário
             </Button>
 
-            <Button
-              onClick={() => setNewTopicOpen(true)}
-              size="sm"
-              className="text-xs gap-1.5 font-bold shadow-md shadow-primary/20"
-            >
-              <Plus className="h-4 w-4" /> Novo Assunto
-            </Button>
+            <Link href="/diario">
+              <Button
+                size="sm"
+                className="text-xs gap-1.5 font-bold shadow-md shadow-primary/20"
+              >
+                <BookOpen className="h-4 w-4" /> Acessar Diário <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
           </div>
         </div>
 
-        {/* Bento Grid */}
+        {/* Bento Grid de Monitoramento */}
         <BentoGrid />
 
-        {/* Fila Crítica e Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <CriticalQueue />
-          </div>
-          <div className="lg:col-span-1">
-            <AreaPerformanceChart />
-          </div>
+        {/* Agenda da Semana (Segunda a Domingo + Meta da Semana) */}
+        <WeeklySchedule />
+
+        {/* Gráfico de Desempenho por Grande Área */}
+        <div className="grid grid-cols-1 gap-6">
+          <AreaPerformanceChart />
         </div>
       </div>
-
-      <NewTopicModal open={newTopicOpen} onOpenChange={setNewTopicOpen} />
     </AppLayout>
   );
 }
