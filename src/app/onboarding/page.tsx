@@ -24,6 +24,7 @@ import {
   ChevronDown,
   MapPin,
   HelpCircle,
+  User,
 } from 'lucide-react';
 
 // LISTA EXTENSA DE ESPECIALIDADES MÉDICAS REGULAMENTADAS (50+)
@@ -150,25 +151,29 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { profile, updateProfile } = useData();
+  const { profile, updateProfile, user } = useData();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Passo 1: Especialidades (Múltipla Seleção)
+  // Passo 1: Boas-vindas & Apresentação (Nome e Tratamento Dr./Dra.)
+  const [titlePrefix, setTitlePrefix] = useState<'Dr.' | 'Dra.' | 'none'>('Dr.');
+  const [fullName, setFullName] = useState<string>('');
+
+  // Passo 2: Especialidades (Múltipla Seleção)
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [specialtySearch, setSpecialtySearch] = useState<string>('');
   const [isSpecialtyDropdownOpen, setIsSpecialtyDropdownOpen] = useState(false);
   const [customSpecialty, setCustomSpecialty] = useState<string>('');
   const specialtyDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Passo 2: Bancas (Múltipla Seleção com Foco Nordeste)
+  // Passo 3: Bancas (Múltipla Seleção com Foco Nordeste)
   const [selectedExams, setSelectedExams] = useState<string[]>(['ENARE', 'SES-PE', 'SURCE']);
   const [examSearch, setExamSearch] = useState<string>('');
   const [isExamDropdownOpen, setIsExamDropdownOpen] = useState(false);
   const [customExam, setCustomExam] = useState<string>('');
   const examDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Passo 3: Meta de Corte e Ano da Prova Flexível
+  // Passo 4: Meta de Corte e Ano da Prova Flexível
   const [cutoffPercentage, setCutoffPercentage] = useState<number>(80);
   const currentYear = new Date().getFullYear();
   const [targetYear, setTargetYear] = useState<number>(currentYear);
@@ -177,6 +182,19 @@ export default function OnboardingPage() {
   // Pré-carrega dados existentes do perfil se houver
   useEffect(() => {
     if (profile) {
+      if (profile.full_name) {
+        const raw = profile.full_name.trim();
+        if (raw.toLowerCase().startsWith('dra.')) {
+          setTitlePrefix('Dra.');
+          setFullName(raw.replace(/^dra\.\s*/i, ''));
+        } else if (raw.toLowerCase().startsWith('dr.')) {
+          setTitlePrefix('Dr.');
+          setFullName(raw.replace(/^dr\.\s*/i, ''));
+        } else {
+          setTitlePrefix('none');
+          setFullName(raw);
+        }
+      }
       if (profile.target_specialty) {
         const parts = profile.target_specialty
           .split(',')
@@ -195,8 +213,10 @@ export default function OnboardingPage() {
       if (profile.target_year) {
         setTargetYear(profile.target_year);
       }
+    } else if (user?.user_metadata?.full_name) {
+      setFullName(user.user_metadata.full_name);
     }
-  }, [profile]);
+  }, [profile, user]);
 
   // Fechar dropdowns ao clicar fora
   useEffect(() => {
@@ -256,6 +276,15 @@ export default function OnboardingPage() {
     setCustomExam('');
   };
 
+  const cleanName = fullName.trim();
+  const firstName = cleanName.split(/\s+/)[0] || '';
+  const greetingPreview =
+    titlePrefix === 'Dr.'
+      ? `Dr. ${firstName || '...'}`
+      : titlePrefix === 'Dra.'
+      ? `Dra. ${firstName || '...'}`
+      : firstName || '...';
+
   // --- Conclusão do Onboarding ---
   const handleFinish = async () => {
     const finalSpecialtiesString =
@@ -263,9 +292,21 @@ export default function OnboardingPage() {
         ? selectedSpecialties.join(', ')
         : 'Residência Médica';
 
+    let finalFullName = cleanName;
+    if (cleanName) {
+      if (titlePrefix === 'Dr.' && !cleanName.toLowerCase().startsWith('dr.')) {
+        finalFullName = `Dr. ${cleanName}`;
+      } else if (titlePrefix === 'Dra.' && !cleanName.toLowerCase().startsWith('dra.')) {
+        finalFullName = `Dra. ${cleanName}`;
+      } else if (titlePrefix === 'none') {
+        finalFullName = cleanName.replace(/^(dr\.|dra\.)\s*/i, '');
+      }
+    }
+
     try {
       setIsSubmitting(true);
       await updateProfile({
+        full_name: finalFullName,
         target_specialty: finalSpecialtiesString,
         target_exams: selectedExams.length > 0 ? selectedExams : ['ENARE'],
         target_cutoff_percentage: cutoffPercentage,
@@ -315,9 +356,9 @@ export default function OnboardingPage() {
         </div>
 
         {/* Indicador de Passos */}
-        <div className="flex items-center justify-center space-x-3 text-xs font-semibold">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold overflow-x-auto pb-1">
           <div
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border transition-all ${
+            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
               step === 1
                 ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
                 : step > 1
@@ -325,11 +366,11 @@ export default function OnboardingPage() {
                 : 'border-border text-muted-foreground'
             }`}
           >
-            <span>1. Especialidades</span>
+            <span>1. Boas-vindas</span>
           </div>
-          <div className="w-4 h-0.5 bg-border" />
+          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
           <div
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border transition-all ${
+            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
               step === 2
                 ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
                 : step > 2
@@ -337,28 +378,152 @@ export default function OnboardingPage() {
                 : 'border-border text-muted-foreground'
             }`}
           >
-            <span>2. Bancas & Regiões</span>
+            <span>2. Especialidades</span>
           </div>
-          <div className="w-4 h-0.5 bg-border" />
+          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
           <div
-            className={`flex items-center space-x-1.5 px-3 py-1 rounded-full border transition-all ${
+            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
               step === 3
+                ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
+                : step > 3
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                : 'border-border text-muted-foreground'
+            }`}
+          >
+            <span>3. Bancas</span>
+          </div>
+          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
+          <div
+            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
+              step === 4
                 ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
                 : 'border-border text-muted-foreground'
             }`}
           >
-            <span>3. Ano & Nota de Corte</span>
+            <span>4. Metas</span>
           </div>
         </div>
 
         <Card className="border-border shadow-2xl">
-          {/* PASSO 1: Especialidades Médicas (Menu Suspenso com Seleção Múltipla + Outros) */}
+          {/* PASSO 1: Boas-vindas & Apresentação (Nome e Tratamento Dr./Dra.) */}
           {step === 1 && (
             <>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
-                    <Target className="h-4 w-4" /> Passo 1 de 3
+                    <User className="h-4 w-4" /> Passo 1 de 4
+                  </div>
+                  <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-400">
+                    Acesso Ativado
+                  </Badge>
+                </div>
+                <CardTitle className="text-xl">Como devemos te chamar no aplicativo?</CardTitle>
+                <CardDescription>
+                  Seu plano está ativo! Vamos personalizar a plataforma para o seu perfil e rotina de estudos.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-5">
+                {/* Tratamento / Título */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground block">
+                    Forma de Tratamento
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTitlePrefix('Dr.')}
+                      className={`p-3 rounded-xl border font-bold text-center text-sm transition-all flex items-center justify-center gap-1.5 ${
+                        titlePrefix === 'Dr.'
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <span>Dr.</span>
+                      {titlePrefix === 'Dr.' && <CheckCircle2 className="h-4 w-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTitlePrefix('Dra.')}
+                      className={`p-3 rounded-xl border font-bold text-center text-sm transition-all flex items-center justify-center gap-1.5 ${
+                        titlePrefix === 'Dra.'
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <span>Dra.</span>
+                      {titlePrefix === 'Dra.' && <CheckCircle2 className="h-4 w-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTitlePrefix('none')}
+                      className={`p-3 rounded-xl border font-bold text-center text-sm transition-all flex items-center justify-center gap-1.5 ${
+                        titlePrefix === 'none'
+                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                          : 'border-border bg-card hover:bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <span>Sem título</span>
+                      {titlePrefix === 'none' && <CheckCircle2 className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Nome Completo */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground block">
+                    Seu Nome Completo
+                  </label>
+                  <Input
+                    type="text"
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    placeholder="Ex: Mariana Silva ou Lucas Andrade"
+                    className="h-11 text-base font-semibold"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Utilizaremos este nome nos relatórios de desempenho e na sua área de estudo.
+                  </p>
+                </div>
+
+                {/* Pré-visualização da Saudação */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-primary/5 to-emerald-500/10 border border-primary/20 space-y-1">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Pré-visualização no Dashboard
+                  </span>
+                  <div className="flex items-center gap-2 text-foreground font-black text-lg">
+                    <span>Olá, {greetingPreview}!</span>
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    É assim que o sistema dará as boas-vindas todos os dias para você cumprir suas revisões.
+                  </p>
+                </div>
+              </CardContent>
+
+              <CardFooter className="flex justify-end pt-4 border-t border-border">
+                <Button
+                  onClick={() => setStep(2)}
+                  disabled={!fullName.trim()}
+                  className="gap-2 font-bold shadow-lg shadow-primary/20"
+                >
+                  <span>Avançar para Especialidades</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardFooter>
+            </>
+          )}
+
+          {/* PASSO 2: Especialidades Médicas (Menu Suspenso com Seleção Múltipla + Outros) */}
+          {step === 2 && (
+            <>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                    <Target className="h-4 w-4" /> Passo 2 de 4
                   </div>
                   <Badge variant="outline" className="text-[11px] font-medium border-blue-500/30 text-blue-400">
                     Seleção Múltipla Permitida
@@ -502,9 +667,12 @@ export default function OnboardingPage() {
                 </div>
               </CardContent>
 
-              <CardFooter className="flex justify-end pt-4 border-t border-border">
+              <CardFooter className="flex justify-between pt-4 border-t border-border">
+                <Button variant="ghost" onClick={() => setStep(1)} className="gap-1.5 text-xs">
+                  <ArrowLeft className="h-4 w-4" /> Voltar
+                </Button>
                 <Button
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(3)}
                   disabled={selectedSpecialties.length === 0}
                   className="gap-2 font-bold shadow-md shadow-primary/20"
                 >
@@ -514,13 +682,13 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {/* PASSO 2: Provas e Bancas (Menu Suspenso com DESTAQUE FORTE NO NORDESTE) */}
-          {step === 2 && (
+          {/* PASSO 3: Provas e Bancas (Menu Suspenso com DESTAQUE FORTE NO NORDESTE) */}
+          {step === 3 && (
             <>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
-                    <GraduationCap className="h-4 w-4" /> Passo 2 de 3
+                    <GraduationCap className="h-4 w-4" /> Passo 3 de 4
                   </div>
                   <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-400">
                     Nordeste & Sudeste
@@ -702,11 +870,11 @@ export default function OnboardingPage() {
               </CardContent>
 
               <CardFooter className="flex justify-between pt-4 border-t border-border">
-                <Button variant="ghost" onClick={() => setStep(1)} className="gap-1.5 text-xs">
+                <Button variant="ghost" onClick={() => setStep(2)} className="gap-1.5 text-xs">
                   <ArrowLeft className="h-4 w-4" /> Voltar
                 </Button>
                 <Button
-                  onClick={() => setStep(3)}
+                  onClick={() => setStep(4)}
                   disabled={selectedExams.length === 0}
                   className="gap-2 font-bold shadow-md shadow-primary/20"
                 >
@@ -716,12 +884,12 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {/* PASSO 3: Meta de Corte e Ano da Prova (FLEXÍVEL PARA QUALQUER ANO: 1º AO 6º ANO) */}
-          {step === 3 && (
+          {/* PASSO 4: Meta de Corte e Ano da Prova (FLEXÍVEL PARA QUALQUER ANO: 1º AO 6º ANO) */}
+          {step === 4 && (
             <>
               <CardHeader>
                 <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
-                  <Percent className="h-4 w-4" /> Passo 3 de 3
+                  <Percent className="h-4 w-4" /> Passo 4 de 4
                 </div>
                 <CardTitle className="text-xl">Qual é o ano da sua prova e meta de nota?</CardTitle>
                 <CardDescription>
@@ -863,7 +1031,7 @@ export default function OnboardingPage() {
               </CardContent>
 
               <CardFooter className="flex justify-between pt-4 border-t border-border">
-                <Button variant="ghost" onClick={() => setStep(2)} className="gap-1.5 text-xs">
+                <Button variant="ghost" onClick={() => setStep(3)} className="gap-1.5 text-xs">
                   <ArrowLeft className="h-4 w-4" /> Voltar
                 </Button>
                 <Button

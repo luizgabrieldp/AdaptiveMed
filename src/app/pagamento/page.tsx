@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { formatGreetingName } from '@/lib/utils';
 import {
   Stethoscope,
   CheckCircle2,
@@ -44,9 +45,13 @@ export default function PagamentoPage() {
         .single()
         .then(({ data: prof }) => {
           setProfile(prof);
-          // Se já tiver pago, vai direto para o dashboard
+          // Se já tiver pago, verifica se completou o onboarding
           if (prof?.is_subscribed || prof?.subscription_status === 'active') {
-            router.replace('/dashboard');
+            if (prof?.onboarding_completed) {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/onboarding');
+            }
           } else {
             setLoadingUser(false);
           }
@@ -97,7 +102,7 @@ export default function PagamentoPage() {
     );
   }
 
-  const firstName = profile?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Doutor(a)';
+  const firstName = profile?.full_name ? formatGreetingName(profile.full_name) : user?.email?.split('@')[0] || 'Doutor(a)';
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col justify-between">

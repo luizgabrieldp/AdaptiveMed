@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
 import { downloadICalendar } from '@/lib/export/ical-generator';
 import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
+import { formatGreetingName } from '@/lib/utils';
 import {
   Plus,
   Calendar,
@@ -38,7 +39,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-                Olá, {profile?.full_name?.split(' ')[0] || 'Doutor(a)'}
+                Olá, {formatGreetingName(profile?.full_name)}
               </h1>
               <HeartPulse className="h-6 w-6 text-rose-500 animate-pulse" />
             </div>

@@ -216,6 +216,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
         }
+
+        // Se usuário possui assinatura ativa MAS ainda não concluiu o Onboarding obrigatório
+        if (
+          (profData.is_subscribed || profData.subscription_status === 'active') &&
+          !profData.onboarding_completed &&
+          typeof window !== 'undefined'
+        ) {
+          const path = window.location.pathname;
+          if (
+            path.startsWith('/dashboard') ||
+            path.startsWith('/revisoes') ||
+            path.startsWith('/simulados') ||
+            path.startsWith('/evolucao')
+          ) {
+            window.location.href = '/onboarding';
+            return;
+          }
+        }
       }
       setTopics(topData ? (topData as StudyTopic[]) : []);
       setReviews(revData ? (revData as TopicReview[]) : []);
