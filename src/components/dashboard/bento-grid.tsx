@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
+import { StreakConfigModal } from './streak-config-modal';
 import {
   CalendarClock,
   Flame,
@@ -13,10 +14,68 @@ import {
   ArrowUpRight,
   Sparkles,
   TrendingUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const BentoGrid: React.FC = () => {
-  const { stats, topics } = useData();
+  const { stats, topics, streakConfig } = useData();
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+
+  const minQ = streakConfig?.minDailyQuestions ?? 10;
+  const ruleType = streakConfig?.ruleType ?? 'questions_or_mock';
+
+  const getStreakRuleSummary = () => {
+    switch (ruleType) {
+      case 'questions_only':
+        return `Regra ${minQ} Qs`;
+      case 'mock_only':
+        return 'Regra 1 Sim';
+      case 'questions_and_mock':
+        return `Regra ${minQ} Qs + 1 Sim`;
+      case 'questions_or_mock':
+      default:
+        return `Regra ${minQ} Qs / 1 Sim`;
+    }
+  };
+
+  const getStreakProgressText = () => {
+    if (stats.streakQualifiedToday) {
+      return 'Ofensiva de hoje garantida com sucesso!';
+    }
+    switch (ruleType) {
+      case 'questions_only':
+        return `Hoje: ${stats.todayQuestionsCount}/${minQ} questões feitas`;
+      case 'mock_only':
+        return stats.todayMockCompleted ? 'Simulado do dia concluído!' : 'Simulado do dia pendente';
+      case 'questions_and_mock':
+        return `Hoje: ${stats.todayQuestionsCount}/${minQ} Qs • Simulado: ${stats.todayMockCompleted ? 'Concluído' : 'Pendente'}`;
+      case 'questions_or_mock':
+      default:
+        return `Hoje: ${stats.todayQuestionsCount}/${minQ} questões ou 1 simulado`;
+    }
+  };
+
+  const getStreakBadgeText = () => {
+    if (stats.streakQualifiedToday) {
+      return 'Pontuou Hoje';
+    }
+    if (ruleType === 'mock_only') {
+      return 'Falta 1 simulado';
+    }
+    if (ruleType === 'questions_and_mock') {
+      const diff = Math.max(0, minQ - stats.todayQuestionsCount);
+      if (diff > 0 && !stats.todayMockCompleted) {
+        return `Faltam ${diff} Qs + Sim`;
+      }
+      if (diff > 0) {
+        return `Faltam ${diff} questões`;
+      }
+      return 'Falta 1 simulado';
+    }
+    // questions_only ou questions_or_mock
+    const diff = Math.max(0, minQ - stats.todayQuestionsCount);
+    return `Faltam ${diff} questões`;
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -68,14 +127,28 @@ export const BentoGrid: React.FC = () => {
       </Card>
       </Link>
 
-      {/* Card 2: Sequência de Estudos Ativa (Streak) - Informativo, sem link */}
+      {/* Card 2: Sequência de Estudos Ativa (Streak) */}
       <Card className="relative overflow-hidden border-border bg-gradient-to-br from-card via-card to-amber-950/20 group hover:border-amber-500/40 transition-all shadow-sm">
         <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
         <CardContent className="p-5 flex flex-col justify-between h-full">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Ofensiva Ativa
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Ofensiva Ativa
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsStreakModalOpen(true);
+                }}
+                className="p-1 rounded-md text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                title="Configurar meta da ofensiva"
+                aria-label="Configurar meta da ofensiva"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
               <Flame className="h-5 w-5 fill-amber-500 text-amber-500" />
             </div>
@@ -91,9 +164,7 @@ export const BentoGrid: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {stats.streakQualifiedToday
-                ? 'Ofensiva de hoje garantida com sucesso!'
-                : `Hoje: ${stats.todayQuestionsCount}/10 questões ou 1 simulado`}
+              {getStreakProgressText()}
             </p>
           </div>
 
@@ -104,10 +175,10 @@ export const BentoGrid: React.FC = () => {
               </Badge>
             ) : (
               <Badge variant="secondary" className="text-[10px] text-amber-300 bg-amber-500/10 border-amber-500/20">
-                Faltam {Math.max(0, 10 - stats.todayQuestionsCount)} questões
+                {getStreakBadgeText()}
               </Badge>
             )}
-            <span className="text-[11px] text-muted-foreground">Regra 10 Qs / 1 Sim</span>
+            <span className="text-[11px] text-muted-foreground">{getStreakRuleSummary()}</span>
           </div>
         </CardContent>
       </Card>
@@ -202,6 +273,12 @@ export const BentoGrid: React.FC = () => {
           </CardContent>
         </Card>
       </Link>
+
+      {/* Modal de Configuração Rápida da Ofensiva */}
+      <StreakConfigModal
+        open={isStreakModalOpen}
+        onOpenChange={setIsStreakModalOpen}
+      />
     </div>
   );
 };
