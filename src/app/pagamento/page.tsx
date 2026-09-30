@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -112,14 +113,14 @@ export default function PagamentoPage() {
 
       {/* Topo / Header */}
       <header className="border-b border-border bg-card/60 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center space-x-3">
+        <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-md shadow-blue-500/20">
             <Stethoscope className="h-5 w-5 text-white stroke-[2.2]" />
           </div>
           <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent">
             AdaptiveMed
           </span>
-        </div>
+        </Link>
 
         <div className="flex items-center space-x-3 text-xs">
           <span className="hidden sm:inline text-muted-foreground">

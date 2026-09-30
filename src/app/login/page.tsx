@@ -64,18 +64,15 @@ export default function LoginPage() {
     // 1. Checa se o usuário já chegou autenticado pelo Google
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        const userEmail = session.user.email || '';
-        const isAdmin = userEmail.toLowerCase().includes('admin123');
-
         supabase
           .from('profiles')
           .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', session.user.id)
           .single()
           .then(({ data: prof }) => {
-            const hasActivePlan =
-              isAdmin ||
-              (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+            const hasActivePlan = Boolean(
+              prof && (prof.is_subscribed || prof.subscription_status === 'active')
+            );
 
             if (!hasActivePlan) {
               router.replace('/pagamento');
@@ -96,18 +93,15 @@ export default function LoginPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-        const userEmail = session.user.email || '';
-        const isAdmin = userEmail.toLowerCase().includes('admin123');
-
         supabase
           .from('profiles')
           .select('onboarding_completed, is_subscribed, subscription_status')
           .eq('id', session.user.id)
           .single()
           .then(({ data: prof }) => {
-            const hasActivePlan =
-              isAdmin ||
-              (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+            const hasActivePlan = Boolean(
+              prof && (prof.is_subscribed || prof.subscription_status === 'active')
+            );
 
             if (!hasActivePlan) {
               router.replace('/pagamento');
@@ -132,20 +126,9 @@ export default function LoginPage() {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // BACKDOOR ESPECIAL DE DEMONSTRAÇÃO (admin123 / admin123)
-    if (
-      (cleanEmail === 'admin123' || cleanEmail === 'admin123@adaptivemed.app') &&
-      password === 'admin123'
-    ) {
-      signInDemo();
-      router.push('/dashboard');
-      router.refresh();
-      return;
-    }
-
     if (!isSupabaseConfigured()) {
       setErrorMessage(
-        'Supabase ainda não configurado no .env.local. Para acessar a demonstração, utilize admin123 com senha admin123.'
+        'Serviço de autenticação temporariamente indisponível. Tente novamente em instantes.'
       );
       return;
     }
@@ -178,10 +161,9 @@ export default function LoginPage() {
           .eq('id', data.user.id)
           .single();
 
-        const isAdmin = cleanEmail.includes('admin123');
-        const hasActivePlan =
-          isAdmin ||
-          (prof && (prof.is_subscribed || prof.subscription_status === 'active'));
+        const hasActivePlan = Boolean(
+          prof && (prof.is_subscribed || prof.subscription_status === 'active')
+        );
 
         // Se a conta não tiver assinatura paga ativa, vai direto para a tela de pagamento já autenticado
         if (!hasActivePlan) {

@@ -31,12 +31,11 @@ import {
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user, isDemoMode, profile } = useData();
+  const { user, profile, signOut } = useData();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
-  const isLoggedIn = Boolean(user || isDemoMode);
+  const hasPaid = Boolean(profile?.is_subscribed || profile?.subscription_status === 'active');
   const [redirectNotice, setRedirectNotice] = useState<string | null>(null);
-  const [isContractInactive, setIsContractInactive] = useState<boolean>(false);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -49,9 +48,8 @@ export default function LandingPage() {
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       } else if (reason === 'inactive_account') {
-        setIsContractInactive(true);
         setRedirectNotice(
-          '🔒 Você não tem contrato finalizado. Finalize um contrato escolhendo um dos planos abaixo para liberar seu acesso:'
+          '🔒 Você não tem assinatura finalizada. Finalize sua assinatura escolhendo um dos planos abaixo para liberar seu acesso:'
         );
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -97,15 +95,47 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-2.5">
-            {isLoggedIn ? (
-              <Button
-                onClick={() => router.push('/dashboard')}
-                size="sm"
-                className="gap-2 font-bold text-xs shadow-md shadow-primary/20"
-              >
-                Meu Painel <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {user ? (
+              hasPaid ? (
+                <>
+                  <Button
+                    onClick={() => router.push('/dashboard')}
+                    size="sm"
+                    className="gap-2 font-bold text-xs shadow-md shadow-primary/20"
+                  >
+                    Meu Painel <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => signOut()}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2.5"
+                    title="Desconectar conta"
+                  >
+                    Sair
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => router.push('/pagamento')}
+                    size="sm"
+                    className="gap-2 font-bold text-xs shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/20 animate-pulse"
+                  >
+                    Finalizar Assinatura <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => signOut()}
+                    className="text-xs text-muted-foreground hover:text-foreground px-2.5"
+                    title="Desconectar conta"
+                  >
+                    Sair
+                  </Button>
+                </>
+              )
             ) : (
               <>
                 <Button
@@ -143,22 +173,36 @@ export default function LandingPage() {
       )}
 
       {/* BANNER PARA USUÁRIO LOGADO */}
-      {isLoggedIn && !redirectNotice && (
-        <div className="bg-primary/10 border-b border-primary/20 py-2.5 px-4 text-center text-xs font-medium text-primary flex items-center justify-center gap-2">
-          <span>
-            Você já está autenticado{' '}
-            <strong className="font-bold">
-              ({profile?.full_name || user?.email || 'Modo Demonstração'})
-            </strong>
-            .
-          </span>
-          <Link
-            href="/dashboard"
-            className="underline font-bold hover:text-primary/80 inline-flex items-center gap-0.5 ml-1"
-          >
-            Acessar meu cronograma <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
+      {user && !redirectNotice && (
+        hasPaid ? (
+          <div className="bg-primary/10 border-b border-primary/20 py-2.5 px-4 text-center text-xs font-medium text-primary flex items-center justify-center gap-2">
+            <span>
+              Você já está autenticado{' '}
+              <strong className="font-bold">
+                ({profile?.full_name || user?.email})
+              </strong>
+              .
+            </span>
+            <Link
+              href="/dashboard"
+              className="underline font-bold hover:text-primary/80 inline-flex items-center gap-0.5 ml-1"
+            >
+              Acessar meu cronograma <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        ) : (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 py-3 px-4 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2 animate-in fade-in">
+            <span>
+              ⚠️ Olá, <strong>{profile?.full_name || user?.email}</strong>! Falta você finalizar o pagamento para liberar seu acesso ao cronograma adaptativo.
+            </span>
+            <Link
+              href="/pagamento"
+              className="underline font-bold text-amber-200 hover:text-white inline-flex items-center gap-0.5 ml-1"
+            >
+              Finalizar Pagamento Agora <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        )
       )}
 
       {/* HERO SECTION */}
@@ -198,7 +242,7 @@ export default function LandingPage() {
               asChild
               className="w-full sm:w-auto h-12 px-6 font-semibold text-sm border-border hover:bg-muted"
             >
-              <Link href="/login">Ver Demonstração Interativa</Link>
+              <a href="#planos">Ver Planos & Preços</a>
             </Button>
           </div>
 
@@ -469,13 +513,13 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {isContractInactive && (
+          {user && !hasPaid && (
             <div className="max-w-2xl mx-auto p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-200 text-center space-y-1.5 animate-in zoom-in-95 shadow-xl shadow-amber-500/10">
               <p className="font-bold text-base text-amber-300">
-                Você não tem contrato finalizado.
+                Falta finalizar o pagamento da sua assinatura
               </p>
               <p className="text-xs text-muted-foreground">
-                Escolha o plano mensal ou anual abaixo para finalizar seu contrato e liberar imediatamente seu acesso à plataforma.
+                Escolha o plano mensal ou anual abaixo para concluir o pagamento com segurança e liberar imediatamente seu cronograma adaptativo.
               </p>
             </div>
           )}
@@ -628,10 +672,10 @@ export default function LandingPage() {
 
             <div className="p-4 rounded-xl border border-border bg-card space-y-1.5">
               <h3 className="font-bold text-sm text-foreground">
-                Como funciona a demonstração da plataforma?
+                Existe fidelidade ou taxa de cancelamento?
               </h3>
               <p className="text-muted-foreground leading-relaxed">
-                Você pode clicar em &quot;Área do Aluno&quot; e utilizar o login especial <strong>admin123</strong> com senha <strong>admin123</strong> para explorar a plataforma completa com dados médicos simulados em tempo real antes de assinar.
+                Não. No Plano Mensal você tem total flexibilidade para cancelar a qualquer momento sem qualquer multa ou fidelidade, diretamente pelo painel de controle da sua conta. Além disso, você conta com garantia incondicional de 7 dias.
               </p>
             </div>
 

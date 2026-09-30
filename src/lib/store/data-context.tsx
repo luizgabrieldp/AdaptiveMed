@@ -167,7 +167,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isDemoMode, setIsDemoMode] = useState(true);
 
 
-  // Inicialização e detecção do Supabase vs Demo
+  // Inicialização e detecção do Supabase
   useEffect(() => {
     async function init() {
       setIsLoading(true);
@@ -188,63 +188,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Se não autenticado no Supabase, inicializa / recupera dados de demonstração
-      loadLocalStorageDemo();
+      // Se não autenticado no Supabase, limpa estados e não permite acesso
+      setUser(null);
+      setProfile(null);
+      setTopics([]);
+      setReviews([]);
+      setMockExams([]);
+      setInstitutionExams([]);
+      setPrevalentTopics([]);
+      setAreas(DEFAULT_STUDY_AREAS);
+      setIsDemoMode(false);
       setIsLoading(false);
     }
 
     init();
   }, []);
-
-  const loadLocalStorageDemo = () => {
-    try {
-      const isDemoActive =
-        typeof window !== 'undefined' &&
-        localStorage.getItem(LOCAL_STORAGE_KEYS.DEMO_ACTIVE) === 'true';
-
-      if (!isDemoActive) {
-        setIsDemoMode(false);
-        setTopics([]);
-        setReviews([]);
-        setMockExams([]);
-        setInstitutionExams([]);
-        setPrevalentTopics([]);
-        setProfile(null);
-        setAreas(DEFAULT_STUDY_AREAS);
-        return;
-      }
-
-      const storedTopics = localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS);
-      const storedReviews = localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS);
-      const storedMocks = localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS);
-      const storedInsts = localStorage.getItem(LOCAL_STORAGE_KEYS.INST_EXAMS);
-      const storedPrevalent = localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS);
-      const storedProfile = localStorage.getItem(LOCAL_STORAGE_KEYS.PROFILE);
-      const storedAreas = localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS);
-
-      const storedStreak = localStorage.getItem(LOCAL_STORAGE_KEYS.STREAK_CONFIG);
-
-      if (storedTopics && storedReviews) {
-        setTopics(JSON.parse(storedTopics));
-        setReviews(JSON.parse(storedReviews));
-        setMockExams(storedMocks ? JSON.parse(storedMocks) : getInitialDemoMockExams());
-        setInstitutionExams(storedInsts ? JSON.parse(storedInsts) : getInitialDemoInstitutionExams());
-        setPrevalentTopics(storedPrevalent ? JSON.parse(storedPrevalent) : getInitialDemoPrevalentTopics());
-        setProfile(storedProfile ? JSON.parse(storedProfile) : INITIAL_DEMO_PROFILE);
-        setAreas(storedAreas ? JSON.parse(storedAreas) : DEFAULT_STUDY_AREAS);
-        if (storedStreak) {
-          try {
-            setStreakConfig(JSON.parse(storedStreak));
-          } catch {}
-        }
-      } else {
-        resetToDemo();
-      }
-      setIsDemoMode(true);
-    } catch {
-      setIsDemoMode(false);
-    }
-  };
 
   const loadSupabaseData = async (userId: string) => {
     const supabase = createClient();
@@ -309,18 +267,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas de estudo
-        if (
-          !profData.is_subscribed &&
-          profData.subscription_status !== 'active' &&
-          typeof window !== 'undefined'
-        ) {
+        const hasActivePlan = Boolean(
+          profData.is_subscribed || profData.subscription_status === 'active'
+        );
+        if (!hasActivePlan && typeof window !== 'undefined') {
           const path = window.location.pathname;
           if (
             path.startsWith('/dashboard') ||
+            path.startsWith('/diario') ||
             path.startsWith('/revisoes') ||
             path.startsWith('/simulados') ||
             path.startsWith('/evolucao') ||
-            path.startsWith('/onboarding')
+            path.startsWith('/prevalencia') ||
+            path.startsWith('/onboarding') ||
+            path.startsWith('/conta')
           ) {
             window.location.href = '/pagamento';
             return;

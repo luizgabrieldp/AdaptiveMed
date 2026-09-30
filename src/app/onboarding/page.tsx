@@ -25,6 +25,7 @@ import {
   MapPin,
   HelpCircle,
   User,
+  Loader2,
 } from 'lucide-react';
 
 // LISTA EXTENSA DE ESPECIALIDADES MÉDICAS REGULAMENTADAS (50+)
@@ -149,9 +150,25 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { profile, updateProfile, user } = useData();
+  const { profile, updateProfile, user, isLoading } = useData();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  // Proteção: apenas usuários com plano ativo podem acessar o onboarding
+  useEffect(() => {
+    if (!isLoading) {
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      const hasActivePlan = Boolean(
+        profile?.is_subscribed || profile?.subscription_status === 'active'
+      );
+      if (!hasActivePlan) {
+        router.replace('/pagamento');
+      }
+    }
+  }, [user, profile, isLoading, router]);
 
   // Passo 1: Boas-vindas & Apresentação (Nome e Tratamento Dr./Dra.)
   const [titlePrefix, setTitlePrefix] = useState<'Dr.' | 'Dra.' | 'none'>('Dr.');
@@ -312,6 +329,21 @@ export default function OnboardingPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (
+    isLoading ||
+    !user ||
+    (!profile?.is_subscribed && profile?.subscription_status !== 'active')
+  ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+          <p className="text-xs">Verificando plano de estudos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 py-8 sm:py-12 bg-background relative overflow-y-auto">
