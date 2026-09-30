@@ -148,6 +148,26 @@ export const DEFAULT_STREAK_CONFIG: StreakConfig = {
   ruleType: 'questions_or_mock',
 };
 
+export interface WorkloadConfig {
+  maxDailyReviews: number;      // Padrão: 3 revisões/dia
+  maxDailyOverdue: number;      // Padrão: 2 atrasados puxados para a fila de hoje
+  maxDailyNewTopics: number;    // Padrão: 1 novo assunto por dia
+}
+
+export const DEFAULT_WORKLOAD_CONFIG: WorkloadConfig = {
+  maxDailyReviews: 3,
+  maxDailyOverdue: 2,
+  maxDailyNewTopics: 1,
+};
+
+export interface PedagogicalDiagnosis {
+  level: 'lapse' | 'unstable' | 'desirable' | 'solid' | 'mastery';
+  badge: string;           // Ex: "🔴 Ruptura Crítica (Lapse)"
+  title: string;           // Ex: "Ruptura Crítica (Lapse)"
+  pedagogicalNote: string; // Ex: "Foco em bloco corretivo enxuto para retestar os erros em 48h sem causar fadiga cognitiva."
+  colorVariant: 'destructive' | 'warning' | 'success' | 'info' | 'purple';
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -157,6 +177,7 @@ export interface Profile {
   target_year?: number;
   custom_areas?: StudyArea[];
   streak_config?: StreakConfig;
+  workload_config?: WorkloadConfig;
   onboarding_completed?: boolean;
   is_subscribed?: boolean;
   subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
@@ -177,6 +198,7 @@ export interface StudyTopic {
   initial_questions: number;
   initial_correct: number;
   initial_percentage: number;
+  initial_duration_minutes?: number | null;
   is_planned?: boolean;
   planned_date?: string;
   is_weekly_goal?: boolean;
@@ -209,9 +231,12 @@ export interface TopicReview {
   questions_done: number | null;
   questions_correct: number | null;
   percentage: number | null;
+  duration_minutes?: number | null;
   recommended_questions?: number;
   previous_interval_days?: number;
   diagnosis?: string;
+  diagnosis_badge?: string;
+  pedagogical_note?: string;
   created_at: string;
 }
 
@@ -227,6 +252,8 @@ export interface ReviewCalculationResult {
   nextCycle: number;
   recommendedQuestions: number;
   diagnosis: string;
+  diagnosisBadge: string;
+  pedagogicalNote: string;
 }
 
 export interface TopicWithReviews extends StudyTopic {
@@ -265,6 +292,10 @@ export interface UserStats {
   todayMockCompleted: boolean;
   streakQualifiedToday: boolean;
   streakConfig?: StreakConfig;
+  workloadConfig?: WorkloadConfig;
+  todayPriorityQueueCount?: number;
+  backlogOverdueCount?: number;
+  overdueCount?: number;
   vulnerableArea: {
     area: string;
     accuracy: number;

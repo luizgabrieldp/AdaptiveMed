@@ -21,6 +21,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clock,
   Plus,
@@ -32,6 +34,8 @@ import {
   AlertTriangle,
   CalendarPlus,
   Flame,
+  Layers,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface DiaryDayViewProps {
@@ -45,6 +49,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
     reviews,
     areas,
     prevalentTopics,
+    workloadConfig,
     updatePlannedTopicDate,
     rescheduleReview,
   } = useData();
@@ -56,6 +61,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
   const [selectedPlannedTopic, setSelectedPlannedTopic] = useState<StudyTopic | null>(null);
 
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [isBacklogExpanded, setIsBacklogExpanded] = useState(false);
 
   const todayStr = useMemo(() => getTodayDateString(), []);
 
@@ -96,6 +102,15 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
         return { review: r, topic, statusInfo };
       });
   }, [reviews, todayStr, selectedDate, topicMap]);
+
+  const maxOverdueQuota = workloadConfig?.maxDailyOverdue ?? 2;
+  const priorityOverdueReviews = useMemo(() => {
+    return overdueReviews.slice(0, maxOverdueQuota);
+  }, [overdueReviews, maxOverdueQuota]);
+
+  const backlogOverdueReviews = useMemo(() => {
+    return overdueReviews.slice(maxOverdueQuota);
+  }, [overdueReviews, maxOverdueQuota]);
 
   // Estudos iniciais (R0) concluídos neste dia
   const dayCompletedTopics = useMemo(() => {
@@ -501,53 +516,149 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
               </CardDescription>
             </CardHeader>
 
-            <CardContent className="p-3 space-y-2 max-h-[320px] overflow-y-auto">
+            <CardContent className="p-3 space-y-2.5 max-h-[460px] overflow-y-auto">
               {overdueReviews.length === 0 ? (
                 <div className="py-6 text-center text-xs text-emerald-400 font-medium">
                   🎉 Nenhuma revisão em atraso pendente!
                 </div>
               ) : (
-                overdueReviews.map(({ review, topic, statusInfo }) => {
-                  const style = topic ? getAreaStyle(topic.area, areas) : null;
-
-                  return (
-                    <div
-                      key={review.id}
-                      className="p-2.5 rounded-xl border border-rose-500/25 bg-rose-500/5 hover:bg-rose-500/10 transition-colors flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          {topic && style && (
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
-                            >
-                              {topic.area}
-                            </span>
-                          )}
-                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
-                            R{review.review_number}
-                          </span>
-                          <span className="text-[9px] font-bold text-rose-400">
-                            {statusInfo.daysDiff}d atraso
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-foreground truncate" title={topic?.subject_name}>
-                          {topic?.subject_name || 'Assunto'}
-                        </p>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => rescheduleReview(review.id, selectedDate)}
-                        className="text-[11px] h-7 px-2 font-bold shrink-0 text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
-                        title="Reprogramar para este dia"
-                      >
-                        Reprogramar
-                      </Button>
+                <>
+                  {/* Fila Prioritária de Atrasos (respeitando a cota anti-sobrecarga) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
+                      <span className="font-semibold text-rose-300 flex items-center gap-1">
+                        <Flame className="h-3 w-3 text-rose-400" />
+                        Fila Prioritária de Hoje ({priorityOverdueReviews.length})
+                      </span>
+                      {backlogOverdueReviews.length > 0 && (
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          Cota: máx {maxOverdueQuota}/dia
+                        </span>
+                      )}
                     </div>
-                  );
-                })
+
+                    {priorityOverdueReviews.map(({ review, topic, statusInfo }) => {
+                      const style = topic ? getAreaStyle(topic.area, areas) : null;
+
+                      return (
+                        <div
+                          key={review.id}
+                          className="p-2.5 rounded-xl border border-rose-500/25 bg-rose-500/5 hover:bg-rose-500/10 transition-colors flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              {topic && style && (
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                                >
+                                  {topic.area}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
+                                R{review.review_number}
+                              </span>
+                              <span className="text-[9px] font-bold text-rose-400">
+                                {statusInfo.daysDiff}d atraso
+                              </span>
+                            </div>
+                            <p className="text-xs font-semibold text-foreground truncate" title={topic?.subject_name}>
+                              {topic?.subject_name || 'Assunto'}
+                            </p>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => rescheduleReview(review.id, selectedDate)}
+                            className="text-[11px] h-7 px-2 font-bold shrink-0 text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                            title="Reprogramar para este dia"
+                          >
+                            Reprogramar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Acordeão / Gaveta Recolhível: Backlog Protegido */}
+                  {backlogOverdueReviews.length > 0 && (
+                    <div className="pt-2 border-t border-border/70 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsBacklogExpanded(prev => !prev)}
+                        className="w-full p-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15 transition-colors flex items-center justify-between text-left cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-amber-400 shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-amber-300">
+                              Backlog de Atrasos (+{backlogOverdueReviews.length})
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {isBacklogExpanded ? 'Clique para recolher' : 'Protegidos contra sobrecarga cognitiva'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isBacklogExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-amber-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-amber-400 shrink-0" />
+                        )}
+                      </button>
+
+                      {isBacklogExpanded && (
+                        <div className="space-y-2 pt-1 animate-in fade-in">
+                          <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] text-muted-foreground leading-relaxed">
+                            💡 <strong>Anti-Sobrecarga:</strong> Estes assuntos estão em espera para evitar fadiga cognitiva. Eles entrarão na sua fila de hoje automaticamente à medida que você liquidar os prioritários, ou você pode reprogramá-los manualmente abaixo.
+                          </div>
+
+                          {backlogOverdueReviews.map(({ review, topic, statusInfo }) => {
+                            const style = topic ? getAreaStyle(topic.area, areas) : null;
+
+                            return (
+                              <div
+                                key={review.id}
+                                className="p-2.5 rounded-xl border border-border bg-card/80 hover:bg-muted/40 transition-colors flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0 space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    {topic && style && (
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                                      >
+                                        {topic.area}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
+                                      R{review.review_number}
+                                    </span>
+                                    <span className="text-[9px] font-medium text-muted-foreground">
+                                      {statusInfo.daysDiff}d pendente
+                                    </span>
+                                  </div>
+                                  <p className="text-xs font-semibold text-foreground truncate" title={topic?.subject_name}>
+                                    {topic?.subject_name || 'Assunto'}
+                                  </p>
+                                </div>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => rescheduleReview(review.id, selectedDate)}
+                                  className="text-[11px] h-7 px-2 font-bold shrink-0 text-foreground border-border hover:border-primary hover:text-primary"
+                                  title="Puxar para este dia"
+                                >
+                                  Puxar Hoje
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

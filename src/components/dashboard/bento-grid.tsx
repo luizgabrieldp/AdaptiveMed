@@ -96,21 +96,25 @@ export const BentoGrid: React.FC = () => {
           <div className="my-3">
             <div className="flex items-baseline space-x-2">
               <span className="text-3xl font-extrabold tracking-tight text-foreground">
-                {stats.todayReviewsCount}
+                {stats.todayPriorityQueueCount ?? stats.todayReviewsCount}
               </span>
               <span className="text-xs text-muted-foreground font-medium">
-                {stats.todayReviewsCount === 1 ? 'assunto pendente' : 'assuntos pendentes'}
+                {(stats.todayPriorityQueueCount ?? stats.todayReviewsCount) === 1
+                  ? 'assunto prioritário'
+                  : 'assuntos prioritários'}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {stats.todayReviewsCount === 0
-                ? 'Meta do dia cumprida com sucesso'
-                : 'Priorize os temas em atraso e de hoje'}
+              {(stats.todayPriorityQueueCount ?? stats.todayReviewsCount) === 0
+                ? 'Meta prioritária do dia cumprida!'
+                : stats.backlogOverdueCount && stats.backlogOverdueCount > 0
+                ? `Cota diária ativa (+${stats.backlogOverdueCount} protegidos no backlog)`
+                : 'Fila calibrada para estudo de hoje'}
             </p>
           </div>
 
           <div className="pt-2 border-t border-border/60 flex items-center justify-between">
-            {stats.todayReviewsCount > 0 ? (
+            {(stats.todayPriorityQueueCount ?? stats.todayReviewsCount) > 0 ? (
               <Badge variant="hoje" className="text-[11px]">
                 Ação prioritária
               </Badge>

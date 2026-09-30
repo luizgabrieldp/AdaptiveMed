@@ -28,8 +28,16 @@ import {
   Link2,
   Lock,
   Flame,
+  Gauge,
+  Layers,
+  Sparkle,
 } from 'lucide-react';
-import { StreakRuleType, DEFAULT_STREAK_CONFIG } from '@/types/database';
+import {
+  StreakRuleType,
+  DEFAULT_STREAK_CONFIG,
+  WorkloadConfig,
+  DEFAULT_WORKLOAD_CONFIG,
+} from '@/types/database';
 
 interface SubscriptionData {
   isSubscribed: boolean;
@@ -66,7 +74,17 @@ const STREAK_RULES: { id: StreakRuleType; label: string; description: string; ba
 ];
 
 export default function ContaPage() {
-  const { profile, user, isDemoMode, signOut, streakConfig, updateStreakConfig, stats } = useData();
+  const {
+    profile,
+    user,
+    isDemoMode,
+    signOut,
+    streakConfig,
+    updateStreakConfig,
+    workloadConfig,
+    updateWorkloadConfig,
+    stats,
+  } = useData();
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [isLoadingSub, setIsLoadingSub] = useState<boolean>(true);
   const [cancelModalOpen, setCancelModalOpen] = useState<boolean>(false);
@@ -88,12 +106,28 @@ export default function ContaPage() {
   const [isUpdatingStreak, setIsUpdatingStreak] = useState(false);
   const [streakSuccessMessage, setStreakSuccessMessage] = useState<string | null>(null);
 
+  // Estados da Capacidade Diária & Gestão de Carga (Anti-Sobrecarga)
+  const currentWorkload = workloadConfig || profile?.workload_config || DEFAULT_WORKLOAD_CONFIG;
+  const [maxDailyReviews, setMaxDailyReviews] = useState<number>(currentWorkload.maxDailyReviews ?? 3);
+  const [maxDailyOverdue, setMaxDailyOverdue] = useState<number>(currentWorkload.maxDailyOverdue ?? 2);
+  const [maxDailyNewTopics, setMaxDailyNewTopics] = useState<number>(currentWorkload.maxDailyNewTopics ?? 1);
+  const [isUpdatingWorkload, setIsUpdatingWorkload] = useState(false);
+  const [workloadSuccessMessage, setWorkloadSuccessMessage] = useState<string | null>(null);
+
   useEffect(() => {
     if (streakConfig) {
       setSelectedRuleType(streakConfig.ruleType);
       setSelectedMinQuestions(streakConfig.minDailyQuestions);
     }
   }, [streakConfig]);
+
+  useEffect(() => {
+    if (workloadConfig) {
+      setMaxDailyReviews(workloadConfig.maxDailyReviews ?? 3);
+      setMaxDailyOverdue(workloadConfig.maxDailyOverdue ?? 2);
+      setMaxDailyNewTopics(workloadConfig.maxDailyNewTopics ?? 1);
+    }
+  }, [workloadConfig]);
 
   const handleSaveStreakConfig = async (newRule?: StreakRuleType, newMin?: number) => {
     const finalRule = newRule || selectedRuleType;
@@ -111,6 +145,32 @@ export default function ContaPage() {
       console.error('Erro ao atualizar regra de streak:', err);
     } finally {
       setIsUpdatingStreak(false);
+    }
+  };
+
+  const handleSaveWorkloadConfig = async (
+    customReviews?: number,
+    customOverdue?: number,
+    customNewTopics?: number
+  ) => {
+    const finalReviews = customReviews !== undefined ? customReviews : maxDailyReviews;
+    const finalOverdue = customOverdue !== undefined ? customOverdue : maxDailyOverdue;
+    const finalNewTopics = customNewTopics !== undefined ? customNewTopics : maxDailyNewTopics;
+
+    try {
+      setIsUpdatingWorkload(true);
+      setWorkloadSuccessMessage(null);
+      await updateWorkloadConfig({
+        maxDailyReviews: finalReviews,
+        maxDailyOverdue: finalOverdue,
+        maxDailyNewTopics: finalNewTopics,
+      });
+      setWorkloadSuccessMessage('Configurações de carga diária salvas com sucesso!');
+      setTimeout(() => setWorkloadSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error('Erro ao atualizar carga diária:', err);
+    } finally {
+      setIsUpdatingWorkload(false);
     }
   };
 
@@ -629,6 +689,176 @@ export default function ContaPage() {
                 {isUpdatingStreak && <Loader2 className="h-3 w-3 animate-spin" />}
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span>Salvar Regra</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD: CAPACIDADE DIÁRIA & GESTÃO DE CARGA (ANTI-SOBRECARGA) */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400">
+                  <Gauge className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">Capacidade Diária & Gestão de Carga (Anti-Sobrecarga)</CardTitle>
+                  <CardDescription className="text-xs">
+                    Distribuição inteligente de revisões para prevenir acúmulo excessivo e proteger sua retenção
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-purple-400 flex items-center gap-1 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/25">
+                  <Layers className="h-3.5 w-3.5" />
+                  Até {maxDailyReviews} revisões/dia
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5 space-y-5">
+            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-1.5">
+              <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-purple-400" />
+                Algoritmo Anti-Acúmulo com Rolagem Automática
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Quando uma data no seu calendário atinge a capacidade máxima configurada, novas revisões subsequentes são agendadas automaticamente para o próximo dia com vaga disponível. Isso impede sobrecargas cognitivas e o desestímulo por efeito &quot;bola de neve&quot;.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Controle 1: Max Daily Reviews */}
+              <div className="space-y-2 p-3.5 rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground">
+                    Revisões por Dia
+                  </label>
+                  <span className="text-xs font-black text-purple-400">
+                    {maxDailyReviews} temas/dia
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Limite máximo de revisões agendadas para o mesmo dia no calendário.
+                </p>
+                <div className="flex items-center gap-1.5 pt-1">
+                  {[2, 3, 4, 5, 6].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        setMaxDailyReviews(num);
+                        handleSaveWorkloadConfig(num, maxDailyOverdue, maxDailyNewTopics);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        maxDailyReviews === num
+                          ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
+                          : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {num}
+                      {num === 3 && <span className="block text-[8px] font-normal leading-none opacity-80">Ideal</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Controle 2: Max Daily Overdue */}
+              <div className="space-y-2 p-3.5 rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground">
+                    Cota de Atrasados
+                  </label>
+                  <span className="text-xs font-black text-amber-400">
+                    {maxDailyOverdue} na fila hoje
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Revisões em atraso puxadas para o dia atual. O restante fica protegido no backlog.
+                </p>
+                <div className="flex items-center gap-1.5 pt-1">
+                  {[1, 2, 3, 4].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        setMaxDailyOverdue(num);
+                        handleSaveWorkloadConfig(maxDailyReviews, num, maxDailyNewTopics);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        maxDailyOverdue === num
+                          ? 'bg-amber-600 text-white border-amber-500 shadow-xs'
+                          : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {num}
+                      {num === 2 && <span className="block text-[8px] font-normal leading-none opacity-80">Ideal</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Controle 3: Max Daily New Topics */}
+              <div className="space-y-2 p-3.5 rounded-xl border border-border bg-card">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground">
+                    Novos Assuntos (R0)
+                  </label>
+                  <span className="text-xs font-black text-blue-400">
+                    {maxDailyNewTopics} novo/dia
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Ritmo diário sugerido para primeiro contato com matérias inéditas.
+                </p>
+                <div className="flex items-center gap-1.5 pt-1">
+                  {[1, 2, 3, 4].map(num => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        setMaxDailyNewTopics(num);
+                        handleSaveWorkloadConfig(maxDailyReviews, maxDailyOverdue, num);
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                        maxDailyNewTopics === num
+                          ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                          : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {num}
+                      {num === 1 && <span className="block text-[8px] font-normal leading-none opacity-80">Ideal</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Feedback e Botão de Salvar */}
+            <div className="flex items-center justify-between pt-2 border-t border-border/60">
+              <div className="text-xs text-muted-foreground">
+                {workloadSuccessMessage ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {workloadSuccessMessage}
+                  </span>
+                ) : (
+                  <span>Revisões que você concluir passarão a respeitar essas cotas automaticamente.</span>
+                )}
+              </div>
+
+              <Button
+                size="sm"
+                onClick={() => handleSaveWorkloadConfig()}
+                disabled={isUpdatingWorkload}
+                className="h-8 text-xs font-bold gap-1.5 shadow-xs bg-purple-600 hover:bg-purple-500 text-white"
+              >
+                {isUpdatingWorkload && <Loader2 className="h-3 w-3 animate-spin" />}
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Salvar Cargas</span>
               </Button>
             </div>
           </CardContent>

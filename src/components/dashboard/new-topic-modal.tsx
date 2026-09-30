@@ -45,6 +45,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   const [initialDate, setInitialDate] = useState(getTodayDateString());
   const [initialQuestions, setInitialQuestions] = useState('25');
   const [initialCorrect, setInitialCorrect] = useState('');
+  const [initialDurationMinutes, setInitialDurationMinutes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tags / Subáreas
@@ -56,6 +57,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   useEffect(() => {
     if (open) {
       setInitialCorrect('');
+      setInitialDurationMinutes('');
       setErrorMessage(null);
     }
   }, [open]);
@@ -77,10 +79,11 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: calculatedPct ?? 80,
-    baseQuestionsCount: questionsNum || 20,
+    baseQuestionsCount: questionsNum || 25,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
   const r1EstimatedDate = addDaysToDate(initialDate, r1Interval);
+  const durNum = initialDurationMinutes.trim() !== '' ? parseInt(initialDurationMinutes, 10) : undefined;
 
   const handleAddTag = (tagToAdd?: string) => {
     const cleanTag = (tagToAdd || tagInput).trim();
@@ -129,6 +132,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
         initial_date: initialDate,
         initial_questions: questionsNum,
         initial_correct: correctNum,
+        initial_duration_minutes: durNum,
       });
 
       setIsSubmitting(false);
@@ -139,6 +143,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
       setTagInput('');
       setInitialQuestions('25');
       setInitialCorrect('');
+      setInitialDurationMinutes('');
       setInitialDate(getTodayDateString());
     } catch (err: unknown) {
       console.error(err);
@@ -323,7 +328,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
               <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
                 <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-blue-200/90 leading-relaxed">
-                  <strong>Recomendação AdaptiveMed:</strong> Resolva no mínimo <strong>15 a 20 questões</strong> no primeiro contato para garantir significância estatística na sua curva de esquecimento inicial.
+                  <strong>Recomendação AdaptiveMed:</strong> Resolva de <strong>25 a 30 questões</strong> no primeiro contato para calibrar a escala da sua curva de retenção e garantir máxima precisão diagnóstica.
                 </p>
               </div>
 
@@ -367,6 +372,35 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                 </div>
               </div>
 
+              {/* Campo Opcional de Duração / Tempo de Estudo */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Tempo de Estudo (opcional)
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">Em minutos</span>
+                </div>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={initialDurationMinutes}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setInitialDurationMinutes(val);
+                    }}
+                    placeholder="Ex: 45 min"
+                    className="text-xs pr-14"
+                  />
+                  {initialDurationMinutes && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none font-medium">
+                      minutos
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Alerta de Acertos maior que Questões */}
               {initialCorrect !== '' && correctNum > questionsNum && (
                 <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
@@ -384,29 +418,23 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
               )}
 
               {/* Box de Previsão Adaptativa Científica */}
-              <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2">
+              <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-muted-foreground flex items-center gap-1">
                     <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Diagnóstico Inicial:
                   </span>
-                  <span
-                    className={`font-black text-sm ${
-                      calculatedPct === null
-                        ? 'text-muted-foreground font-normal'
-                        : calculatedPct >= 85
-                        ? 'text-emerald-400'
-                        : calculatedPct >= 70
-                        ? 'text-blue-400'
-                        : calculatedPct >= 50
-                        ? 'text-amber-400'
-                        : 'text-rose-400'
-                    }`}
-                  >
+                  <span className="font-bold text-xs">
                     {calculatedPct !== null
-                      ? `${calculatedPct}% (${reviewCalc.diagnosis.split('(')[0].trim()})`
+                      ? reviewCalc.diagnosisBadge
                       : '— (Informe os acertos)'}
                   </span>
                 </div>
+
+                {calculatedPct !== null && (
+                  <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
+                    💡 {reviewCalc.pedagogicalNote}
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
                   <span className="text-muted-foreground flex items-center gap-1">

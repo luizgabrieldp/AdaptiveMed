@@ -15,6 +15,8 @@ import {
   PrevalentTopic,
   StreakConfig,
   DEFAULT_STREAK_CONFIG,
+  WorkloadConfig,
+  DEFAULT_WORKLOAD_CONFIG,
 } from '@/types/database';
 import {
   getInitialDemoTopics,
@@ -32,6 +34,7 @@ import {
   addDaysToDate,
   calculateStreak,
   calculateQualifiedStreak,
+  findNextAvailableDate,
 } from '@/lib/spaced-repetition';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -49,7 +52,9 @@ interface DataContextType {
   isDemoMode: boolean;
   stats: UserStats;
   streakConfig: StreakConfig;
+  workloadConfig: WorkloadConfig;
   updateStreakConfig: (config: StreakConfig) => Promise<void>;
+  updateWorkloadConfig: (config: WorkloadConfig) => Promise<void>;
   addTopic: (data: {
     area: string;
     subject_name: string;
@@ -57,6 +62,7 @@ interface DataContextType {
     initial_date: string;
     initial_questions: number;
     initial_correct: number;
+    initial_duration_minutes?: number;
   }) => Promise<void>;
   updateTopic: (topicId: string, data: Partial<StudyTopic>) => Promise<void>;
   updateTopicR0: (
@@ -79,6 +85,7 @@ interface DataContextType {
       study_date: string;
       questions_done: number;
       questions_correct: number;
+      duration_minutes?: number;
     }
   ) => Promise<{ nextReviewDate?: string }>;
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
@@ -93,7 +100,8 @@ interface DataContextType {
   completeReview: (
     reviewId: string,
     questionsDone: number,
-    questionsCorrect: number
+    questionsCorrect: number,
+    durationMinutes?: number
   ) => Promise<{ nextReviewDate?: string }>;
   updateCompletedReview: (
     reviewId: string,
@@ -136,6 +144,7 @@ const LOCAL_STORAGE_KEYS = {
   PROFILE: 'adaptivemed_profile_v1',
   AREAS: 'adaptivemed_areas_v1',
   STREAK_CONFIG: 'adaptivemed_streak_config_v1',
+  WORKLOAD_CONFIG: 'adaptivemed_workload_config_v1',
   DEMO_ACTIVE: 'adaptivemed_demo_active',
 };
 
@@ -162,6 +171,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [areas, setAreas] = useState<StudyArea[]>(DEFAULT_STUDY_AREAS);
   const [streakConfig, setStreakConfig] = useState<StreakConfig>(DEFAULT_STREAK_CONFIG);
+  const [workloadConfig, setWorkloadConfig] = useState<WorkloadConfig>(DEFAULT_WORKLOAD_CONFIG);
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(true);
@@ -262,6 +272,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setStreakConfig(JSON.parse(storedStreak));
             } catch {
               setStreakConfig(DEFAULT_STREAK_CONFIG);
+            }
+          }
+        }
+
+        // Carrega workload_config persistido no Supabase ou no localStorage
+        if (profData.workload_config) {
+          setWorkloadConfig(profData.workload_config);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(profData.workload_config));
+          }
+        } else {
+          const storedWorkload = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG) : null;
+          if (storedWorkload) {
+            try {
+              setWorkloadConfig(JSON.parse(storedWorkload));
+            } catch {
+              setWorkloadConfig(DEFAULT_WORKLOAD_CONFIG);
             }
           }
         }
@@ -441,6 +468,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateProfile({ streak_config: newConfig });
   };
 
+  const updateWorkloadConfig = async (newConfig: WorkloadConfig) => {
+    setWorkloadConfig(newConfig);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(newConfig));
+      } catch {}
+    }
+    await updateProfile({ workload_config: newConfig });
+  };
+
   // Salvar no localStorage de forma contínua
   useEffect(() => {
     if (typeof window !== 'undefined' && topics.length > 0) {
@@ -618,6 +655,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initial_date: string;
     initial_questions: number;
     initial_correct: number;
+    initial_duration_minutes?: number;
   }) => {
     const percentage =
       data.initial_questions > 0
@@ -637,6 +675,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initial_questions: data.initial_questions,
       initial_correct: data.initial_correct,
       initial_percentage: percentage,
+      initial_duration_minutes: data.initial_duration_minutes || null,
       base_questions_count: data.initial_questions,
       created_at: new Date().toISOString(),
     };
@@ -647,7 +686,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       accuracy: percentage,
       baseQuestionsCount: data.initial_questions,
     });
-    const r1ScheduledDate = addDaysToDate(data.initial_date, reviewCalc.nextIntervalDays);
+    const targetR1Date = addDaysToDate(data.initial_date, reviewCalc.nextIntervalDays);
+
+    // Gestão de carga diária e rolagem automática (anti-sobrecarga)
+    const scheduledCounts = new Map<string, number>();
+    reviews.forEach(r => {
+      if (!r.completed_date) {
+        scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+      }
+    });
+    const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+    const r1ScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
 
     const r1Review: TopicReview = {
       id: isDemoMode ? `rev-${Date.now()}-1` : crypto.randomUUID(),
@@ -662,6 +711,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       recommended_questions: reviewCalc.recommendedQuestions,
       previous_interval_days: reviewCalc.nextIntervalDays,
       diagnosis: reviewCalc.diagnosis,
+      diagnosis_badge: reviewCalc.diagnosisBadge,
+      pedagogical_note: reviewCalc.pedagogicalNote,
       created_at: new Date().toISOString(),
     };
 
@@ -738,6 +789,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       study_date: string;
       questions_done: number;
       questions_correct: number;
+      duration_minutes?: number;
     }
   ): Promise<{ nextReviewDate?: string }> => {
     const percentage =
@@ -750,7 +802,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       accuracy: percentage,
       baseQuestionsCount: data.questions_done,
     });
-    const r1ScheduledDate = addDaysToDate(data.study_date, reviewCalc.nextIntervalDays);
+    const targetR1Date = addDaysToDate(data.study_date, reviewCalc.nextIntervalDays);
+
+    // Gestão de carga diária e rolagem automática (anti-sobrecarga)
+    const scheduledCounts = new Map<string, number>();
+    reviews.forEach(r => {
+      if (!r.completed_date) {
+        scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+      }
+    });
+    const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+    const r1ScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
 
     const targetTopic = topics.find(t => t.id === topicId);
     const userId = user?.id || 'demo-user-id';
@@ -762,6 +824,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_questions: data.questions_done,
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
+          initial_duration_minutes: data.duration_minutes || null,
           base_questions_count: data.questions_done,
           is_planned: false,
         }
@@ -774,6 +837,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_questions: data.questions_done,
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
+          initial_duration_minutes: data.duration_minutes || null,
           base_questions_count: data.questions_done,
           is_planned: false,
           created_at: new Date().toISOString(),
@@ -792,6 +856,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       recommended_questions: reviewCalc.recommendedQuestions,
       previous_interval_days: reviewCalc.nextIntervalDays,
       diagnosis: reviewCalc.diagnosis,
+      diagnosis_badge: reviewCalc.diagnosisBadge,
+      pedagogical_note: reviewCalc.pedagogicalNote,
       created_at: new Date().toISOString(),
     };
 
@@ -821,6 +887,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             initial_questions: data.questions_done,
             initial_correct: data.questions_correct,
             initial_percentage: percentage,
+            initial_duration_minutes: data.duration_minutes || null,
             base_questions_count: data.questions_done,
             is_planned: false,
           })
@@ -885,13 +952,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         accuracy: percentage,
         baseQuestionsCount: questionsDone,
       });
-      const newScheduledDate = addDaysToDate(finalInitialDate, reviewCalc.nextIntervalDays);
+      const targetR1Date = addDaysToDate(finalInitialDate, reviewCalc.nextIntervalDays);
+
+      const scheduledCounts = new Map<string, number>();
+      reviews.forEach(r => {
+        if (!r.completed_date && r.id !== r1Review.id) {
+          scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+        }
+      });
+      const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+      const newScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
+
       updatedR1 = {
         ...r1Review,
         scheduled_date: newScheduledDate,
         recommended_questions: reviewCalc.recommendedQuestions,
         previous_interval_days: reviewCalc.nextIntervalDays,
         diagnosis: reviewCalc.diagnosis,
+        diagnosis_badge: reviewCalc.diagnosisBadge,
+        pedagogical_note: reviewCalc.pedagogicalNote,
       };
     }
 
@@ -937,6 +1016,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               recommended_questions: updatedR1.recommended_questions,
               previous_interval_days: updatedR1.previous_interval_days,
               diagnosis: updatedR1.diagnosis,
+              diagnosis_badge: updatedR1.diagnosis_badge,
+              pedagogical_note: updatedR1.pedagogical_note,
             })
             .eq('id', updatedR1.id)
         );
@@ -1089,7 +1170,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const completeReview = async (
     reviewId: string,
     questionsDone: number,
-    questionsCorrect: number
+    questionsCorrect: number,
+    durationMinutes?: number
   ): Promise<{ nextReviewDate?: string }> => {
     const today = getTodayDateString();
     const percentage =
@@ -1121,7 +1203,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_done: questionsDone,
       questions_correct: questionsCorrect,
       percentage,
+      duration_minutes: durationMinutes || null,
       diagnosis: reviewCalc.diagnosis,
+      diagnosis_badge: reviewCalc.diagnosisBadge,
+      pedagogical_note: reviewCalc.pedagogicalNote,
     };
 
     let nextReviewObj: TopicReview | null = null;
@@ -1129,7 +1214,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Se o próximo ciclo for <= 8 e a revisão atual < 8, agenda o próximo ciclo
     if (reviewCalc.nextCycle <= 8 && currentReview.review_number < 8) {
-      nextScheduledDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
+      const targetNextDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
+
+      // Gestão de carga diária e rolagem automática (anti-sobrecarga)
+      const scheduledCounts = new Map<string, number>();
+      reviews.forEach(r => {
+        if (!r.completed_date && r.id !== reviewId) {
+          scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+        }
+      });
+      const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+      nextScheduledDate = findNextAvailableDate(targetNextDate, scheduledCounts, maxDailyLimit);
 
       nextReviewObj = {
         id: isDemoMode ? `rev-${Date.now()}-${reviewCalc.nextCycle}` : crypto.randomUUID(),
@@ -1144,6 +1239,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         recommended_questions: reviewCalc.recommendedQuestions,
         previous_interval_days: reviewCalc.nextIntervalDays,
         diagnosis: reviewCalc.diagnosis,
+        diagnosis_badge: reviewCalc.diagnosisBadge,
+        pedagogical_note: reviewCalc.pedagogicalNote,
         created_at: new Date().toISOString(),
       };
     }
@@ -1167,7 +1264,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             questions_done: questionsDone,
             questions_correct: questionsCorrect,
             percentage,
+            duration_minutes: durationMinutes || null,
             diagnosis: reviewCalc.diagnosis,
+            diagnosis_badge: reviewCalc.diagnosisBadge,
+            pedagogical_note: reviewCalc.pedagogicalNote,
           })
           .eq('id', reviewId)
       ];
@@ -1213,6 +1313,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       percentage,
       completed_date: finalDate,
       diagnosis: reviewCalc.diagnosis,
+      diagnosis_badge: reviewCalc.diagnosisBadge,
+      pedagogical_note: reviewCalc.pedagogicalNote,
     };
 
     // Se a próxima revisão existir e não estiver concluída, recalcula seus parâmetros de agendamento
@@ -1222,13 +1324,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         r => r.topic_id === targetRev.topic_id && r.review_number === targetRev.review_number + 1
       );
       if (nextRev && !nextRev.completed_date) {
-        const newScheduledDate = addDaysToDate(finalDate, reviewCalc.nextIntervalDays);
+        const targetNextDate = addDaysToDate(finalDate, reviewCalc.nextIntervalDays);
+        const scheduledCounts = new Map<string, number>();
+        reviews.forEach(r => {
+          if (!r.completed_date && r.id !== nextRev.id) {
+            scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+          }
+        });
+        const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+        const newScheduledDate = findNextAvailableDate(targetNextDate, scheduledCounts, maxDailyLimit);
+
         updatedNextRev = {
           ...nextRev,
           scheduled_date: newScheduledDate,
           recommended_questions: reviewCalc.recommendedQuestions,
           previous_interval_days: reviewCalc.nextIntervalDays,
           diagnosis: reviewCalc.diagnosis,
+          diagnosis_badge: reviewCalc.diagnosisBadge,
+          pedagogical_note: reviewCalc.pedagogicalNote,
         };
       }
     }
@@ -1256,6 +1369,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             percentage,
             completed_date: finalDate,
             diagnosis: reviewCalc.diagnosis,
+            diagnosis_badge: reviewCalc.diagnosisBadge,
+            pedagogical_note: reviewCalc.pedagogicalNote,
           })
           .eq('id', reviewId)
       ];
@@ -1269,6 +1384,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               recommended_questions: updatedNextRev.recommended_questions,
               previous_interval_days: updatedNextRev.previous_interval_days,
               diagnosis: updatedNextRev.diagnosis,
+              diagnosis_badge: updatedNextRev.diagnosis_badge,
+              pedagogical_note: updatedNextRev.pedagogical_note,
             })
             .eq('id', updatedNextRev.id)
         );
@@ -1455,11 +1572,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const stats = useMemo<UserStats>(() => {
     const today = getTodayDateString();
 
-    // 1. Revisões de Hoje (pendentes com scheduled_date <= today)
-    const todayPending = reviews.filter(
-      r => !r.completed_date && r.scheduled_date <= today
+    // 1. Revisões de Hoje e Gestão de Carga Diária
+    const todayScheduled = reviews.filter(
+      r => !r.completed_date && r.scheduled_date === today
     );
-    const todayReviewsCount = todayPending.length;
+    const overduePending = reviews.filter(
+      r => !r.completed_date && r.scheduled_date < today
+    );
+    const maxOverdueQuota = workloadConfig?.maxDailyOverdue ?? 2;
+    const prioritizedOverdueCount = Math.min(overduePending.length, maxOverdueQuota);
+    const backlogOverdueCount = Math.max(0, overduePending.length - maxOverdueQuota);
+
+    // Fila prioritária de hoje = agendadas hoje + atrasadas prioritárias (cota)
+    const todayPriorityQueueCount = todayScheduled.length + prioritizedOverdueCount;
+    const todayReviewsCount = todayScheduled.length + overduePending.length;
 
     // 2. Ofensiva do Dia (Streak) Qualificada conforme regra configurada pelo assinante
     const {
@@ -1553,6 +1679,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       todayReviewsCount,
+      todayPriorityQueueCount,
+      backlogOverdueCount,
+      overdueCount: overduePending.length,
       currentStreak,
       overallAccuracy,
       totalQuestions,
@@ -1560,10 +1689,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       todayMockCompleted,
       streakQualifiedToday,
       streakConfig,
+      workloadConfig,
       vulnerableArea,
       areaAccuracy: areaStats,
     };
-  }, [topics, reviews, mockExams, areas, streakConfig]);
+  }, [topics, reviews, mockExams, areas, streakConfig, workloadConfig]);
 
   return (
     <DataContext.Provider
@@ -1581,7 +1711,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isDemoMode,
         stats,
         streakConfig,
+        workloadConfig,
         updateStreakConfig,
+        updateWorkloadConfig,
         addTopic,
         updateTopic,
         updateTopicR0,

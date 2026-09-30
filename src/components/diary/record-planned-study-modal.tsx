@@ -38,16 +38,18 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   const { recordPlannedTopicStudy, areas } = useData();
 
   const [studyDate, setStudyDate] = useState(getTodayDateString());
-  const [questionsDone, setQuestionsDone] = useState<string>('20');
+  const [questionsDone, setQuestionsDone] = useState<string>('25');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('');
+  const [durationMinutes, setDurationMinutes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultDate, setResultDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setStudyDate(getTodayDateString());
-      setQuestionsDone('20');
+      setQuestionsDone('25');
       setQuestionsCorrect('');
+      setDurationMinutes('');
       setResultDate(null);
     }
   }, [open, topic]);
@@ -64,10 +66,11 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: percentage ?? 80,
-    baseQuestionsCount: qDone || 20,
+    baseQuestionsCount: qDone || 25,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
   const estimatedR1Date = addDaysToDate(studyDate || getTodayDateString(), r1Interval);
+  const durNum = durationMinutes.trim() !== '' ? parseInt(durationMinutes, 10) : undefined;
 
   const areaStyle = getAreaStyle(topic.area, areas);
 
@@ -81,6 +84,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
         study_date: studyDate,
         questions_done: qDone,
         questions_correct: qCorrect,
+        duration_minutes: durNum,
       });
 
       setResultDate(res.nextReviewDate || estimatedR1Date);
@@ -159,7 +163,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
             <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
               <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-[11px] text-blue-200/90 leading-relaxed">
-                <strong>Recomendação AdaptiveMed:</strong> Resolva no mínimo <strong>15 a 20 questões</strong> no primeiro estudo para garantir significância estatística na sua taxa de retenção inicial.
+                <strong>Recomendação AdaptiveMed:</strong> Resolva de <strong>25 a 30 questões</strong> no primeiro estudo para calibrar a escala da sua curva de retenção e garantir máxima precisão diagnóstica.
               </p>
             </div>
 
@@ -188,7 +192,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   inputMode="numeric"
                   pattern="[0-9]*"
                   required
-                  placeholder="Ex: 20"
+                  placeholder="Ex: 25"
                   value={questionsDone}
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '');
@@ -207,7 +211,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   inputMode="numeric"
                   pattern="[0-9]*"
                   required
-                  placeholder="Ex: 16"
+                  placeholder="Ex: 18"
                   value={questionsCorrect}
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '');
@@ -215,6 +219,35 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   }}
                   className="text-sm font-semibold text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                 />
+              </div>
+            </div>
+
+            {/* Campo Opcional de Duração / Tempo de Estudo */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Tempo de Estudo (opcional)
+                </label>
+                <span className="text-[10px] text-muted-foreground">Em minutos</span>
+              </div>
+              <div className="relative">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={durationMinutes}
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setDurationMinutes(val);
+                  }}
+                  placeholder="Ex: 45 min"
+                  className="text-xs pr-14"
+                />
+                {durationMinutes && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none font-medium">
+                    minutos
+                  </span>
+                )}
               </div>
             </div>
 
@@ -235,29 +268,23 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
             )}
 
             {/* Prévia da Repetição Espaçada Adaptativa Científica */}
-            <div className="p-3 rounded-xl bg-muted/50 border border-border text-xs space-y-2">
+            <div className="p-3.5 rounded-xl bg-muted/50 border border-border text-xs space-y-2.5">
               <div className="flex items-center justify-between font-bold">
                 <span className="text-muted-foreground flex items-center gap-1">
                   <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Diagnóstico:
                 </span>
-                <span
-                  className={
-                    percentage === null
-                      ? 'text-muted-foreground font-normal'
-                      : percentage >= 85
-                      ? 'text-emerald-400'
-                      : percentage >= 70
-                      ? 'text-blue-400'
-                      : percentage >= 50
-                      ? 'text-amber-400'
-                      : 'text-rose-400'
-                  }
-                >
+                <span className="font-bold text-xs">
                   {percentage !== null
-                    ? `${percentage}% (${reviewCalc.diagnosis.split('(')[0].trim()})`
+                    ? reviewCalc.diagnosisBadge
                     : '— (Informe os acertos)'}
                 </span>
               </div>
+
+              {percentage !== null && (
+                <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
+                  💡 {reviewCalc.pedagogicalNote}
+                </p>
+              )}
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/60">
                 <span>Próxima Revisão (R1):</span>

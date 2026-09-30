@@ -42,8 +42,9 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const { completeReview, updateCompletedReview } = useData();
   const [questionsDone, setQuestionsDone] = useState<string>('20');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
+  const [durationMinutes, setDurationMinutes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number; isEdit?: boolean } | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number; isEdit?: boolean; duration?: number } | null>(null);
 
   const isEdit = mode === 'edit' || (mode !== 'complete' && Boolean(review?.completed_date));
 
@@ -52,10 +53,12 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       if (isEdit || review.completed_date) {
         setQuestionsDone(review.questions_done != null ? String(review.questions_done) : '20');
         setQuestionsCorrect(review.questions_correct != null ? String(review.questions_correct) : '16');
+        setDurationMinutes(review.duration_minutes != null ? String(review.duration_minutes) : '');
       } else {
         const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
         setQuestionsDone(suggested);
         setQuestionsCorrect('');
+        setDurationMinutes('');
       }
       setSuccessInfo(null);
     }
@@ -85,6 +88,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const nextInterval = nextReviewCalc.nextIntervalDays;
   const today = getTodayDateString();
   const estimatedNextDate = nextCycleNumber ? addDaysToDate(today, nextInterval) : null;
+  const durNum = durationMinutes.trim() !== '' ? parseInt(durationMinutes, 10) : undefined;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,9 +98,9 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       setIsSubmitting(true);
       if (isEdit) {
         await updateCompletedReview(review.id, doneNum, correctNum);
-        setSuccessInfo({ nextDate: estimatedNextDate || undefined, pct: calculatedPct ?? 0, isEdit: true });
+        setSuccessInfo({ nextDate: estimatedNextDate || undefined, pct: calculatedPct ?? 0, isEdit: true, duration: durNum });
       } else {
-        const res = await completeReview(review.id, doneNum, correctNum);
+        const res = await completeReview(review.id, doneNum, correctNum, durNum);
 
         // Efeito festivo de gamificação
         try {
@@ -110,14 +114,14 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
           // Fallback silencioso se canvas-confetti não estiver disponível
         }
 
-        setSuccessInfo({ nextDate: res.nextReviewDate, pct: calculatedPct ?? 0, isEdit: false });
+        setSuccessInfo({ nextDate: res.nextReviewDate, pct: calculatedPct ?? 0, isEdit: false, duration: durNum });
       }
 
       setTimeout(() => {
         setIsSubmitting(false);
         setSuccessInfo(null);
         onOpenChange(false);
-      }, 1200);
+      }, 1400);
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -138,13 +142,22 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 Aproveitamento de <span className="font-bold text-emerald-400">{successInfo.pct}%</span>
+                {successInfo.duration ? ` • ⏱️ ${successInfo.duration} min` : ''}
               </p>
+              <div className="inline-block mt-2">
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-muted border border-border">
+                  {nextReviewCalc.diagnosisBadge}
+                </span>
+              </div>
             </div>
             {successInfo.nextDate && (
               <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-left">
                 <p className="text-xs text-blue-300 font-medium">Ciclo Adaptativo R{review.review_number + 1} Agendado:</p>
                 <p className="text-base font-bold text-blue-400 mt-0.5">
-                  {formatDateBR(successInfo.nextDate)} ({nextInterval} dias a partir de hoje)
+                  {formatDateBR(successInfo.nextDate)}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Meta sugerida: <strong>{nextReviewCalc.recommendedQuestions} questões</strong>
                 </p>
               </div>
             )}
@@ -218,6 +231,35 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 </div>
               </div>
 
+              {/* Campo Opcional de Duração / Tempo de Estudo */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Tempo de Estudo (opcional)
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">Em minutos</span>
+                </div>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={durationMinutes}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setDurationMinutes(val);
+                    }}
+                    placeholder="Ex: 45 min"
+                    className="text-xs pr-14"
+                  />
+                  {durationMinutes && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none font-medium">
+                      minutos
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Alerta de Acertos maior que Questões */}
               {isCorrectFilled && correctNum > doneNum && (
                 <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
@@ -226,27 +268,21 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               )}
 
               {/* Pré-visualização Adaptativa Científica em Tempo Real */}
-              <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2">
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground">Diagnóstico de Retenção:</span>
-                  <span
-                    className={`font-bold text-xs ${
-                      calculatedPct === null
-                        ? 'text-muted-foreground font-normal'
-                        : calculatedPct >= 85
-                        ? 'text-emerald-400'
-                        : calculatedPct >= 70
-                        ? 'text-blue-400'
-                        : calculatedPct >= 50
-                        ? 'text-amber-400'
-                        : 'text-rose-400'
-                    }`}
-                  >
+                  <span className="text-muted-foreground">Diagnóstico Clínico:</span>
+                  <span className="font-bold text-xs">
                     {calculatedPct !== null
-                      ? `${calculatedPct}% (${nextReviewCalc.diagnosis.split('(')[0].trim()})`
+                      ? nextReviewCalc.diagnosisBadge
                       : '— (Informe os acertos)'}
                   </span>
                 </div>
+
+                {calculatedPct !== null && (
+                  <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
+                    💡 {nextReviewCalc.pedagogicalNote}
+                  </p>
+                )}
 
                 {nextCycleNumber && estimatedNextDate && (
                   <>
@@ -261,9 +297,9 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     </div>
 
                     <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Meta para R{nextCycleNumber}:</span>
+                      <span className="text-muted-foreground">Meta Sugerida (R{nextCycleNumber}):</span>
                       <span className="font-bold text-amber-400">
-                        🎯 {nextReviewCalc.recommendedQuestions} questões recomendadas
+                        🎯 {nextReviewCalc.recommendedQuestions} questões
                       </span>
                     </div>
                   </>
