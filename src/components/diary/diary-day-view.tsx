@@ -28,6 +28,10 @@ import {
   BookOpen,
   CalendarCheck2,
   ListOrdered,
+  X,
+  AlertTriangle,
+  CalendarPlus,
+  Flame,
 } from 'lucide-react';
 
 interface DiaryDayViewProps {
@@ -36,7 +40,14 @@ interface DiaryDayViewProps {
 }
 
 export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDateChange }) => {
-  const { topics, reviews, areas, prevalentTopics } = useData();
+  const {
+    topics,
+    reviews,
+    areas,
+    prevalentTopics,
+    updatePlannedTopicDate,
+    rescheduleReview,
+  } = useData();
 
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<TopicReview | null>(null);
@@ -65,13 +76,26 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
       });
   }, [reviews, selectedDate, topicMap, todayStr]);
 
-  // Estudos previamente programados para este dia
+  // Estudos previamente programados para este dia (apenas com planned_date explícito)
   const dayPlannedTopics = useMemo(() => {
-    return topics.filter(t => {
-      const planDate = t.planned_date || (t.is_planned ? t.initial_date : null);
-      return t.is_planned && planDate === selectedDate;
-    });
+    return topics.filter(t => t.is_planned && t.planned_date === selectedDate);
   }, [topics, selectedDate]);
+
+  // Assuntos da Semana / Pendentes disponíveis para agendar neste dia
+  const availableBacklogTopics = useMemo(() => {
+    return topics.filter(t => t.is_planned && t.planned_date !== selectedDate);
+  }, [topics, selectedDate]);
+
+  // Revisões Atrasadas (agendadas para antes de hoje que ainda não foram concluídas)
+  const overdueReviews = useMemo(() => {
+    return reviews
+      .filter(r => !r.completed_date && r.scheduled_date < todayStr && r.scheduled_date !== selectedDate)
+      .map(r => {
+        const topic = topicMap.get(r.topic_id);
+        const statusInfo = calculateReviewStatus(r.scheduled_date, r.completed_date, todayStr);
+        return { review: r, topic, statusInfo };
+      });
+  }, [reviews, todayStr, selectedDate, topicMap]);
 
   // Estudos iniciais (R0) concluídos neste dia
   const dayCompletedTopics = useMemo(() => {
@@ -157,218 +181,377 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
         </div>
       </div>
 
-      {/* Cards de Atividades do Dia Selecionado */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Card 1: Revisões Agendadas no Dia */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-400">
-                  <CalendarCheck2 className="h-4 w-4" />
-                </div>
-                <CardTitle className="text-sm font-bold">Revisões Agendadas</CardTitle>
-              </div>
-              <Badge variant="outline" className="text-xs">
-                {dayReviews.length}
-              </Badge>
-            </div>
-            <CardDescription className="text-xs">
-              Ciclos adaptativos (R1 a R8) previstos para este dia.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-4 space-y-2.5">
-            {dayReviews.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-foreground italic">
-                Nenhuma revisão agendada para este dia.
-              </div>
-            ) : (
-              dayReviews.map(({ review, topic, statusInfo }) => {
-                const style = topic ? getAreaStyle(topic.area, areas) : null;
-                const isDone = Boolean(review.completed_date);
-
-                return (
-                  <div
-                    key={review.id}
-                    className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all ${
-                      isDone
-                        ? 'bg-emerald-500/10 border-emerald-500/25'
-                        : statusInfo.status === 'ATRASADO'
-                        ? 'bg-rose-500/10 border-rose-500/30'
-                        : 'bg-muted/40 border-border'
-                    }`}
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        {topic && style && (
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
-                          >
-                            {topic.area}
-                          </span>
-                        )}
-                        <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
-                          R{review.review_number}
-                        </span>
-                        {review.recommended_questions && (
-                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded">
-                            🎯 {review.recommended_questions} Qs
-                          </span>
-                        )}
-                        <Badge
-                          variant={isDone ? 'concluido' : statusInfo.status === 'ATRASADO' ? 'atrasado' : 'hoje'}
-                          className="text-[9px] py-0 px-1.5"
-                        >
-                          {statusInfo.badgeText}
-                        </Badge>
-                      </div>
-
-                      <p className="font-bold text-xs text-foreground truncate">
-                        {topic?.subject_name || 'Assunto'}
-                      </p>
-
-                      {isDone && review.questions_done && (
-                        <p className="text-[10px] text-emerald-400 font-semibold">
-                          {review.questions_correct}/{review.questions_done} questões ({review.percentage}%)
-                        </p>
-                      )}
-                    </div>
-
-                    {!isDone && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedReview(review);
-                          setCompletionModalOpen(true);
-                        }}
-                        className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
-                      </Button>
-                    )}
+      {/* Grid Principal: Atividades do Dia + Painel Lateral de Agendamento */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {/* Coluna Principal (2 colunas em desktop largo): Atividades do Dia */}
+        <div className="xl:col-span-2 space-y-5">
+          {/* Card 1: Estudos no Dia (Concluídos e Programados) */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
+                    <BookOpen className="h-4 w-4" />
                   </div>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Card 2: Estudos no Dia (Concluídos e Programados) */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3 border-b border-border/60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
-                  <BookOpen className="h-4 w-4" />
+                  <CardTitle className="text-sm font-bold">Estudos do Dia (R0)</CardTitle>
                 </div>
-                <CardTitle className="text-sm font-bold">Estudos do Dia (R0)</CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  {dayCompletedTopics.length + dayPlannedTopics.length}
+                </Badge>
               </div>
-              <Badge variant="outline" className="text-xs">
-                {dayCompletedTopics.length + dayPlannedTopics.length}
-              </Badge>
-            </div>
-            <CardDescription className="text-xs">
-              Primeiro contato com a matéria (concluídos e pendentes).
-            </CardDescription>
-          </CardHeader>
+              <CardDescription className="text-xs">
+                Primeiro contato com a matéria agendado ou concluído neste dia.
+              </CardDescription>
+            </CardHeader>
 
-          <CardContent className="p-4 space-y-2.5">
-            {dayCompletedTopics.length === 0 && dayPlannedTopics.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
-                <p className="italic">Nenhum estudo programado ou concluído neste dia.</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPlanModalOpen(true)}
-                  className="text-xs h-7 gap-1"
-                >
-                  <Plus className="h-3 w-3" /> Programar Estudo
-                </Button>
-              </div>
-            ) : (
-              <>
-                {/* Estudos Concluídos (R0 Feito) */}
-                {dayCompletedTopics.map(t => {
-                  const style = getAreaStyle(t.area, areas);
+            <CardContent className="p-4 space-y-2.5">
+              {dayCompletedTopics.length === 0 && dayPlannedTopics.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                  <p className="italic">Nenhum estudo programado ou concluído neste dia.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPlanModalOpen(true)}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <Plus className="h-3 w-3" /> Programar Novo Assunto
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {/* Estudos Concluídos (R0 Feito) */}
+                  {dayCompletedTopics.map(t => {
+                    const style = getAreaStyle(t.area, areas);
 
-                  return (
-                    <div
-                      key={t.id}
-                      className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
-                          >
-                            {t.area}
-                          </span>
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.2 rounded">
-                            R0 Concluído
-                          </span>
+                    return (
+                      <div
+                        key={t.id}
+                        className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {t.area}
+                            </span>
+                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                              R0 Concluído
+                            </span>
+                          </div>
+
+                          <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+
+                          <p className="text-[10px] text-emerald-400 font-semibold">
+                            {t.initial_correct}/{t.initial_questions} questões ({t.initial_percentage}%)
+                          </p>
                         </div>
 
-                        <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+                        <span className="text-xs font-bold text-emerald-400 self-start sm:self-center">
+                          Concluído ✓
+                        </span>
+                      </div>
+                    );
+                  })}
 
-                        <p className="text-[10px] text-emerald-400 font-semibold">
-                          {t.initial_correct}/{t.initial_questions} questões ({t.initial_percentage}%)
+                  {/* Estudos Pendentes Programados */}
+                  {dayPlannedTopics.map(t => {
+                    const style = getAreaStyle(t.area, areas);
+
+                    return (
+                      <div
+                        key={t.id}
+                        className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {t.area}
+                            </span>
+                            <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30">
+                              A Estudar
+                            </Badge>
+                            {t.is_weekly_goal && (
+                              <span className="text-[9px] font-bold text-amber-300">
+                                • Meta da Semana
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => updatePlannedTopicDate(t.id, null)}
+                            title="Remover data e manter na Meta da Semana em aberto"
+                            className="text-[11px] h-7 px-2 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10"
+                          >
+                            <X className="h-3.5 w-3.5 mr-1" /> Desagendar
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedPlannedTopic(t);
+                              setRecordStudyModalOpen(true);
+                            }}
+                            className="text-xs h-7 font-bold gap-1 bg-amber-600 hover:bg-amber-500 text-white"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Questões
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Revisões Agendadas no Dia */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-400">
+                    <CalendarCheck2 className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-bold">Revisões Agendadas (Ciclos R1 a R8)</CardTitle>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {dayReviews.length}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Ciclos adaptativos previstos para este dia específico.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-4 space-y-2.5">
+              {dayReviews.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground italic">
+                  Nenhuma revisão agendada para este dia.
+                </div>
+              ) : (
+                dayReviews.map(({ review, topic, statusInfo }) => {
+                  const style = topic ? getAreaStyle(topic.area, areas) : null;
+                  const isDone = Boolean(review.completed_date);
+
+                  return (
+                    <div
+                      key={review.id}
+                      className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all ${
+                        isDone
+                          ? 'bg-emerald-500/10 border-emerald-500/25'
+                          : statusInfo.status === 'ATRASADO'
+                          ? 'bg-rose-500/10 border-rose-500/30'
+                          : 'bg-muted/40 border-border'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {topic && style && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {topic.area}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
+                            R{review.review_number}
+                          </span>
+                          {review.recommended_questions && (
+                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded">
+                              🎯 {review.recommended_questions} Qs
+                            </span>
+                          )}
+                          <Badge
+                            variant={isDone ? 'concluido' : statusInfo.status === 'ATRASADO' ? 'atrasado' : 'hoje'}
+                            className="text-[9px] py-0 px-1.5"
+                          >
+                            {statusInfo.badgeText}
+                          </Badge>
+                        </div>
+
+                        <p className="font-bold text-xs text-foreground truncate">
+                          {topic?.subject_name || 'Assunto'}
                         </p>
+
+                        {isDone && review.questions_done && (
+                          <p className="text-[10px] text-emerald-400 font-semibold">
+                            {review.questions_correct}/{review.questions_done} questões ({review.percentage}%)
+                          </p>
+                        )}
                       </div>
 
-                      <span className="text-xs font-bold text-emerald-400 self-start sm:self-center">
-                        Concluído ✓
-                      </span>
+                      {!isDone && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedReview(review);
+                            setCompletionModalOpen(true);
+                          }}
+                          className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
+                        </Button>
+                      )}
                     </div>
                   );
-                })}
+                })
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-                {/* Estudos Pendentes Programados */}
-                {dayPlannedTopics.map(t => {
+        {/* Coluna Lateral (1 coluna): Assuntos da Semana & Revisões em Atraso */}
+        <div className="xl:col-span-1 space-y-5">
+          {/* Card Lateral 1: Assuntos da Semana / Meta Disponíveis */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-primary/15 text-primary">
+                    <CalendarPlus className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-bold">Assuntos da Semana</CardTitle>
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {availableBacklogTopics.length}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Metas em aberto ou planejadas para outros dias.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-3 space-y-2 max-h-[360px] overflow-y-auto">
+              {availableBacklogTopics.length === 0 ? (
+                <div className="py-6 text-center text-xs text-muted-foreground italic">
+                  Todos os assuntos da semana já foram agendados para este dia!
+                </div>
+              ) : (
+                availableBacklogTopics.map(t => {
                   const style = getAreaStyle(t.area, areas);
 
                   return (
                     <div
                       key={t.id}
-                      className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      className="p-2.5 rounded-xl border border-border/70 bg-card hover:bg-muted/40 transition-colors flex items-center justify-between gap-2"
                     >
-                      <div className="space-y-1 min-w-0">
+                      <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <span
                             className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
                           >
                             {t.area}
                           </span>
-                          <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30">
-                            A Estudar
-                          </Badge>
-                          {t.is_weekly_goal && (
-                            <span className="text-[9px] font-bold text-amber-300">
-                              • Meta da Semana
+                          {t.planned_date ? (
+                            <span className="text-[9px] text-muted-foreground font-medium">
+                              Em {formatDateBR(t.planned_date)}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 px-1 rounded">
+                              Sem dia fixo
                             </span>
                           )}
                         </div>
-
-                        <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
+                        <p className="text-xs font-semibold text-foreground truncate" title={t.subject_name}>
+                          {t.subject_name}
+                        </p>
                       </div>
 
                       <Button
                         size="sm"
-                        onClick={() => {
-                          setSelectedPlannedTopic(t);
-                          setRecordStudyModalOpen(true);
-                        }}
-                        className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center bg-amber-600 hover:bg-amber-500 text-white"
+                        variant="outline"
+                        onClick={() => updatePlannedTopicDate(t.id, selectedDate)}
+                        className="text-[11px] h-7 px-2 font-bold shrink-0 hover:border-primary hover:text-primary"
+                        title="Agendar para a data selecionada"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Questões
+                        <Plus className="h-3 w-3 mr-1" /> Agendar
                       </Button>
                     </div>
                   );
-                })}
-              </>
-            )}
-          </CardContent>
-        </Card>
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card Lateral 2: Revisões em Atraso */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-bold">Revisões em Atraso</CardTitle>
+                </div>
+                <Badge variant={overdueReviews.length > 0 ? 'atrasado' : 'outline'} className="text-xs">
+                  {overdueReviews.length}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Reprograme para este dia para regularizar sua curva de retenção.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-3 space-y-2 max-h-[320px] overflow-y-auto">
+              {overdueReviews.length === 0 ? (
+                <div className="py-6 text-center text-xs text-emerald-400 font-medium">
+                  🎉 Nenhuma revisão em atraso pendente!
+                </div>
+              ) : (
+                overdueReviews.map(({ review, topic, statusInfo }) => {
+                  const style = topic ? getAreaStyle(topic.area, areas) : null;
+
+                  return (
+                    <div
+                      key={review.id}
+                      className="p-2.5 rounded-xl border border-rose-500/25 bg-rose-500/5 hover:bg-rose-500/10 transition-colors flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          {topic && style && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {topic.area}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
+                            R{review.review_number}
+                          </span>
+                          <span className="text-[9px] font-bold text-rose-400">
+                            {statusInfo.daysDiff}d atraso
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-foreground truncate" title={topic?.subject_name}>
+                          {topic?.subject_name || 'Assunto'}
+                        </p>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => rescheduleReview(review.id, selectedDate)}
+                        className="text-[11px] h-7 px-2 font-bold shrink-0 text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                        title="Reprogramar para este dia"
+                      >
+                        Reprogramar
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Tabela Geral de Assuntos & Revisões com Busca e Filtros */}

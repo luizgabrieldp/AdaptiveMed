@@ -83,6 +83,7 @@ interface DataContextType {
   ) => Promise<{ nextReviewDate?: string }>;
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
   updatePlannedTopicDate: (topicId: string, planned_date: string | null) => Promise<void>;
+  rescheduleReview: (reviewId: string, newScheduledDate: string) => Promise<void>;
   distributeWeeklyAutoStudy: (weekStartStr: string) => Promise<number>;
   addArea: (name: string, colorHex: string) => Promise<void>;
   updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
@@ -737,15 +738,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }) => {
     const topicId = isDemoMode ? `topic-${Date.now()}` : crypto.randomUUID();
     const userId = user?.id || 'demo-user-id';
-    const fallbackDate = new Date().toISOString().split('T')[0];
-
     const newTopic: StudyTopic = {
       id: topicId,
       user_id: userId,
       area: data.area,
       subject_name: data.subject_name.trim(),
       tags: data.tags || [],
-      initial_date: data.planned_date || fallbackDate,
+      initial_date: data.planned_date || '',
       planned_date: data.planned_date,
       initial_questions: 0,
       initial_correct: 0,
@@ -1011,7 +1010,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ...t,
               planned_date: planned_date || undefined,
               is_planned: true,
-              initial_date: planned_date || t.initial_date,
+              initial_date: planned_date || '',
             }
           : t
       );
@@ -1029,9 +1028,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .update({
             planned_date: planned_date,
             is_planned: true,
-            initial_date: planned_date || undefined,
+            initial_date: planned_date || null,
           })
           .eq('id', topicId)
+      );
+    }
+  };
+
+  // AÇÃO 1.4b: Reprogramar Data de uma Revisão Agendada/Atrasada no Calendário
+  const rescheduleReview = async (reviewId: string, newScheduledDate: string) => {
+    setReviews(prev => {
+      const updated = prev.map(r =>
+        r.id === reviewId
+          ? {
+              ...r,
+              scheduled_date: newScheduledDate,
+            }
+          : r
+      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(
+        supabase
+          .from('topic_reviews')
+          .update({ scheduled_date: newScheduledDate })
+          .eq('id', reviewId)
       );
     }
   };
@@ -1602,6 +1629,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         recordPlannedTopicStudy,
         updateTopicWeeklyGoal,
         updatePlannedTopicDate,
+        rescheduleReview,
         distributeWeeklyAutoStudy,
         addArea,
         updateArea,

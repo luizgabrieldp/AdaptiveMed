@@ -156,15 +156,14 @@ export const WeeklySchedule: React.FC = () => {
       }
     });
 
-    // 2. Assuntos com estudo planejado para os dias da semana
+    // 2. Assuntos com estudo planejado para os dias da semana (apenas com planned_date explícito)
     topics.forEach(t => {
-      const planDate = t.planned_date || (t.is_planned ? t.initial_date : null);
-      if (t.is_planned && planDate && map.has(planDate)) {
+      if (t.is_planned && t.planned_date && map.has(t.planned_date)) {
         const isHigh =
           highPrevalenceNames.has(t.subject_name.toLowerCase()) ||
           Boolean(t.tags?.some(tag => tag.toLowerCase().includes('alta')));
 
-        map.get(planDate)!.push({
+        map.get(t.planned_date)!.push({
           type: 'planned_study',
           id: t.id,
           topic: t,
@@ -173,7 +172,7 @@ export const WeeklySchedule: React.FC = () => {
           badgeText: '1º Contato Planejado',
           isCompleted: false,
           isHighPrevalence: isHigh,
-          isOverdue: planDate < todayStr,
+          isOverdue: t.planned_date < todayStr,
         });
       }
     });

@@ -26,6 +26,7 @@ import {
 } from '@/lib/spaced-repetition';
 import { TopicDrawer } from './topic-drawer';
 import { ReviewCompletionModal } from '@/components/dashboard/review-completion-modal';
+import { RecordPlannedStudyModal } from '@/components/diary/record-planned-study-modal';
 import {
   Search,
   Filter,
@@ -36,6 +37,7 @@ import {
   AlertCircle,
   Clock,
   Tag,
+  BookOpen,
 } from 'lucide-react';
 
 export const ReviewsTable: React.FC = () => {
@@ -50,10 +52,26 @@ export const ReviewsTable: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [selectedPlannedTopic, setSelectedPlannedTopic] = useState<StudyTopic | null>(null);
+  const [recordStudyModalOpen, setRecordStudyModalOpen] = useState(false);
 
   // Mapeamento dos assuntos com sua revisão ativa / pendente mais recente
   const enhancedTopics = useMemo(() => {
     return topics.map(topic => {
+      // Se for assunto planejado (ainda não realizou o primeiro contato)
+      if (topic.is_planned) {
+        return {
+          topic,
+          topicReviews: [],
+          activeReview: undefined,
+          statusInfo: {
+            status: 'PENDENTE DE ESTUDO' as ReviewStatus,
+            daysDiff: 0,
+            badgeText: 'A Estudar',
+          },
+        };
+      }
+
       const topicReviews = reviews
         .filter(r => r.topic_id === topic.id)
         .sort((a, b) => a.review_number - b.review_number);
@@ -244,25 +262,48 @@ export const ReviewsTable: React.FC = () => {
                           ))}
                         </div>
                       )}
-                      <p className="text-[11px] text-muted-foreground">
-                        {topic.initial_correct}/{topic.initial_questions} questões na fixação inicial
-                      </p>
+                      {topic.is_planned ? (
+                        <p className="text-[11px] text-amber-400 font-medium">
+                          {topic.planned_date ? `Estudo previsto para ${formatDateBR(topic.planned_date)}` : 'Aguardando primeiro contato'}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          {topic.initial_correct}/{topic.initial_questions} questões na fixação inicial
+                        </p>
+                      )}
                     </div>
                   </TableCell>
 
                   {/* Contato Inicial */}
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
-                    <p className="text-xs font-semibold text-foreground">
-                      {formatDateBR(topic.initial_date)}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {topic.initial_percentage}%
-                    </p>
+                    {topic.is_planned ? (
+                      <>
+                        <p className="text-xs font-semibold text-amber-400">
+                          {topic.planned_date ? formatDateBR(topic.planned_date) : '-'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {topic.planned_date ? 'Previsto' : 'Sem data fixa'}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold text-foreground">
+                          {formatDateBR(topic.initial_date)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {topic.initial_percentage}%
+                        </p>
+                      </>
+                    )}
                   </TableCell>
 
                   {/* Ciclo Ativo */}
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
-                    {activeReview ? (
+                    {topic.is_planned ? (
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-bold text-[11px] border border-amber-500/20">
+                        R0 (Planejado)
+                      </span>
+                    ) : activeReview ? (
                       <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary font-bold text-xs">
                         R{activeReview.review_number}
                       </span>
@@ -274,7 +315,9 @@ export const ReviewsTable: React.FC = () => {
                   {/* Data Agendada */}
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
                     <p className="text-xs font-semibold text-foreground">
-                      {activeReview ? formatDateBR(activeReview.scheduled_date) : '-'}
+                      {topic.is_planned
+                        ? (topic.planned_date ? formatDateBR(topic.planned_date) : 'Sem dia fixo')
+                        : (activeReview ? formatDateBR(activeReview.scheduled_date) : '-')}
                     </p>
                   </TableCell>
 
@@ -282,7 +325,9 @@ export const ReviewsTable: React.FC = () => {
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
                     <Badge
                       variant={
-                        statusInfo.status === 'CONCLUÍDO'
+                        topic.is_planned
+                          ? 'programado'
+                          : statusInfo.status === 'CONCLUÍDO'
                           ? 'concluido'
                           : statusInfo.status === 'ATRASADO'
                           ? 'atrasado'
@@ -292,14 +337,29 @@ export const ReviewsTable: React.FC = () => {
                       }
                       className="text-[11px]"
                     >
-                      {statusInfo.badgeText}
+                      {topic.is_planned ? 'A Estudar' : statusInfo.badgeText}
                     </Badge>
                   </TableCell>
 
                   {/* Ações */}
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-1">
-                      {activeReview && (
+                      {topic.is_planned && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPlannedTopic(topic);
+                            setRecordStudyModalOpen(true);
+                          }}
+                          className="h-7 px-2 text-[11px] font-bold gap-1 bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs"
+                          title="Registrar estudo e iniciar ciclos espaçados"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Registrar Estudo</span>
+                        </Button>
+                      )}
+
+                      {!topic.is_planned && activeReview && (
                         <Button
                           size="sm"
                           variant={statusInfo.status === 'ATRASADO' ? 'destructive' : 'default'}
@@ -344,6 +404,13 @@ export const ReviewsTable: React.FC = () => {
         onOpenChange={setCompletionModalOpen}
         review={selectedReviewToComplete}
         topic={drawerTopic || undefined}
+      />
+
+      {/* Modal de Registro de Estudo Planejado (R0) */}
+      <RecordPlannedStudyModal
+        open={recordStudyModalOpen}
+        onOpenChange={setRecordStudyModalOpen}
+        topic={selectedPlannedTopic}
       />
     </div>
   );

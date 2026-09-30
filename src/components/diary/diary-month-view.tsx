@@ -27,6 +27,10 @@ import {
   CalendarCheck2,
   Flame,
   AlertCircle,
+  AlertTriangle,
+  CalendarPlus,
+  X,
+  GripVertical,
 } from 'lucide-react';
 
 interface DiaryMonthViewProps {
@@ -52,7 +56,14 @@ const MONTH_NAMES = [
 const WEEKDAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onSelectDay }) => {
-  const { topics, reviews, prevalentTopics, areas } = useData();
+  const {
+    topics,
+    reviews,
+    prevalentTopics,
+    areas,
+    updatePlannedTopicDate,
+    rescheduleReview,
+  } = useData();
 
   const todayStr = useMemo(() => getTodayDateString(), []);
 
@@ -217,9 +228,9 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
       });
     });
 
-    // Estudos planejados
+    // Estudos planejados (apenas com planned_date explicitamente definido)
     topics.forEach(t => {
-      const planDate = t.planned_date || (t.is_planned ? t.initial_date : null);
+      const planDate = t.planned_date;
       if (t.is_planned && planDate) {
         const isHigh =
           highPrevalenceNames.has(t.subject_name.toLowerCase()) ||
@@ -271,6 +282,22 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
     return map;
   }, [reviews, topics, topicMap, highPrevalenceNames, todayStr]);
 
+  // Assuntos planejados pendentes (backlog geral da semana ou sem data)
+  const backlogTopics = useMemo(() => {
+    return topics.filter(t => t.is_planned);
+  }, [topics]);
+
+  // Revisões em atraso (scheduled_date < todayStr e não concluídas)
+  const overdueReviews = useMemo(() => {
+    return reviews
+      .filter(r => !r.completed_date && r.scheduled_date < todayStr)
+      .map(r => {
+        const topic = topicMap.get(r.topic_id);
+        const statusInfo = calculateReviewStatus(r.scheduled_date, r.completed_date, todayStr);
+        return { review: r, topic, statusInfo };
+      });
+  }, [reviews, todayStr, topicMap]);
+
   // Estatísticas do Mês Atual
   const monthStats = useMemo(() => {
     const { year, month } = activeYearMonth;
@@ -278,7 +305,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
 
     let totalReviews = 0;
     let completedReviews = 0;
-    let overdueReviews = 0;
+    let overdueReviewsCount = 0;
     let plannedTopicsCount = 0;
 
     reviews.forEach(r => {
@@ -287,13 +314,13 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
         if (r.completed_date) {
           completedReviews++;
         } else if (r.scheduled_date < todayStr) {
-          overdueReviews++;
+          overdueReviewsCount++;
         }
       }
     });
 
     topics.forEach(t => {
-      const planDate = t.planned_date || (t.is_planned ? t.initial_date : null);
+      const planDate = t.planned_date;
       if (t.is_planned && planDate && planDate.startsWith(prefix)) {
         plannedTopicsCount++;
       }
@@ -305,7 +332,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
     return {
       totalReviews,
       completedReviews,
-      overdueReviews,
+      overdueReviews: overdueReviewsCount,
       plannedTopicsCount,
       completionRate,
     };
@@ -457,129 +484,338 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
         </Card>
       </div>
 
-      {/* Grade do Calendário Mensal */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-        {/* Cabeçalho dos Dias da Semana */}
-        <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center py-2 text-xs font-bold text-muted-foreground">
-          {WEEKDAY_NAMES.map((name, idx) => (
-            <div
-              key={name}
-              className={`${idx === 0 || idx === 6 ? 'text-primary/70' : 'text-foreground/80'}`}
-            >
-              {name}
-            </div>
-          ))}
+      {/* Layout com Grade do Calendário Mensal e Painel Lateral de Agendamento */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
+        {/* Grade do Calendário Mensal (ocupa 3 colunas em telas xl) */}
+        <div className="xl:col-span-3 rounded-2xl border border-border bg-card overflow-hidden shadow-sm flex flex-col">
+          {/* Cabeçalho dos Dias da Semana */}
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center py-2 text-xs font-bold text-muted-foreground">
+            {WEEKDAY_NAMES.map((name, idx) => (
+              <div
+                key={name}
+                className={`${idx === 0 || idx === 6 ? 'text-primary/70' : 'text-foreground/80'}`}
+              >
+                {name}
+              </div>
+            ))}
+          </div>
+
+          {/* Células dos Dias */}
+          <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-border/60">
+            {calendarDays.map(cell => {
+              const items = monthItemsMap.get(cell.dateStr) || [];
+              const completedCount = items.filter(i => i.isCompleted).length;
+              const pendingCount = items.filter(i => !i.isCompleted).length;
+              const hasOverdue = items.some(i => i.isOverdue && !i.isCompleted);
+
+              return (
+                <div
+                  key={cell.dateStr}
+                  onClick={() => onSelectDay(cell.dateStr)}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => {
+                    e.preventDefault();
+                    try {
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (raw) {
+                        const data = JSON.parse(raw);
+                        if (data.type === 'topic') {
+                          updatePlannedTopicDate(data.id, cell.dateStr);
+                        } else if (data.type === 'review') {
+                          rescheduleReview(data.id, cell.dateStr);
+                        }
+                      }
+                    } catch (err) {
+                      console.error('Erro ao soltar no calendário:', err);
+                    }
+                  }}
+                  className={`group min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-all cursor-pointer select-none ${
+                    !cell.isCurrentMonth
+                      ? 'bg-muted/15 text-muted-foreground/50 hover:bg-muted/30'
+                      : cell.isToday
+                      ? 'bg-primary/5 ring-1 ring-inset ring-primary/40 hover:bg-primary/10'
+                      : 'bg-card hover:bg-muted/40'
+                  }`}
+                >
+                  {/* Header do Dia */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-1.5">
+                      <span
+                        className={`text-xs font-bold rounded-full flex items-center justify-center ${
+                          cell.isToday
+                            ? 'h-6 w-6 bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                            : cell.isCurrentMonth
+                            ? 'text-foreground'
+                            : 'text-muted-foreground/60'
+                        }`}
+                      >
+                        {cell.dayNumber}
+                      </span>
+
+                      {hasOverdue && (
+                        <span
+                          className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"
+                          title="Possui pendência atrasada"
+                        />
+                      )}
+                    </div>
+
+                    {/* Botão sutil para agendar estudo neste dia */}
+                    <button
+                      type="button"
+                      onClick={e => handleOpenPlanForDate(e, cell.dateStr)}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                      title={`Agendar estudo para ${formatDateBR(cell.dateStr)}`}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  {/* Lista / Indicadores de Assuntos no Dia */}
+                  <div className="mt-1 space-y-1 flex-1 overflow-hidden">
+                    {items.slice(0, 2).map(item => {
+                      const areaStyle = getAreaStyle(item.area, areas);
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={e => handleOpenItem(e, item)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium flex items-center justify-between gap-1 transition-transform hover:scale-[1.02] shadow-2xs group/item ${
+                            item.isCompleted
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 line-through opacity-70'
+                              : item.isOverdue
+                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                              : `${areaStyle.bg} ${areaStyle.text} border ${areaStyle.border}`
+                          }`}
+                          title={`${item.badgeText} • ${item.subjectName} (${item.area})`}
+                        >
+                          <span className="truncate">{item.subjectName}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {item.isHighPrevalence && (
+                              <Flame className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+                            )}
+                            {item.type === 'planned_study' && (
+                              <button
+                                type="button"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  updatePlannedTopicDate(item.id, null);
+                                }}
+                                className="opacity-0 group-hover/item:opacity-100 p-0.5 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/20 rounded transition-all"
+                                title="Desagendar deste dia e manter na Meta da Semana"
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {items.length > 2 && (
+                      <div className="text-[10px] text-muted-foreground font-semibold px-1 py-0.5 text-center">
+                        +{items.length - 2} mais
+                      </div>
+                    )}
+
+                    {items.length === 0 && (
+                      <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-40 transition-opacity">
+                        <span className="text-[9px] text-muted-foreground">Livre</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Resumo do Rodapé do Card */}
+                  {items.length > 0 && (
+                    <div className="pt-1 border-t border-border/40 flex items-center justify-between text-[9px] text-muted-foreground">
+                      <span>
+                        {items.length} {items.length === 1 ? 'item' : 'itens'}
+                      </span>
+                      {completedCount > 0 && (
+                        <span className="text-emerald-400 font-semibold">
+                          ✓ {completedCount}/{items.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Células dos Dias */}
-        <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-border/60">
-          {calendarDays.map(cell => {
-            const items = monthItemsMap.get(cell.dateStr) || [];
-            const completedCount = items.filter(i => i.isCompleted).length;
-            const pendingCount = items.filter(i => !i.isCompleted).length;
-            const hasOverdue = items.some(i => i.isOverdue && !i.isCompleted);
-
-            return (
-              <div
-                key={cell.dateStr}
-                onClick={() => onSelectDay(cell.dateStr)}
-                className={`group min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-all cursor-pointer select-none ${
-                  !cell.isCurrentMonth
-                    ? 'bg-muted/15 text-muted-foreground/50 hover:bg-muted/30'
-                    : cell.isToday
-                    ? 'bg-primary/5 ring-1 ring-inset ring-primary/40 hover:bg-primary/10'
-                    : 'bg-card hover:bg-muted/40'
-                }`}
-              >
-                {/* Header do Dia */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5">
-                    <span
-                      className={`text-xs font-bold rounded-full flex items-center justify-center ${
-                        cell.isToday
-                          ? 'h-6 w-6 bg-primary text-primary-foreground shadow-sm shadow-primary/30'
-                          : cell.isCurrentMonth
-                          ? 'text-foreground'
-                          : 'text-muted-foreground/60'
-                      }`}
-                    >
-                      {cell.dayNumber}
-                    </span>
-
-                    {hasOverdue && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"
-                        title="Possui pendência atrasada"
-                      />
-                    )}
+        {/* Coluna Lateral (1 coluna em xl): Assuntos da Semana & Revisões em Atraso */}
+        <div className="xl:col-span-1 space-y-4">
+          {/* Card Lateral 1: Assuntos da Semana / Metas */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-primary/15 text-primary">
+                    <CalendarPlus className="h-4 w-4" />
                   </div>
-
-                  {/* Botão sutil para agendar estudo neste dia */}
-                  <button
-                    type="button"
-                    onClick={e => handleOpenPlanForDate(e, cell.dateStr)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                    title={`Agendar estudo para ${formatDateBR(cell.dateStr)}`}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
+                  <CardTitle className="text-sm font-bold">Assuntos da Semana</CardTitle>
                 </div>
-
-                {/* Lista / Indicadores de Assuntos no Dia */}
-                <div className="mt-1 space-y-1 flex-1 overflow-hidden">
-                  {items.slice(0, 2).map(item => {
-                    const areaStyle = getAreaStyle(item.area, areas);
-
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={e => handleOpenItem(e, item)}
-                        className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium flex items-center justify-between gap-1 transition-transform hover:scale-[1.02] shadow-2xs ${
-                          item.isCompleted
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 line-through opacity-70'
-                            : item.isOverdue
-                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                            : `${areaStyle.bg} ${areaStyle.text} border ${areaStyle.border}`
-                        }`}
-                        title={`${item.badgeText} • ${item.subjectName} (${item.area})`}
-                      >
-                        <span className="truncate">{item.subjectName}</span>
-                        {item.isHighPrevalence && (
-                          <Flame className="h-2.5 w-2.5 text-amber-400 shrink-0 fill-amber-400" />
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {items.length > 2 && (
-                    <div className="text-[10px] text-muted-foreground font-semibold px-1 py-0.5 text-center">
-                      +{items.length - 2} mais
-                    </div>
-                  )}
-
-                  {items.length === 0 && (
-                    <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-40 transition-opacity">
-                      <span className="text-[9px] text-muted-foreground">Livre</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Resumo do Rodapé do Card */}
-                {items.length > 0 && (
-                  <div className="pt-1 border-t border-border/40 flex items-center justify-between text-[9px] text-muted-foreground">
-                    <span>
-                      {items.length} {items.length === 1 ? 'item' : 'itens'}
-                    </span>
-                    {completedCount > 0 && (
-                      <span className="text-emerald-400 font-semibold">
-                        ✓ {completedCount}/{items.length}
-                      </span>
-                    )}
-                  </div>
-                )}
+                <Badge variant="secondary" className="text-xs">
+                  {backlogTopics.length}
+                </Badge>
               </div>
-            );
-          })}
+              <CardDescription className="text-xs">
+                Arraste para um dia do calendário ou clique para agendar.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-3 space-y-2 max-h-[380px] overflow-y-auto">
+              {backlogTopics.length === 0 ? (
+                <div className="py-6 text-center text-xs text-muted-foreground italic">
+                  Nenhum assunto em aberto para agendar.
+                </div>
+              ) : (
+                backlogTopics.map(t => {
+                  const style = getAreaStyle(t.area, areas);
+
+                  return (
+                    <div
+                      key={t.id}
+                      draggable
+                      onDragStart={e => {
+                        e.dataTransfer.setData(
+                          'application/json',
+                          JSON.stringify({ type: 'topic', id: t.id })
+                        );
+                      }}
+                      className="p-2.5 rounded-xl border border-border/70 bg-card hover:bg-muted/40 transition-colors flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                          >
+                            {t.area}
+                          </span>
+                          {t.planned_date ? (
+                            <span className="text-[9px] text-muted-foreground font-medium">
+                              Em {formatDateBR(t.planned_date)}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 px-1 rounded">
+                              Sem dia fixo
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-foreground truncate" title={t.subject_name}>
+                          {t.subject_name}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {t.planned_date && (
+                          <button
+                            type="button"
+                            onClick={() => updatePlannedTopicDate(t.id, null)}
+                            className="p-1 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+                            title="Desagendar da data e manter na meta em aberto"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setPlanModalDate(todayStr);
+                            setSelectedPlannedTopic(t);
+                            setRecordStudyModalOpen(true);
+                          }}
+                          className="text-[10px] h-6 px-1.5 font-bold"
+                          title="Estudar agora"
+                        >
+                          Estudar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card Lateral 2: Revisões em Atraso */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <CardTitle className="text-sm font-bold">Revisões em Atraso</CardTitle>
+                </div>
+                <Badge variant={overdueReviews.length > 0 ? 'atrasado' : 'outline'} className="text-xs">
+                  {overdueReviews.length}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Arraste para um dia do mês ou reprograme para hoje.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-3 space-y-2 max-h-[340px] overflow-y-auto">
+              {overdueReviews.length === 0 ? (
+                <div className="py-6 text-center text-xs text-emerald-400 font-medium">
+                  🎉 Nenhuma revisão em atraso!
+                </div>
+              ) : (
+                overdueReviews.map(({ review, topic, statusInfo }) => {
+                  const style = topic ? getAreaStyle(topic.area, areas) : null;
+
+                  return (
+                    <div
+                      key={review.id}
+                      draggable
+                      onDragStart={e => {
+                        e.dataTransfer.setData(
+                          'application/json',
+                          JSON.stringify({ type: 'review', id: review.id })
+                        );
+                      }}
+                      className="p-2.5 rounded-xl border border-rose-500/25 bg-rose-500/5 hover:bg-rose-500/10 transition-colors flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          {topic && style && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            >
+                              {topic.area}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
+                            R{review.review_number}
+                          </span>
+                          <span className="text-[9px] font-bold text-rose-400">
+                            {statusInfo.daysDiff}d atraso
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-foreground truncate" title={topic?.subject_name}>
+                          {topic?.subject_name || 'Assunto'}
+                        </p>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => rescheduleReview(review.id, todayStr)}
+                        className="text-[10px] h-6 px-1.5 font-bold text-rose-400 border-rose-500/30 hover:bg-rose-500/20 shrink-0"
+                        title="Reprogramar para hoje"
+                      >
+                        Para Hoje
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
