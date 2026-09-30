@@ -348,30 +348,28 @@ export const WeeklySchedule: React.FC = () => {
                       return (
                         <div
                           key={item.id}
-                          className={`p-2 rounded-xl border text-[11px] space-y-1 transition-all ${
-                            item.isCompleted
-                              ? 'bg-emerald-500/10 border-emerald-500/25 opacity-75'
-                              : item.isOverdue
-                              ? 'bg-rose-500/10 border-rose-500/30'
-                              : 'bg-muted/50 border-border group-hover:border-primary/40'
+                          className={`p-2 rounded-xl border text-[11px] space-y-1 transition-all ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
+                            item.isOverdue ? 'ring-1 ring-rose-500/50' : ''
                           }`}
                         >
                           <div className="flex items-center justify-between gap-1">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              title={item.area}
                             >
-                              {item.area.split(' ')[0]}
+                              {item.area}
                             </span>
 
                             <span
-                              className={`text-[9px] font-semibold px-1 py-0.2 rounded ${
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
                                 item.isCompleted
-                                  ? 'text-emerald-400 bg-emerald-500/15'
+                                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border-emerald-500/35'
                                   : item.isOverdue
-                                  ? 'text-rose-400 bg-rose-500/15'
-                                  : 'text-primary bg-primary/10'
+                                  ? 'text-rose-700 dark:text-rose-300 bg-rose-500/20 border-rose-500/35'
+                                  : 'text-primary bg-primary/20 border-primary/35'
                               }`}
                             >
+                              {item.isCompleted && <CheckCircle2 className="h-2.5 w-2.5" />}
                               {item.badgeText}
                             </span>
                           </div>
@@ -459,11 +457,7 @@ export const WeeklySchedule: React.FC = () => {
                       <div
                         key={t.id}
                         onClick={() => router.push(`/diario?search=${encodeURIComponent(t.subject_name)}`)}
-                        className={`p-2.5 rounded-xl border text-xs space-y-1 transition-all cursor-pointer ${
-                          isDone
-                            ? 'bg-emerald-500/10 border-emerald-500/20'
-                            : 'bg-muted/40 border-border hover:border-primary/40'
-                        }`}
+                        className={`p-2.5 rounded-xl border text-xs space-y-1 transition-all cursor-pointer ${style.cardBg} ${style.cardBorder} ${style.cardHover}`}
                       >
                         <div className="flex items-center justify-between">
                           <span

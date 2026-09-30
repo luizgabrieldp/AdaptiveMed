@@ -582,14 +582,17 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                           onClick={e => handleOpenItem(e, item)}
                           className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium flex items-center justify-between gap-1 transition-transform hover:scale-[1.02] shadow-2xs group/item ${
                             item.isCompleted
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 line-through opacity-70'
+                              ? `${areaStyle.cardBg} ${areaStyle.text} border ${areaStyle.cardBorder} opacity-85`
                               : item.isOverdue
-                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border border-rose-500/30'
                               : `${areaStyle.bg} ${areaStyle.text} border ${areaStyle.border}`
                           }`}
                           title={`${item.badgeText} • ${item.subjectName} (${item.area})`}
                         >
-                          <span className="truncate">{item.subjectName}</span>
+                          <span className="truncate flex items-center gap-1">
+                            {item.isCompleted && <span className="text-[9px] font-bold">✓</span>}
+                            {item.subjectName}
+                          </span>
                           <div className="flex items-center gap-1 shrink-0">
                             {item.isHighPrevalence && (
                               <Flame className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />

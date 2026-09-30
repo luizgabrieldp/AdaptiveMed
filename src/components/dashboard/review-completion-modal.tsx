@@ -22,7 +22,7 @@ import {
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { useData } from '@/lib/store/data-context';
-import { CheckCircle2, Sparkles, BrainCircuit, Target } from 'lucide-react';
+import { CheckCircle2, Sparkles, BrainCircuit, Target, Trash2, AlertTriangle } from 'lucide-react';
 
 interface ReviewCompletionModalProps {
   open: boolean;
@@ -39,12 +39,13 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   topic,
   mode,
 }) => {
-  const { completeReview, updateCompletedReview } = useData();
+  const { completeReview, updateCompletedReview, deleteTopic } = useData();
   const [questionsDone, setQuestionsDone] = useState<string>('20');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
   const [durationMinutes, setDurationMinutes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successInfo, setSuccessInfo] = useState<{ nextDate?: string; pct: number; isEdit?: boolean; duration?: number } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isEdit = mode === 'edit' || (mode !== 'complete' && Boolean(review?.completed_date));
 
@@ -60,7 +61,6 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         setQuestionsCorrect('');
         setDurationMinutes('');
       }
-      setSuccessInfo(null);
     }
   }, [review, open, isEdit]);
 
@@ -98,9 +98,8 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       setIsSubmitting(true);
       if (isEdit) {
         await updateCompletedReview(review.id, doneNum, correctNum);
-        setSuccessInfo({ nextDate: estimatedNextDate || undefined, pct: calculatedPct ?? 0, isEdit: true, duration: durNum });
       } else {
-        const res = await completeReview(review.id, doneNum, correctNum, durNum);
+        await completeReview(review.id, doneNum, correctNum, durNum);
 
         // Efeito festivo de gamificação
         try {
@@ -113,54 +112,74 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         } catch {
           // Fallback silencioso se canvas-confetti não estiver disponível
         }
-
-        setSuccessInfo({ nextDate: res.nextReviewDate, pct: calculatedPct ?? 0, isEdit: false, duration: durNum });
       }
 
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setSuccessInfo(null);
-        onOpenChange(false);
-      }, 1400);
+      // Conclusão em 1 clique: fecha o modal diretamente
+      onOpenChange(false);
     } catch (err) {
       console.error(err);
+    } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!topic) return;
+    try {
+      setIsDeleting(true);
+      await deleteTopic(topic.id);
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+    } catch (err) {
+      console.error('Erro ao excluir estudo:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        {successInfo ? (
-          <div className="py-8 text-center space-y-4 animate-in zoom-in-95">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-              <CheckCircle2 className="h-10 w-10 animate-bounce" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-foreground">
-                {successInfo.isEdit ? 'Rendimento Atualizado!' : 'Revisão Concluída!'}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Aproveitamento de <span className="font-bold text-emerald-400">{successInfo.pct}%</span>
-                {successInfo.duration ? ` • ⏱️ ${successInfo.duration} min` : ''}
-              </p>
-              <div className="inline-block mt-2">
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-muted border border-border">
-                  {nextReviewCalc.diagnosisBadge}
-                </span>
+        {showDeleteConfirm ? (
+          <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 space-y-3.5 my-2">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-destructive/20 text-destructive shrink-0 mt-0.5">
+                <AlertTriangle className="h-5 w-5" />
               </div>
-            </div>
-            {successInfo.nextDate && (
-              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-left">
-                <p className="text-xs text-blue-300 font-medium">Ciclo Adaptativo R{review.review_number + 1} Agendado:</p>
-                <p className="text-base font-bold text-blue-400 mt-0.5">
-                  {formatDateBR(successInfo.nextDate)}
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Meta sugerida: <strong>{nextReviewCalc.recommendedQuestions} questões</strong>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-foreground">
+                  Excluir estudo definitivamente?
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Isso apagará o assunto <strong className="text-foreground">"{topic?.subject_name || 'Assunto'}"</strong> e{' '}
+                  <strong className="text-destructive">todas as revisões associadas</strong> do seu cronograma.
                 </p>
               </div>
-            )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-destructive/20">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="text-xs"
+              >
+                Voltar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={isDeleting}
+                onClick={handleDelete}
+                className="text-xs font-bold gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {isDeleting ? 'Excluindo...' : 'Confirmar Exclusão'}
+              </Button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
@@ -269,6 +288,21 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
               {/* Pré-visualização Adaptativa Científica em Tempo Real */}
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2.5">
+                {/* Aproveitamento em Destaque */}
+                <div className="flex items-center justify-between font-bold pb-2 border-b border-border/60">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    Taxa de Aproveitamento:
+                  </span>
+                  {calculatedPct !== null ? (
+                    <span className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                      <span className="text-primary text-base font-black">{calculatedPct}%</span>
+                      <span className="text-xs text-muted-foreground font-normal">({correctNum} de {doneNum} acertos)</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground font-normal">— (Informe acertos)</span>
+                  )}
+                </div>
+
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-muted-foreground">Diagnóstico Clínico:</span>
                   <span className="font-bold text-xs">
@@ -312,24 +346,40 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </div>
             </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                variant="success"
-                disabled={isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
-                className="gap-1.5 font-bold"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {isSubmitting ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Gravar e Agendar Próximo'}
-              </Button>
+            <DialogFooter className="flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-border">
+              {topic ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full sm:w-auto text-xs text-destructive hover:bg-destructive/15 gap-1.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir Estudo
+                </Button>
+              ) : (
+                <span />
+              )}
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="success"
+                  disabled={isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
+                  className="gap-1.5 font-bold"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {isSubmitting ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Gravar e Agendar Próximo'}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         )}

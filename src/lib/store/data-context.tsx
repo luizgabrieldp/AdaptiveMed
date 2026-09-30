@@ -69,7 +69,8 @@ interface DataContextType {
     topicId: string,
     questionsDone: number,
     questionsCorrect: number,
-    initialDate?: string
+    initialDate?: string,
+    durationMinutes?: number
   ) => Promise<void>;
   addPlannedTopic: (data: {
     area: string;
@@ -925,7 +926,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     topicId: string,
     questionsDone: number,
     questionsCorrect: number,
-    initialDate?: string
+    initialDate?: string,
+    durationMinutes?: number
   ) => {
     const targetTopic = topics.find(t => t.id === topicId);
     if (!targetTopic) return;
@@ -941,6 +943,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initial_percentage: percentage,
       base_questions_count: questionsDone,
       initial_date: finalInitialDate,
+      initial_duration_minutes: durationMinutes !== undefined ? durationMinutes : targetTopic.initial_duration_minutes,
     };
 
     // Se R1 ainda não foi concluído, recalcula os parâmetros de agendamento de R1
@@ -1003,6 +1006,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             initial_percentage: percentage,
             base_questions_count: questionsDone,
             initial_date: finalInitialDate,
+            initial_duration_minutes: durationMinutes !== undefined ? durationMinutes : targetTopic.initial_duration_minutes,
           })
           .eq('id', topicId)
       ];

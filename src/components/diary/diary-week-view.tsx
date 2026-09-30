@@ -492,26 +492,19 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 }
                               }}
                               onClick={() => handleOpenItem(item)}
-                              className={`p-2.5 rounded-xl border text-xs space-y-1.5 cursor-pointer transition-all hover:scale-[1.02] shadow-2xs group/item ${
-                                isInitialDone
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60'
-                                  : item.isCompleted
-                                  ? 'bg-emerald-500/10 border-emerald-500/25 opacity-75'
-                                  : item.isOverdue
-                                  ? 'bg-rose-500/10 border-rose-500/35 hover:border-rose-500/60'
-                                  : item.type === 'planned_study'
-                                  ? 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/60 cursor-grab active:cursor-grabbing'
-                                  : 'bg-muted/60 border-border hover:border-primary/50'
+                              className={`p-2.5 rounded-xl border text-xs space-y-1.5 cursor-pointer transition-all hover:scale-[1.02] shadow-2xs group/item ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
+                                item.isOverdue ? 'ring-1 ring-rose-500/50' : ''
                               }`}
                             >
                               <div className="flex items-center justify-between gap-1">
                                 <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                                  title={item.area}
                                 >
-                                  {item.area.split(' ')[0]}
+                                  {item.area}
                                 </span>
 
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 shrink-0">
                                   {/* Botão de edição para estudos planejados ou concluídos */}
                                   {item.topic && (
                                     <button
@@ -522,7 +515,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                         setEditModalOpen(true);
                                       }}
                                       className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/20 transition-all"
-                                      title="Editar assunto"
+                                      title="Editar assunto e rendimento"
                                     >
                                       <Edit2 className="h-3 w-3" />
                                     </button>
@@ -544,19 +537,18 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                   )}
 
                                   <span
-                                    className={`text-[9px] font-bold px-1 py-0.5 rounded ${
-                                      isInitialDone
-                                        ? 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/30'
-                                        : item.isCompleted
-                                        ? 'text-emerald-400 bg-emerald-500/15'
+                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                                      isInitialDone || item.isCompleted
+                                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border-emerald-500/40'
                                         : item.type === 'planned_study'
-                                        ? 'text-amber-400 bg-amber-500/15'
+                                        ? 'text-amber-700 dark:text-amber-300 bg-amber-500/20 border-amber-500/40'
                                         : item.isOverdue
-                                        ? 'text-rose-400 bg-rose-500/15'
-                                        : 'text-primary bg-primary/10'
+                                        ? 'text-rose-700 dark:text-rose-300 bg-rose-500/20 border-rose-500/40'
+                                        : 'text-primary bg-primary/20 border-primary/40'
                                     }`}
                                   >
-                                    {item.badgeText}
+                                    {(isInitialDone || item.isCompleted) && <CheckCircle2 className="h-2.5 w-2.5" />}
+                                    {isInitialDone ? 'R0 Feito' : item.badgeText}
                                   </span>
                                 </div>
                               </div>
@@ -567,21 +559,31 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
 
                               {/* Rendimento se R0 concluído */}
                               {isInitialDone && item.topic && (
-                                <div className="text-[10px] text-emerald-400 font-semibold flex items-center justify-between">
-                                  <span>{item.topic.initial_correct}/{item.topic.initial_questions} questões</span>
-                                  <span className="font-bold">{item.topic.initial_percentage}%</span>
+                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between pt-1 border-t border-border/40">
+                                  <span className="text-muted-foreground">{item.topic.initial_correct}/{item.topic.initial_questions} questões</span>
+                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{item.topic.initial_percentage}% acerto</span>
+                                </div>
+                              )}
+
+                              {/* Rendimento se Revisão concluída */}
+                              {item.isCompleted && item.review && item.review.questions_done != null && item.review.questions_correct != null && (
+                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between pt-1 border-t border-border/40">
+                                  <span className="text-muted-foreground">{item.review.questions_correct}/{item.review.questions_done} questões</span>
+                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                                    {Math.round(((item.review.questions_correct || 0) / (item.review.questions_done || 1)) * 100)}% acerto
+                                  </span>
                                 </div>
                               )}
 
                               <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
                                 {item.isHighPrevalence && (
-                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-400 text-[9px]">
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-500 dark:text-amber-400 text-[9px]">
                                     <Star className="h-2.5 w-2.5 fill-amber-400" /> Top Banca
                                   </span>
                                 )}
 
-                                <span className={`font-semibold ml-auto ${isInitialDone ? 'text-emerald-400' : 'text-primary hover:underline'}`}>
-                                  {isInitialDone ? 'Concluído ✓' : item.isCompleted ? 'Ver detalhes' : 'Concluir →'}
+                                <span className={`font-semibold ml-auto ${isInitialDone || item.isCompleted ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:underline'}`}>
+                                  {isInitialDone ? 'Editar / Ver' : item.isCompleted ? 'Editar / Ver' : 'Concluir →'}
                                 </span>
                               </div>
                             </div>
@@ -647,15 +649,16 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       key={topic.id}
                       draggable={true}
                       onDragStart={e => handleDragStart(e, topic.id)}
-                      className="p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing shadow-2xs space-y-2 group"
+                      className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} transition-all cursor-grab active:cursor-grabbing shadow-2xs space-y-2 group`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0 group-hover:text-primary transition-colors" />
                           <span
                             className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                            title={topic.area}
                           >
-                            {topic.area.split(' ')[0]}
+                            {topic.area}
                           </span>
                         </div>
 
@@ -749,27 +752,34 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       return (
                         <div
                           key={topic.id}
-                          className="p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 space-y-1.5 shadow-2xs group"
+                          onClick={() => {
+                            setSelectedTopicToEdit(topic);
+                            setEditModalOpen(true);
+                          }}
+                          className={`p-2.5 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} space-y-1.5 shadow-2xs group cursor-pointer transition-all hover:scale-[1.01]`}
                         >
                           <div className="flex items-start justify-between gap-1.5">
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                              title={topic.area}
                             >
-                              {topic.area.split(' ')[0]}
+                              {topic.area}
                             </span>
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={e => {
+                                  e.stopPropagation();
                                   setSelectedTopicToEdit(topic);
                                   setEditModalOpen(true);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary transition-opacity"
-                                title="Editar assunto"
+                                title="Editar estudo e rendimento"
                               >
                                 <Edit2 className="h-3 w-3" />
                               </button>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35 flex items-center gap-1">
+                                <CheckCircle2 className="h-2.5 w-2.5" />
                                 R0 Feito
                               </span>
                             </div>
@@ -779,9 +789,9 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                             {topic.subject_name}
                           </p>
 
-                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/40">
                             <span>{formatDateBR(topic.initial_date)}</span>
-                            <span className="font-bold text-emerald-400">
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
                               {topic.initial_correct}/{topic.initial_questions} ({topic.initial_percentage}%)
                             </span>
                           </div>

@@ -16,6 +16,7 @@ import {
 import { ReviewCompletionModal } from '@/components/dashboard/review-completion-modal';
 import { RecordPlannedStudyModal } from './record-planned-study-modal';
 import { PlanTopicModal } from './plan-topic-modal';
+import { EditPlannedTopicModal } from './edit-planned-topic-modal';
 import { ReviewsTable } from '@/components/reviews/reviews-table';
 import {
   Calendar,
@@ -36,6 +37,7 @@ import {
   Flame,
   Layers,
   ShieldAlert,
+  Edit2,
 } from 'lucide-react';
 
 interface DiaryDayViewProps {
@@ -59,6 +61,9 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
 
   const [recordStudyModalOpen, setRecordStudyModalOpen] = useState(false);
   const [selectedPlannedTopic, setSelectedPlannedTopic] = useState<StudyTopic | null>(null);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedTopicToEdit, setSelectedTopicToEdit] = useState<StudyTopic | null>(null);
 
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [isBacklogExpanded, setIsBacklogExpanded] = useState(false);
@@ -241,30 +246,52 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                     return (
                       <div
                         key={t.id}
-                        className="p-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        onClick={() => {
+                          setSelectedTopicToEdit(t);
+                          setEditModalOpen(true);
+                        }}
+                        className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer transition-all hover:scale-[1.01] group`}
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              title={t.area}
                             >
                               {t.area}
                             </span>
-                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                            <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border border-emerald-500/35 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <CheckCircle2 className="h-2.5 w-2.5" />
                               R0 Concluído
                             </span>
                           </div>
 
                           <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
 
-                          <p className="text-[10px] text-emerald-400 font-semibold">
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
                             {t.initial_correct}/{t.initial_questions} questões ({t.initial_percentage}%)
                           </p>
                         </div>
 
-                        <span className="text-xs font-bold text-emerald-400 self-start sm:self-center">
-                          Concluído ✓
-                        </span>
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedTopicToEdit(t);
+                              setEditModalOpen(true);
+                            }}
+                            className="h-7 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            Editar
+                          </Button>
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                            Concluído ✓
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -276,20 +303,21 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                     return (
                       <div
                         key={t.id}
-                        className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} flex flex-col sm:flex-row sm:items-center justify-between gap-2`}
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              title={t.area}
                             >
                               {t.area}
                             </span>
-                            <Badge variant="outline" className="text-[9px] text-amber-400 border-amber-500/30">
+                            <Badge variant="outline" className="text-[9px] text-amber-700 dark:text-amber-300 bg-amber-500/15 border-amber-500/35">
                               A Estudar
                             </Badge>
                             {t.is_weekly_goal && (
-                              <span className="text-[9px] font-bold text-amber-300">
+                              <span className="text-[9px] font-bold text-amber-600 dark:text-amber-300">
                                 • Meta da Semana
                               </span>
                             )}
@@ -299,6 +327,21 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedTopicToEdit(t);
+                              setEditModalOpen(true);
+                            }}
+                            className="h-7 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground"
+                            title="Editar assunto planejado"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            Editar
+                          </Button>
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -694,6 +737,12 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
         onOpenChange={setCompletionModalOpen}
         review={selectedReview}
         topic={selectedReview ? topicMap.get(selectedReview.topic_id) : undefined}
+      />
+
+      <EditPlannedTopicModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        topic={selectedTopicToEdit}
       />
     </div>
   );

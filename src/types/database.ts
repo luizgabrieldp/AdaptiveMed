@@ -67,48 +67,80 @@ export const DEFAULT_STUDY_AREAS: StudyArea[] = [
 
 export const MEDICAL_AREAS: string[] = DEFAULT_STUDY_AREAS.map(a => a.name);
 
-export const AREA_COLORS: Record<string, { primary: string; bg: string; text: string; border: string }> = {
+export interface AreaStyle {
+  primary: string;
+  bg: string;
+  text: string;
+  border: string;
+  cardBg: string;
+  cardBorder: string;
+  cardHover: string;
+}
+
+export const AREA_COLORS: Record<string, AreaStyle> = {
   'Clínica Médica': {
     primary: '#3B82F6',
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-500',
-    border: 'border-blue-500/20',
+    bg: 'bg-blue-500/15 dark:bg-blue-500/25',
+    text: 'text-blue-700 dark:text-blue-300 font-bold',
+    border: 'border-blue-500/40 dark:border-blue-500/50',
+    cardBg: 'bg-blue-500/[0.08] dark:bg-blue-500/[0.16]',
+    cardBorder: 'border-blue-500/35 dark:border-blue-500/45',
+    cardHover: 'hover:border-blue-500 dark:hover:border-blue-400',
   },
   'Cirurgia Geral': {
     primary: '#10B981',
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-500',
-    border: 'border-emerald-500/20',
+    bg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+    text: 'text-emerald-700 dark:text-emerald-300 font-bold',
+    border: 'border-emerald-500/40 dark:border-emerald-500/50',
+    cardBg: 'bg-emerald-500/[0.08] dark:bg-emerald-500/[0.16]',
+    cardBorder: 'border-emerald-500/35 dark:border-emerald-500/45',
+    cardHover: 'hover:border-emerald-500 dark:hover:border-emerald-400',
   },
   'Pediatria': {
     primary: '#F59E0B',
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-500',
-    border: 'border-amber-500/20',
+    bg: 'bg-amber-500/15 dark:bg-amber-500/25',
+    text: 'text-amber-700 dark:text-amber-300 font-bold',
+    border: 'border-amber-500/40 dark:border-amber-500/50',
+    cardBg: 'bg-amber-500/[0.08] dark:bg-amber-500/[0.16]',
+    cardBorder: 'border-amber-500/35 dark:border-amber-500/45',
+    cardHover: 'hover:border-amber-500 dark:hover:border-amber-400',
   },
   'Ginecologia e Obstetrícia': {
     primary: '#EC4899',
-    bg: 'bg-pink-500/10',
-    text: 'text-pink-500',
-    border: 'border-pink-500/20',
+    bg: 'bg-pink-500/15 dark:bg-pink-500/25',
+    text: 'text-pink-700 dark:text-pink-300 font-bold',
+    border: 'border-pink-500/40 dark:border-pink-500/50',
+    cardBg: 'bg-pink-500/[0.08] dark:bg-pink-500/[0.16]',
+    cardBorder: 'border-pink-500/35 dark:border-pink-500/45',
+    cardHover: 'hover:border-pink-500 dark:hover:border-pink-400',
   },
   'Medicina Preventiva': {
     primary: '#8B5CF6',
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-500',
-    border: 'border-purple-500/20',
+    bg: 'bg-purple-500/15 dark:bg-purple-500/25',
+    text: 'text-purple-700 dark:text-purple-300 font-bold',
+    border: 'border-purple-500/40 dark:border-purple-500/50',
+    cardBg: 'bg-purple-500/[0.08] dark:bg-purple-500/[0.16]',
+    cardBorder: 'border-purple-500/35 dark:border-purple-500/45',
+    cardHover: 'hover:border-purple-500 dark:hover:border-purple-400',
   },
 };
 
-export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []) {
+export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []): AreaStyle {
   // Procura primeiro nas áreas do usuário
   const found = customAreas.find(a => a.name.toLowerCase() === areaName.toLowerCase());
   if (found) {
+    // Se o customArea coincidir com uma das áreas padrão
+    if (AREA_COLORS[found.name]) {
+      return AREA_COLORS[found.name];
+    }
     return {
       primary: found.color,
-      bg: found.bg,
-      text: found.text,
-      border: found.border,
+      bg: found.bg || 'bg-primary/10',
+      text: found.text || 'text-primary font-bold',
+      border: found.border || 'border-primary/20',
+      cardBg: found.bg ? `${found.bg.replace('/10', '/[0.08]')} dark:${found.bg.replace('/10', '/[0.16]')}` : 'bg-primary/5',
+      cardBorder: found.border ? found.border.replace('/20', '/35') : 'border-primary/30',
+      cardHover: 'hover:border-primary',
     };
   }
 
@@ -129,6 +161,9 @@ export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []) {
     bg: c.bg,
     text: c.text,
     border: c.border,
+    cardBg: `${c.bg.replace('/10', '/[0.08]')} dark:${c.bg.replace('/10', '/[0.16]')}`,
+    cardBorder: c.border.replace('/20', '/35'),
+    cardHover: 'hover:border-primary',
   };
 }
 

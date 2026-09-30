@@ -80,23 +80,24 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
     try {
       setIsSubmitting(true);
-      const res = await recordPlannedTopicStudy(topic.id, {
+      await recordPlannedTopicStudy(topic.id, {
         study_date: studyDate,
         questions_done: qDone,
         questions_correct: qCorrect,
         duration_minutes: durNum,
       });
 
-      setResultDate(res.nextReviewDate || estimatedR1Date);
-
-      // Efeito de confete ao consolidar 1º contato
+      // Efeito festivo de confete ao consolidar 1º contato
       try {
         confetti({
-          particleCount: 50,
-          spread: 60,
+          particleCount: 60,
+          spread: 70,
           origin: { y: 0.6 },
         });
       } catch {}
+
+      // Conclusão em 1 clique: fecha o modal diretamente
+      onOpenChange(false);
     } catch (err) {
       console.error('Erro ao registrar estudo:', err);
     } finally {
@@ -109,7 +110,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
@@ -121,31 +122,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
           </div>
         </DialogHeader>
 
-        {resultDate ? (
-          <div className="py-6 text-center space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
-              <Sparkles className="h-7 w-7" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-foreground">Estudo Registrado com Sucesso!</h3>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Sua taxa de acerto foi de <strong className="text-emerald-400">{percentage}%</strong>. O algoritmo adaptativo agendou seu 1º Ciclo de Revisão (R1) para:
-              </p>
-              <div className="pt-2">
-                <Badge variant="hoje" className="text-sm px-3 py-1 font-bold">
-                  {formatDateBR(resultDate)} (em {r1Interval} dias)
-                </Badge>
-              </div>
-            </div>
-            <Button
-              onClick={() => onOpenChange(false)}
-              className="font-bold text-xs shadow-md shadow-primary/20"
-            >
-              Fechar e Continuar
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
             {/* Detalhes do Assunto */}
             <div className="p-3 rounded-xl bg-muted/40 border border-border space-y-1">
               <span
@@ -160,10 +137,10 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
             </div>
 
             {/* Callout de Recomendação Científica */}
-            <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
-              <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-blue-200/90 leading-relaxed">
-                <strong>Recomendação AdaptiveMed:</strong> Resolva de <strong>25 a 30 questões</strong> no primeiro estudo para calibrar a escala da sua curva de retenção e garantir máxima precisão diagnóstica.
+            <div className="p-3 rounded-xl bg-blue-500/10 dark:bg-blue-500/15 border border-blue-500/30 text-xs flex items-start gap-2.5">
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-900 dark:text-blue-100 font-medium leading-relaxed">
+                <strong className="font-bold">Recomendação AdaptiveMed:</strong> Resolva de <strong className="font-bold">25 a 30 questões</strong> no primeiro estudo para calibrar a escala da sua curva de retenção e garantir máxima precisão diagnóstica.
               </p>
             </div>
 
@@ -269,6 +246,21 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
             {/* Prévia da Repetição Espaçada Adaptativa Científica */}
             <div className="p-3.5 rounded-xl bg-muted/50 border border-border text-xs space-y-2.5">
+              {/* Aproveitamento em Destaque */}
+              <div className="flex items-center justify-between font-bold pb-2 border-b border-border/60">
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  Taxa de Aproveitamento:
+                </span>
+                {percentage !== null ? (
+                  <span className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                    <span className="text-primary text-base font-black">{percentage}%</span>
+                    <span className="text-xs text-muted-foreground font-normal">({qCorrect} de {qDone} acertos)</span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground font-normal">— (Informe acertos)</span>
+                )}
+              </div>
+
               <div className="flex items-center justify-between font-bold">
                 <span className="text-muted-foreground flex items-center gap-1">
                   <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Diagnóstico:
@@ -320,7 +312,6 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
               </Button>
             </DialogFooter>
           </form>
-        )}
       </DialogContent>
     </Dialog>
   );
