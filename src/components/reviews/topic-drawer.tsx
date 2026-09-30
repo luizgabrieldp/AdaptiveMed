@@ -28,6 +28,7 @@ import {
   Pencil,
   Check,
   X,
+  FileText,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/lib/store/data-context';
@@ -45,7 +46,7 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   topic,
   reviews,
 }) => {
-  const { deleteTopic, areas, updateTopicR0 } = useData();
+  const { deleteTopic, areas, updateTopicR0, updateTopic } = useData();
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'complete' | 'edit'>('complete');
@@ -53,19 +54,32 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
 
   // Estados para edição do R0
   const [isEditingR0, setIsEditingR0] = useState(false);
+  const [r0Area, setR0Area] = useState<string>('');
+  const [r0SubjectName, setR0SubjectName] = useState<string>('');
   const [r0Questions, setR0Questions] = useState<string>('20');
   const [r0Correct, setR0Correct] = useState<string>('0');
   const [r0Date, setR0Date] = useState<string>('');
+  const [r0Notes, setR0Notes] = useState<string>('');
   const [isSavingR0, setIsSavingR0] = useState(false);
+
+  // Estado para edição rápida de anotações no Drawer
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
 
   React.useEffect(() => {
     if (topic && open) {
+      setR0Area(topic.area || areas[0]?.name || 'Clínica Médica');
+      setR0SubjectName(topic.subject_name || '');
       setR0Questions(String(topic.initial_questions || 20));
       setR0Correct(String(topic.initial_correct || 0));
       setR0Date(topic.initial_date || '');
+      setR0Notes(topic.notes || '');
+      setNotesDraft(topic.notes || '');
       setIsEditingR0(false);
+      setIsEditingNotes(false);
     }
-  }, [topic, open]);
+  }, [topic, open, areas]);
 
   if (!topic) return null;
 
@@ -89,12 +103,28 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
     if (r0CorrectNum > r0DoneNum) return;
     try {
       setIsSavingR0(true);
-      await updateTopicR0(topic.id, r0DoneNum, r0CorrectNum, r0Date || undefined);
+      await updateTopicR0(topic.id, r0DoneNum, r0CorrectNum, r0Date || undefined, undefined, {
+        area: r0Area || topic.area,
+        subject_name: r0SubjectName.trim() || topic.subject_name,
+        notes: r0Notes.trim(),
+      });
       setIsEditingR0(false);
     } catch (err) {
       console.error(err);
     } finally {
       setIsSavingR0(false);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    try {
+      setIsSavingNotes(true);
+      await updateTopic(topic.id, { notes: notesDraft.trim() });
+      setIsEditingNotes(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingNotes(false);
     }
   };
 
@@ -177,6 +207,46 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
 
             {isEditingR0 ? (
               <div className="space-y-3 pt-1">
+                {/* Grande Área Médica */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground">Grande Área Médica</label>
+                  <select
+                    value={r0Area}
+                    onChange={e => setR0Area(e.target.value)}
+                    className="w-full h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    {areas.map(a => (
+                      <option key={a.id} value={a.name}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Nome do Assunto */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground">Nome do Assunto ou Doença</label>
+                  <Input
+                    type="text"
+                    required
+                    value={r0SubjectName}
+                    onChange={e => setR0SubjectName(e.target.value)}
+                    className="h-8 text-xs font-bold"
+                  />
+                </div>
+
+                {/* Data Inicial (R0) */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground">Data em que Estudou (R0)</label>
+                  <Input
+                    type="date"
+                    required
+                    value={r0Date}
+                    onChange={e => setR0Date(e.target.value)}
+                    className="h-8 text-xs bg-card"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[10px] font-semibold text-muted-foreground">Questões Feitas</label>
@@ -200,6 +270,18 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
                       className="h-8 text-xs font-bold text-emerald-400"
                     />
                   </div>
+                </div>
+
+                {/* Anotações no R0 */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground">Anotações / Foco do Estudo (opcional)</label>
+                  <textarea
+                    rows={2}
+                    value={r0Notes}
+                    onChange={e => setR0Notes(e.target.value)}
+                    placeholder="Ex: Anote pontos de atenção, mnemônicos..."
+                    className="w-full rounded-lg border border-border bg-card p-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                  />
                 </div>
 
                 {r0Correct !== '' && r0CorrectNum > r0DoneNum && (
@@ -256,6 +338,76 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
                   </p>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Anotações do Estudo / Dúvidas e Mnemônicos */}
+          <div className="p-3.5 rounded-xl bg-card border border-border space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-primary" /> Anotações do Estudo
+              </h4>
+              {!isEditingNotes ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setNotesDraft(topic.notes || '');
+                    setIsEditingNotes(true);
+                  }}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3 w-3" /> {topic.notes ? 'Editar' : 'Adicionar'}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingNotes(false)}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" /> Cancelar
+                </Button>
+              )}
+            </div>
+
+            {isEditingNotes ? (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  rows={3}
+                  value={notesDraft}
+                  onChange={e => setNotesDraft(e.target.value)}
+                  placeholder="Adicione anotações, mnemônicos, pegadinhas de bancas ou o que precisa melhorar..."
+                  className="w-full rounded-lg border border-border bg-card p-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingNotes(false)}
+                    disabled={isSavingNotes}
+                    className="h-7 text-xs"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNotes}
+                    disabled={isSavingNotes}
+                    className="h-7 text-xs font-bold gap-1 bg-primary text-primary-foreground"
+                  >
+                    <Check className="h-3 w-3" /> {isSavingNotes ? 'Salvando...' : 'Salvar Anotação'}
+                  </Button>
+                </div>
+              </div>
+            ) : topic.notes ? (
+              <p className="text-xs text-foreground bg-muted/30 p-2.5 rounded-lg whitespace-pre-wrap leading-relaxed border border-border/50">
+                {topic.notes}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                Nenhuma anotação registrada ainda para este estudo.
+              </p>
             )}
           </div>
 

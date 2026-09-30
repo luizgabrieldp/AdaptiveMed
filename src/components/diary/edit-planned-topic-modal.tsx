@@ -120,17 +120,19 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
 
       const targetPlannedDate = hasSpecificDate && plannedDate ? plannedDate : undefined;
 
-      await updateTopic(topic.id, {
+      const topicChanges: Partial<StudyTopic> = {
         area,
         subject_name: subjectName.trim(),
         tags,
         planned_date: targetPlannedDate,
         initial_date: isCompleted ? studyDate : targetPlannedDate || topic.initial_date,
-        notes: notes.trim() || undefined,
-      });
+        notes: notes.trim(),
+      };
 
       if (isCompleted) {
-        await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum);
+        await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum, topicChanges);
+      } else {
+        await updateTopic(topic.id, topicChanges);
       }
 
       onOpenChange(false);
@@ -433,12 +435,12 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
               <label className="text-xs font-semibold text-muted-foreground">
                 Anotações / Foco do Estudo (opcional)
               </label>
-              <Input
-                type="text"
-                placeholder="Ex: Focar em critérios diagnósticos e tratamento de 1ª linha"
+              <textarea
+                rows={3}
+                placeholder="Ex: Focar em critérios diagnósticos, pontos fracos ou o que precisa melhorar..."
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                className="text-xs"
+                className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
             </div>
 

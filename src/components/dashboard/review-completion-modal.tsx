@@ -39,7 +39,11 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   topic,
   mode,
 }) => {
-  const { completeReview, updateCompletedReview, deleteTopic } = useData();
+  const { completeReview, updateCompletedReview, deleteTopic, topics, areas, updateTopic } = useData();
+  const [area, setArea] = useState<string>('');
+  const [subjectName, setSubjectName] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [completedDate, setCompletedDate] = useState<string>('');
   const [questionsDone, setQuestionsDone] = useState<string>('20');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
   const [durationMinutes, setDurationMinutes] = useState<string>('');
@@ -51,18 +55,31 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
   React.useEffect(() => {
     if (review && open) {
+      const currentTopic = topic || topics.find(t => t.id === review.topic_id);
+      if (currentTopic) {
+        setArea(currentTopic.area || areas[0]?.name || 'Clínica Médica');
+        setSubjectName(currentTopic.subject_name || '');
+        setNotes(currentTopic.notes || '');
+      } else {
+        setArea(areas[0]?.name || 'Clínica Médica');
+        setSubjectName('');
+        setNotes('');
+      }
+
       if (isEdit || review.completed_date) {
         setQuestionsDone(review.questions_done != null ? String(review.questions_done) : '20');
         setQuestionsCorrect(review.questions_correct != null ? String(review.questions_correct) : '16');
         setDurationMinutes(review.duration_minutes != null ? String(review.duration_minutes) : '');
+        setCompletedDate(review.completed_date || getTodayDateString());
       } else {
         const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
         setQuestionsDone(suggested);
         setQuestionsCorrect('');
         setDurationMinutes('');
+        setCompletedDate(getTodayDateString());
       }
     }
-  }, [review, open, isEdit]);
+  }, [review, open, isEdit, topic, topics, areas]);
 
   if (!review) return null;
 
@@ -74,8 +91,10 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       ? Math.min(100, Math.round((correctNum / doneNum) * 1000) / 10)
       : null;
 
+  const currentTopic = topic || topics.find(t => t.id === review.topic_id);
+
   // Cálculo científico do próximo ciclo
-  const baseCount = topic?.base_questions_count || topic?.initial_questions || 20;
+  const baseCount = currentTopic?.base_questions_count || currentTopic?.initial_questions || 20;
   const prevInterval = review.previous_interval_days || 7;
   const nextReviewCalc = calculateNextReview({
     currentCycle: review.review_number,
@@ -96,8 +115,27 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
     try {
       setIsSubmitting(true);
+      const targetTopic = topic || topics.find(t => t.id === review.topic_id);
+
+      if (targetTopic) {
+        const topicUpdates: Partial<StudyTopic> = {};
+        if (area && area !== targetTopic.area) {
+          topicUpdates.area = area;
+        }
+        if (subjectName.trim() && subjectName.trim() !== targetTopic.subject_name) {
+          topicUpdates.subject_name = subjectName.trim();
+        }
+        if (notes.trim() !== (targetTopic.notes || '')) {
+          topicUpdates.notes = notes.trim();
+        }
+
+        if (Object.keys(topicUpdates).length > 0) {
+          await updateTopic(targetTopic.id, topicUpdates);
+        }
+      }
+
       if (isEdit) {
-        await updateCompletedReview(review.id, doneNum, correctNum);
+        await updateCompletedReview(review.id, doneNum, correctNum, completedDate || undefined);
       } else {
         await completeReview(review.id, doneNum, correctNum, durNum);
 
@@ -114,7 +152,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         }
       }
 
-      // Conclusão em 1 clique: fecha o modal diretamente
+      // Conclusão/Edição: fecha o modal diretamente
       onOpenChange(false);
     } catch (err) {
       console.error(err);
@@ -124,10 +162,11 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!topic) return;
+    const targetTopic = topic || topics.find(t => t.id === review.topic_id);
+    if (!targetTopic) return;
     try {
       setIsDeleting(true);
-      await deleteTopic(topic.id);
+      await deleteTopic(targetTopic.id);
       setShowDeleteConfirm(false);
       onOpenChange(false);
     } catch (err) {
@@ -139,7 +178,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         {showDeleteConfirm ? (
           <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 space-y-3.5 my-2">
             <div className="flex items-start gap-3">
@@ -199,6 +238,55 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
             </DialogHeader>
 
             <div className="space-y-4 my-4">
+              {/* Grande Área Médica */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Grande Área Médica
+                </label>
+                <select
+                  value={area}
+                  onChange={e => setArea(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-border bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {areas.map(a => (
+                    <option key={a.id} value={a.name}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nome do Assunto */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Nome do Assunto ou Doença
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="Ex: Asma na Infância"
+                  value={subjectName}
+                  onChange={e => setSubjectName(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              {/* Data da Revisão (no modo de edição) */}
+              {isEdit && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Data em que Realizou a Revisão
+                  </label>
+                  <Input
+                    type="date"
+                    required
+                    value={completedDate}
+                    onChange={e => setCompletedDate(e.target.value)}
+                    className="text-xs bg-card"
+                  />
+                </div>
+              )}
+
               {/* Meta Recomendada para a Revisão Atual */}
               {review.recommended_questions ? (
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs">
@@ -277,6 +365,20 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Anotações / Foco do Estudo */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Anotações / Foco do Estudo (opcional)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Ex: Dúvidas, pegadinhas de bancas, mnemônicos ou pontos a revisar..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                />
               </div>
 
               {/* Alerta de Acertos maior que Questões */}

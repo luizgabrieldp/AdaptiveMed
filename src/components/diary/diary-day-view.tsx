@@ -403,7 +403,11 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                   return (
                     <div
                       key={review.id}
-                      className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all ${
+                      onClick={() => {
+                        setSelectedReview(review);
+                        setCompletionModalOpen(true);
+                      }}
+                      className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all cursor-pointer hover:scale-[1.01] ${
                         isDone
                           ? 'bg-emerald-500/10 border-emerald-500/25'
                           : statusInfo.status === 'ATRASADO'
@@ -447,10 +451,31 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         )}
                       </div>
 
-                      {!isDone && (
+                      {isDone ? (
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedReview(review);
+                              setCompletionModalOpen(true);
+                            }}
+                            className="h-7 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            Editar
+                          </Button>
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                            Concluído ✓
+                          </span>
+                        </div>
+                      ) : (
                         <Button
                           size="sm"
-                          onClick={() => {
+                          onClick={e => {
+                            e.stopPropagation();
                             setSelectedReview(review);
                             setCompletionModalOpen(true);
                           }}

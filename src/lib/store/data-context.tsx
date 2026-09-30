@@ -70,7 +70,8 @@ interface DataContextType {
     questionsDone: number,
     questionsCorrect: number,
     initialDate?: string,
-    durationMinutes?: number
+    durationMinutes?: number,
+    extraTopicData?: Partial<StudyTopic>
   ) => Promise<void>;
   addPlannedTopic: (data: {
     area: string;
@@ -1112,23 +1113,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // AÇÃO 1.2c: Atualizar Rendimento do Primeiro Contato (R0)
+  // AÇÃO 1.2c: Atualizar Rendimento do Primeiro Contato (R0) e Dados do Assunto (Área, Anotações, etc)
   const updateTopicR0 = async (
     topicId: string,
     questionsDone: number,
     questionsCorrect: number,
     initialDate?: string,
-    durationMinutes?: number
+    durationMinutes?: number,
+    extraTopicData?: Partial<StudyTopic>
   ) => {
     const targetTopic = topics.find(t => t.id === topicId);
     if (!targetTopic) return;
 
     const percentage =
       questionsDone > 0 ? Math.round((questionsCorrect / questionsDone) * 1000) / 10 : 0;
-    const finalInitialDate = initialDate || targetTopic.initial_date;
+    const finalInitialDate = initialDate || extraTopicData?.initial_date || targetTopic.initial_date;
 
     const updatedTopic: StudyTopic = {
       ...targetTopic,
+      ...(extraTopicData || {}),
       initial_questions: questionsDone,
       initial_correct: questionsCorrect,
       initial_percentage: percentage,
@@ -1191,6 +1194,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       syncSupabase(
         (async () => {
           await safeUpdateStudyTopic(supabase, topicId, {
+            ...(extraTopicData || {}),
             initial_questions: questionsDone,
             initial_correct: questionsCorrect,
             initial_percentage: percentage,

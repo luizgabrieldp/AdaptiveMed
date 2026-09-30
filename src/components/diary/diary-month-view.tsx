@@ -15,6 +15,7 @@ import {
 import { ReviewCompletionModal } from '@/components/dashboard/review-completion-modal';
 import { RecordPlannedStudyModal } from './record-planned-study-modal';
 import { PlanTopicModal } from './plan-topic-modal';
+import { EditPlannedTopicModal } from './edit-planned-topic-modal';
 import {
   Calendar,
   ChevronLeft,
@@ -79,6 +80,9 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
 
   const [recordStudyModalOpen, setRecordStudyModalOpen] = useState(false);
   const [selectedPlannedTopic, setSelectedPlannedTopic] = useState<StudyTopic | null>(null);
+
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedTopicToEdit, setSelectedTopicToEdit] = useState<StudyTopic | null>(null);
 
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [planModalDate, setPlanModalDate] = useState<string | undefined>(undefined);
@@ -341,7 +345,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
   const handleOpenItem = (
     e: React.MouseEvent,
     item: {
-      type: 'review' | 'planned_study';
+      type: 'review' | 'planned_study' | 'initial_study_done';
       topic?: StudyTopic;
       review?: TopicReview;
     }
@@ -353,6 +357,9 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
     } else if (item.type === 'planned_study' && item.topic) {
       setSelectedPlannedTopic(item.topic);
       setRecordStudyModalOpen(true);
+    } else if (item.type === 'initial_study_done' && item.topic) {
+      setSelectedTopicToEdit(item.topic);
+      setEditModalOpen(true);
     }
   };
 
@@ -844,6 +851,12 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
         open={planModalOpen}
         onOpenChange={setPlanModalOpen}
         defaultDate={planModalDate}
+      />
+
+      <EditPlannedTopicModal
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        topic={selectedTopicToEdit}
       />
     </div>
   );
