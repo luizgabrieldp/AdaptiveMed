@@ -149,6 +149,119 @@ const LOCAL_STORAGE_KEYS = {
   DEMO_ACTIVE: 'adaptivemed_demo_active',
 };
 
+// Campos homologados no schema base do PostgreSQL
+const BASE_STUDY_TOPIC_FIELDS = [
+  'id',
+  'user_id',
+  'area',
+  'subject_name',
+  'initial_date',
+  'initial_questions',
+  'initial_correct',
+  'initial_percentage',
+  'tags',
+  'is_planned',
+  'planned_date',
+  'is_weekly_goal',
+  'notes',
+  'base_questions_count',
+  'created_at',
+];
+
+const BASE_TOPIC_REVIEW_FIELDS = [
+  'id',
+  'topic_id',
+  'user_id',
+  'review_number',
+  'scheduled_date',
+  'completed_date',
+  'questions_done',
+  'questions_correct',
+  'percentage',
+  'recommended_questions',
+  'previous_interval_days',
+  'diagnosis',
+  'created_at',
+];
+
+function pickFields<T extends Record<string, any>>(obj: T, allowedKeys: string[]): Partial<T> {
+  const result: any = {};
+  for (const key of allowedKeys) {
+    if (key in obj && obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
+// Inserção resiliente no study_topics com tolerância a colunas novas
+async function safeInsertStudyTopic(supabase: any, topic: StudyTopic) {
+  try {
+    const { error } = await supabase.from('study_topics').insert(topic);
+    if (!error) return;
+
+    console.warn('Aviso ao inserir estudo completo no Supabase, tentando com campos base:', error.message || error);
+    const basePayload = pickFields(topic, BASE_STUDY_TOPIC_FIELDS);
+    const { error: retryError } = await supabase.from('study_topics').insert(basePayload);
+    if (retryError) {
+      console.error('Falha ao persistir study_topics no Supabase mesmo com campos base:', retryError);
+    }
+  } catch (err) {
+    console.error('Exceção ao persistir study_topics no Supabase:', err);
+  }
+}
+
+// Atualização resiliente no study_topics
+async function safeUpdateStudyTopic(supabase: any, topicId: string, data: Partial<StudyTopic>) {
+  try {
+    const { error } = await supabase.from('study_topics').update(data).eq('id', topicId);
+    if (!error) return;
+
+    console.warn('Aviso ao atualizar estudo no Supabase, tentando com campos base:', error.message || error);
+    const baseData = pickFields(data, BASE_STUDY_TOPIC_FIELDS);
+    const { error: retryError } = await supabase.from('study_topics').update(baseData).eq('id', topicId);
+    if (retryError) {
+      console.error('Falha ao atualizar study_topics no Supabase mesmo com campos base:', retryError);
+    }
+  } catch (err) {
+    console.error('Exceção ao atualizar study_topics no Supabase:', err);
+  }
+}
+
+// Inserção resiliente no topic_reviews com tolerância a colunas novas
+async function safeInsertTopicReview(supabase: any, review: TopicReview) {
+  try {
+    const { error } = await supabase.from('topic_reviews').insert(review);
+    if (!error) return;
+
+    console.warn('Aviso ao inserir revisão no Supabase, tentando com campos base:', error.message || error);
+    const basePayload = pickFields(review, BASE_TOPIC_REVIEW_FIELDS);
+    const { error: retryError } = await supabase.from('topic_reviews').insert(basePayload);
+    if (retryError) {
+      console.error('Falha ao persistir topic_reviews no Supabase mesmo com campos base:', retryError);
+    }
+  } catch (err) {
+    console.error('Exceção ao persistir topic_reviews no Supabase:', err);
+  }
+}
+
+// Atualização resiliente no topic_reviews
+async function safeUpdateTopicReview(supabase: any, reviewId: string, data: Partial<TopicReview>) {
+  try {
+    const { error } = await supabase.from('topic_reviews').update(data).eq('id', reviewId);
+    if (!error) return;
+
+    console.warn('Aviso ao atualizar revisão no Supabase, tentando com campos base:', error.message || error);
+    const baseData = pickFields(data, BASE_TOPIC_REVIEW_FIELDS);
+    const { error: retryError } = await supabase.from('topic_reviews').update(baseData).eq('id', reviewId);
+    if (retryError) {
+      console.error('Falha ao atualizar topic_reviews no Supabase mesmo com campos base:', retryError);
+    }
+  } catch (err) {
+    console.error('Exceção ao atualizar topic_reviews no Supabase:', err);
+  }
+}
+
 // Sincronização segura e não-bloqueante em background com Supabase
 const syncSupabase = (promise: PromiseLike<any>) => {
   Promise.resolve(promise)
@@ -227,7 +340,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('prevalent_topics').select('*').eq('user_id', userId).order('rank_order', { ascending: true }),
       ]);
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout de carregamento do Supabase')), 4000)
+        setTimeout(() => reject(new Error('Timeout de carregamento do Supabase')), 10000)
       );
 
       const [
@@ -345,21 +458,86 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      if (topData && topData.length > 0) {
-        setTopics(topData as StudyTopic[]);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(topData));
-        }
-      } else {
-        const stored = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS) : null;
-        if (stored) {
-          try {
-            setTopics(JSON.parse(stored));
-          } catch {}
-        }
+      // 1. MERGE INTELIGENTE DE TÓPICOS (Preserva tópicos locais que ainda não subiram ao banco)
+      let mergedTopics: StudyTopic[] = (topData as StudyTopic[]) || [];
+      const storedTopicsRaw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS) : null;
+      if (storedTopicsRaw) {
+        try {
+          const localTopics = JSON.parse(storedTopicsRaw) as StudyTopic[];
+          const remoteIds = new Set(mergedTopics.map(t => t.id));
+          const pendingTopics = localTopics.filter(lt => !remoteIds.has(lt.id));
+          if (pendingTopics.length > 0) {
+            mergedTopics = [...pendingTopics, ...mergedTopics];
+            // Sincroniza os tópicos pendentes com o Supabase em background
+            pendingTopics.forEach(pt => safeInsertStudyTopic(supabase, pt));
+          }
+        } catch {}
+      }
+      setTopics(mergedTopics);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(mergedTopics));
       }
 
-      setReviews(revData ? (revData as TopicReview[]) : []);
+      // 2. MERGE INTELIGENTE DE REVISÕES (Preserva revisões locais se o banco estiver vazio ou desatualizado)
+      let mergedReviews: TopicReview[] = (revData as TopicReview[]) || [];
+      const storedReviewsRaw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS) : null;
+      if (storedReviewsRaw) {
+        try {
+          const localReviews = JSON.parse(storedReviewsRaw) as TopicReview[];
+          const remoteRevIds = new Set(mergedReviews.map(r => r.id));
+          const pendingReviews = localReviews.filter(lr => !remoteRevIds.has(lr.id));
+          if (pendingReviews.length > 0) {
+            mergedReviews = [...mergedReviews, ...pendingReviews];
+            pendingReviews.forEach(pr => safeInsertTopicReview(supabase, pr));
+          }
+        } catch {}
+      }
+
+      // 3. AUTO-CURA PEDAGÓGICA (Gera R1 para qualquer estudo que tenha ficado sem revisão)
+      const missingReviews: TopicReview[] = [];
+      mergedTopics.forEach(topic => {
+        if (!topic.is_planned && (topic.initial_questions > 0 || topic.initial_percentage > 0)) {
+          const hasReview = mergedReviews.some(r => r.topic_id === topic.id);
+          if (!hasReview) {
+            const reviewCalc = calculateNextReview({
+              currentCycle: 0,
+              accuracy: topic.initial_percentage,
+              baseQuestionsCount: topic.initial_questions || topic.base_questions_count || 20,
+            });
+            const targetDate = addDaysToDate(topic.initial_date || getTodayDateString(), reviewCalc.nextIntervalDays);
+            const newR1: TopicReview = {
+              id: crypto.randomUUID(),
+              topic_id: topic.id,
+              user_id: userId,
+              review_number: 1,
+              scheduled_date: targetDate,
+              completed_date: null,
+              questions_done: null,
+              questions_correct: null,
+              percentage: null,
+              recommended_questions: reviewCalc.recommendedQuestions,
+              previous_interval_days: reviewCalc.nextIntervalDays,
+              diagnosis: reviewCalc.diagnosis,
+              diagnosis_badge: reviewCalc.diagnosisBadge,
+              pedagogical_note: reviewCalc.pedagogicalNote,
+              created_at: new Date().toISOString(),
+            };
+            missingReviews.push(newR1);
+            safeInsertTopicReview(supabase, newR1);
+          }
+        }
+      });
+
+      if (missingReviews.length > 0) {
+        mergedReviews = [...mergedReviews, ...missingReviews];
+      }
+
+      setReviews(mergedReviews);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(mergedReviews));
+      }
+
+      // 4. Simulados e Assuntos Prevalentes
       setMockExams(mockData ? (mockData as MockExam[]) : []);
       setInstitutionExams(instData ? (instData as InstitutionExam[]) : []);
 
@@ -377,7 +555,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (err) {
-      console.error('Erro ao carregar dados do Supabase:', err);
+      console.warn('Aviso ou timeout no carregamento do Supabase. Carregando dados locais de segurança:', err);
+      // Fallback seguro: se falhar a rede/timeout, carrega todos os dados locais do localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          const storedTopics = localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS);
+          if (storedTopics) setTopics(JSON.parse(storedTopics));
+          const storedReviews = localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS);
+          if (storedReviews) setReviews(JSON.parse(storedReviews));
+          const storedMocks = localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS);
+          if (storedMocks) setMockExams(JSON.parse(storedMocks));
+          const storedInsts = localStorage.getItem(LOCAL_STORAGE_KEYS.INST_EXAMS);
+          if (storedInsts) setInstitutionExams(JSON.parse(storedInsts));
+          const storedPrev = localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS);
+          if (storedPrev) setPrevalentTopics(JSON.parse(storedPrev));
+        } catch (storageErr) {
+          console.error('Erro ao restaurar dados do localStorage no fallback:', storageErr);
+        }
+      }
     }
   };
 
@@ -731,10 +926,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      syncSupabase(Promise.allSettled([
-        supabase.from('study_topics').insert(newTopic),
-        supabase.from('topic_reviews').insert(r1Review),
-      ]));
+      syncSupabase(
+        (async () => {
+          await safeInsertStudyTopic(supabase, newTopic);
+          await safeInsertTopicReview(supabase, r1Review);
+        })()
+      );
     }
   };
 
@@ -779,7 +976,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Sincronização não-bloqueante com Supabase
     if (!isDemoMode && user) {
       const supabase = createClient();
-      syncSupabase(supabase.from('study_topics').insert(newTopic));
+      syncSupabase(safeInsertStudyTopic(supabase, newTopic));
     }
   };
 
@@ -880,10 +1077,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      syncSupabase(Promise.allSettled([
-        supabase
-          .from('study_topics')
-          .update({
+      syncSupabase(
+        (async () => {
+          await safeUpdateStudyTopic(supabase, topicId, {
             initial_date: data.study_date,
             initial_questions: data.questions_done,
             initial_correct: data.questions_correct,
@@ -891,10 +1087,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             initial_duration_minutes: data.duration_minutes || null,
             base_questions_count: data.questions_done,
             is_planned: false,
-          })
-          .eq('id', topicId),
-        supabase.from('topic_reviews').insert(r1Review)
-      ]));
+          });
+          await safeInsertTopicReview(supabase, r1Review);
+        })()
+      );
     }
 
     return { nextReviewDate: r1ScheduledDate };
@@ -912,12 +1108,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      syncSupabase(
-        supabase
-          .from('study_topics')
-          .update(data)
-          .eq('id', topicId)
-      );
+      syncSupabase(safeUpdateStudyTopic(supabase, topicId, data));
     }
   };
 
@@ -997,36 +1188,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      const calls: PromiseLike<any>[] = [
-        supabase
-          .from('study_topics')
-          .update({
+      syncSupabase(
+        (async () => {
+          await safeUpdateStudyTopic(supabase, topicId, {
             initial_questions: questionsDone,
             initial_correct: questionsCorrect,
             initial_percentage: percentage,
             base_questions_count: questionsDone,
             initial_date: finalInitialDate,
             initial_duration_minutes: durationMinutes !== undefined ? durationMinutes : targetTopic.initial_duration_minutes,
-          })
-          .eq('id', topicId)
-      ];
-
-      if (updatedR1) {
-        calls.push(
-          supabase
-            .from('topic_reviews')
-            .update({
+          });
+          if (updatedR1) {
+            await safeUpdateTopicReview(supabase, updatedR1.id, {
               scheduled_date: updatedR1.scheduled_date,
               recommended_questions: updatedR1.recommended_questions,
               previous_interval_days: updatedR1.previous_interval_days,
               diagnosis: updatedR1.diagnosis,
               diagnosis_badge: updatedR1.diagnosis_badge,
               pedagogical_note: updatedR1.pedagogical_note,
-            })
-            .eq('id', updatedR1.id)
-        );
-      }
-      syncSupabase(Promise.allSettled(calls));
+            });
+          }
+        })()
+      );
     }
   };
 
@@ -1260,10 +1443,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      const calls: PromiseLike<any>[] = [
-        supabase
-          .from('topic_reviews')
-          .update({
+      syncSupabase(
+        (async () => {
+          await safeUpdateTopicReview(supabase, reviewId, {
             completed_date: today,
             questions_done: questionsDone,
             questions_correct: questionsCorrect,
@@ -1272,14 +1454,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             diagnosis: reviewCalc.diagnosis,
             diagnosis_badge: reviewCalc.diagnosisBadge,
             pedagogical_note: reviewCalc.pedagogicalNote,
-          })
-          .eq('id', reviewId)
-      ];
-
-      if (nextReviewObj) {
-        calls.push(supabase.from('topic_reviews').insert(nextReviewObj));
-      }
-      syncSupabase(Promise.allSettled(calls));
+          });
+          if (nextReviewObj) {
+            await safeInsertTopicReview(supabase, nextReviewObj);
+          }
+        })()
+      );
     }
 
     return { nextReviewDate: nextScheduledDate };
@@ -1364,10 +1544,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!isDemoMode && user) {
       const supabase = createClient();
-      const calls: PromiseLike<any>[] = [
-        supabase
-          .from('topic_reviews')
-          .update({
+      syncSupabase(
+        (async () => {
+          await safeUpdateTopicReview(supabase, reviewId, {
             questions_done: questionsDone,
             questions_correct: questionsCorrect,
             percentage,
@@ -1375,26 +1554,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             diagnosis: reviewCalc.diagnosis,
             diagnosis_badge: reviewCalc.diagnosisBadge,
             pedagogical_note: reviewCalc.pedagogicalNote,
-          })
-          .eq('id', reviewId)
-      ];
-
-      if (updatedNextRev) {
-        calls.push(
-          supabase
-            .from('topic_reviews')
-            .update({
+          });
+          if (updatedNextRev) {
+            await safeUpdateTopicReview(supabase, updatedNextRev.id, {
               scheduled_date: updatedNextRev.scheduled_date,
               recommended_questions: updatedNextRev.recommended_questions,
               previous_interval_days: updatedNextRev.previous_interval_days,
               diagnosis: updatedNextRev.diagnosis,
               diagnosis_badge: updatedNextRev.diagnosis_badge,
               pedagogical_note: updatedNextRev.pedagogical_note,
-            })
-            .eq('id', updatedNextRev.id)
-        );
-      }
-      syncSupabase(Promise.allSettled(calls));
+            });
+          }
+        })()
+      );
     }
   };
 

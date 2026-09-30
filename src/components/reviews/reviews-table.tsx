@@ -82,9 +82,9 @@ export const ReviewsTable: React.FC = () => {
       const lastReview = topicReviews[topicReviews.length - 1];
 
       let statusInfo: { status: ReviewStatus; daysDiff: number; badgeText: string } = {
-        status: 'CONCLUÍDO',
+        status: 'PROGRAMADO',
         daysDiff: 0,
-        badgeText: 'Concluído',
+        badgeText: 'Programado',
       };
 
       if (activeReview) {
@@ -92,12 +92,31 @@ export const ReviewsTable: React.FC = () => {
           activeReview.scheduled_date,
           activeReview.completed_date
         );
+      } else if (lastReview && lastReview.review_number >= 8 && lastReview.completed_date) {
+        statusInfo = {
+          status: 'CONCLUÍDO',
+          daysDiff: 0,
+          badgeText: 'Concluído',
+        };
+      } else if (lastReview && lastReview.completed_date) {
+        statusInfo = {
+          status: 'PROGRAMADO',
+          daysDiff: 0,
+          badgeText: `R${lastReview.review_number} Concluída`,
+        };
+      } else if (topicReviews.length === 0 && !topic.is_planned) {
+        statusInfo = {
+          status: 'PROGRAMADO',
+          daysDiff: 0,
+          badgeText: 'Aguardando R1',
+        };
       }
 
       return {
         topic,
         topicReviews,
         activeReview,
+        lastReview,
         statusInfo,
       };
     });
@@ -230,7 +249,7 @@ export const ReviewsTable: React.FC = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTopics.map(({ topic, activeReview, statusInfo }) => {
+            {filteredTopics.map(({ topic, activeReview, lastReview, statusInfo }) => {
               const areaStyle = getAreaStyle(topic.area, areas);
 
               return (
@@ -307,8 +326,14 @@ export const ReviewsTable: React.FC = () => {
                       <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary font-bold text-xs">
                         R{activeReview.review_number}
                       </span>
-                    ) : (
+                    ) : lastReview && lastReview.review_number >= 8 && lastReview.completed_date ? (
                       <span className="text-xs text-emerald-400 font-semibold">R8 Final</span>
+                    ) : lastReview && lastReview.completed_date ? (
+                      <span className="text-xs text-blue-400 font-semibold">R{lastReview.review_number} Feita</span>
+                    ) : (
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold text-[11px] border border-blue-500/20">
+                        R1 Pendente
+                      </span>
                     )}
                   </TableCell>
 
