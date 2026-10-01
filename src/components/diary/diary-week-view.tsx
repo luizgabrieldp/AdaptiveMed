@@ -472,7 +472,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                     </div>
 
                     {/* Lista com scroll vertical interno caso passe de 3 itens */}
-                    <div className="space-y-2 mt-2.5 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
+                    <div className="space-y-2 mt-2.5 max-h-[460px] overflow-y-auto pr-1 scrollbar-thin">
                       {items.length === 0 ? (
                         <div className="py-12 text-center text-[11px] text-muted-foreground/60 italic border border-dashed border-border/40 rounded-xl my-2">
                           Arraste um tema aqui
@@ -506,19 +506,20 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 }
                               }}
                               onClick={() => handleOpenItem(item)}
-                              className={`p-2.5 rounded-xl border text-xs space-y-1.5 cursor-pointer transition-all hover:scale-[1.02] shadow-2xs group/item ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
+                              className={`p-3 rounded-xl border text-xs space-y-2 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md shadow-2xs group/item ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
                                 item.isOverdue ? 'ring-1 ring-rose-500/50' : ''
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-1">
+                              {/* Linha 1: Topo exclusivo com Grande Área e Ações Rápidas */}
+                              <div className="flex items-center justify-between gap-1 w-full">
                                 <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate max-w-[82%] bg-background/80 ${style.text} ${style.border}`}
                                   title={item.area}
                                 >
                                   {item.area}
                                 </span>
 
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className="flex items-center gap-0.5 shrink-0">
                                   {/* Botão de edição para estudos planejados ou concluídos */}
                                   {item.topic && (
                                     <button
@@ -528,7 +529,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                         setSelectedTopicToEdit(item.topic!);
                                         setEditModalOpen(true);
                                       }}
-                                      className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/20 transition-all"
+                                      className="opacity-70 group-hover/item:opacity-100 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-background/80 transition-all"
                                       title="Editar assunto e rendimento"
                                     >
                                       <Edit2 className="h-3 w-3" />
@@ -543,71 +544,78 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                         e.stopPropagation();
                                         updatePlannedTopicDate(item.topic!.id, null);
                                       }}
-                                      className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded text-muted-foreground hover:text-amber-400 hover:bg-amber-500/20 transition-all"
+                                      className="opacity-70 group-hover/item:opacity-100 p-1 rounded-md text-muted-foreground hover:text-amber-500 hover:bg-amber-500/20 transition-all"
                                       title="Remover deste dia (mantém nos Assuntos da Semana)"
                                     >
                                       <CalendarX className="h-3 w-3" />
                                     </button>
                                   )}
-
-                                  {isItemTrackPaused && (
-                                    <span
-                                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/35 flex items-center gap-1"
-                                      title="Trilha pausada. Clique para recalcular as revisões."
-                                    >
-                                      <Clock className="h-2.5 w-2.5" />
-                                      Pausado
-                                    </span>
-                                  )}
-
-                                  <span
-                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
-                                      isInitialDone || item.isCompleted
-                                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border-emerald-500/40'
-                                        : item.type === 'planned_study'
-                                        ? 'text-amber-700 dark:text-amber-300 bg-amber-500/20 border-amber-500/40'
-                                        : item.isOverdue
-                                        ? 'text-rose-700 dark:text-rose-300 bg-rose-500/20 border-rose-500/40'
-                                        : 'text-primary bg-primary/20 border-primary/40'
-                                    }`}
-                                  >
-                                    {(isInitialDone || item.isCompleted) && <CheckCircle2 className="h-2.5 w-2.5" />}
-                                    {isInitialDone ? 'R0 Feito' : item.badgeText}
-                                  </span>
                                 </div>
                               </div>
 
-                              <p className="font-bold text-[11px] text-foreground line-clamp-2 leading-tight">
-                                {item.subjectName}
-                              </p>
-
-                              {/* Rendimento se R0 concluído */}
-                              {isInitialDone && item.topic && (
-                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between pt-1 border-t border-border/40">
-                                  <span className="text-muted-foreground">{item.topic.initial_correct}/{item.topic.initial_questions} questões</span>
-                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{item.topic.initial_percentage}% acerto</span>
-                                </div>
-                              )}
-
-                              {/* Rendimento se Revisão concluída */}
-                              {item.isCompleted && item.review && item.review.questions_done != null && item.review.questions_correct != null && (
-                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between pt-1 border-t border-border/40">
-                                  <span className="text-muted-foreground">{item.review.questions_correct}/{item.review.questions_done} questões</span>
-                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                                    {Math.round(((item.review.questions_correct || 0) / (item.review.questions_done || 1)) * 100)}% acerto
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
-                                {item.isHighPrevalence && (
-                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-500 dark:text-amber-400 text-[9px]">
-                                    <Star className="h-2.5 w-2.5 fill-amber-400" /> Top Banca
+                              {/* Linha 2: Badges de Status (sem esmagar a Grande Área) */}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {isItemTrackPaused && (
+                                  <span
+                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-2xs"
+                                    title="Trilha pausada. Clique para recalcular as revisões."
+                                  >
+                                    <Clock className="h-2.5 w-2.5" />
+                                    Trilha Pausada
                                   </span>
                                 )}
 
-                                <span className={`font-semibold ml-auto ${isInitialDone || item.isCompleted ? 'text-muted-foreground hover:text-foreground' : 'text-primary hover:underline'}`}>
-                                  {isInitialDone ? 'Editar / Ver' : item.isCompleted ? 'Editar / Ver' : 'Concluir →'}
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 shadow-2xs ${
+                                    isInitialDone || item.isCompleted
+                                      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/25 border-emerald-500/40'
+                                      : item.type === 'planned_study'
+                                      ? 'text-amber-700 dark:text-amber-300 bg-amber-500/25 border-amber-500/40'
+                                      : item.isOverdue
+                                      ? 'text-rose-700 dark:text-rose-300 bg-rose-500/25 border-rose-500/40'
+                                      : 'text-primary bg-primary/20 border-primary/40'
+                                  }`}
+                                >
+                                  {(isInitialDone || item.isCompleted) && <CheckCircle2 className="h-2.5 w-2.5" />}
+                                  {isInitialDone ? 'R0 Feito' : item.badgeText}
+                                </span>
+
+                                {item.isHighPrevalence && (
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400 text-[9px] bg-amber-500/15 border border-amber-500/30 px-1 py-0.2 rounded shadow-2xs">
+                                    <Star className="h-2 w-2 fill-amber-400 text-amber-500" /> Top Banca
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Linha 3: Título do Assunto */}
+                              <h5 className="font-bold text-xs text-foreground line-clamp-2 leading-snug">
+                                {item.subjectName}
+                              </h5>
+
+                              {/* Linha 4: Rendimento se R0 concluído */}
+                              {isInitialDone && item.topic && (
+                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between p-1.5 rounded-lg bg-background/60 border border-border/50">
+                                  <span className="text-muted-foreground">{item.topic.initial_correct}/{item.topic.initial_questions} Qs</span>
+                                  <span className={`font-black ${item.topic.initial_percentage >= 80 ? 'text-emerald-600 dark:text-emerald-400' : item.topic.initial_percentage >= 65 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                    {item.topic.initial_percentage}%
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Linha 4: Rendimento se Revisão concluída */}
+                              {item.isCompleted && item.review && item.review.questions_done != null && item.review.questions_correct != null && (
+                                <div className="text-[10px] text-foreground font-semibold flex items-center justify-between p-1.5 rounded-lg bg-background/60 border border-border/50">
+                                  <span className="text-muted-foreground">{item.review.questions_correct}/{item.review.questions_done} Qs</span>
+                                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                                    {Math.round(((item.review.questions_correct || 0) / (item.review.questions_done || 1)) * 100)}%
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Linha 5: Ação no Rodapé do Card */}
+                              <div className="flex items-center justify-end text-[10px] pt-1 border-t border-border/40">
+                                <span className={`font-bold group-hover/item:underline flex items-center gap-1 ${isInitialDone || item.isCompleted ? 'text-muted-foreground group-hover/item:text-foreground' : 'text-primary'}`}>
+                                  {isInitialDone || item.isCompleted ? 'Editar / Ver' : 'Concluir →'}
                                 </span>
                               </div>
                             </div>
@@ -787,51 +795,56 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                             setSelectedTopicToEdit(topic);
                             setEditModalOpen(true);
                           }}
-                          className={`p-2.5 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} space-y-1.5 shadow-2xs group cursor-pointer transition-all hover:scale-[1.01]`}
+                          className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} space-y-2 shadow-2xs group cursor-pointer transition-all hover:scale-[1.01]`}
                         >
-                          <div className="flex items-start justify-between gap-1.5">
+                          {/* Linha 1: Topo exclusivo com Grande Área e Ação de Editar */}
+                          <div className="flex items-center justify-between gap-1 w-full">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate max-w-[80%] bg-background/80 ${style.text} ${style.border}`}
                               title={topic.area}
                             >
                               {topic.area}
                             </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  setSelectedTopicToEdit(topic);
-                                  setEditModalOpen(true);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-primary transition-opacity"
-                                title="Editar estudo e rendimento"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </button>
-                              {isTopicTrackPaused && (
-                                <span
-                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/35 flex items-center gap-1"
-                                  title="Trilha de revisões pausada. Clique para recalcular."
-                                >
-                                  <Clock className="h-2.5 w-2.5" />
-                                  Pausado
-                                </span>
-                              )}
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35 flex items-center gap-1">
-                                <CheckCircle2 className="h-2.5 w-2.5" />
-                                R0 Feito
-                              </span>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedTopicToEdit(topic);
+                                setEditModalOpen(true);
+                              }}
+                              className="opacity-70 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-background/80 transition-all"
+                              title="Editar estudo e rendimento"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
                           </div>
 
+                          {/* Linha 2: Badges de Status */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {isTopicTrackPaused && (
+                              <span
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-2xs"
+                                title="Trilha de revisões pausada. Clique para recalcular."
+                              >
+                                <Clock className="h-2.5 w-2.5" />
+                                Pausado
+                              </span>
+                            )}
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="h-2.5 w-2.5" />
+                              R0 Feito
+                            </span>
+                          </div>
+
+                          {/* Linha 3: Título do Assunto */}
                           <p className="text-xs font-bold text-foreground leading-snug">
                             {topic.subject_name}
                           </p>
 
-                          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/40">
-                            <span>{formatDateBR(topic.initial_date)}</span>
-                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                          {/* Linha 4: Rendimento e Data */}
+                          <div className="flex items-center justify-between text-[10px] p-1.5 rounded-lg bg-background/60 border border-border/50">
+                            <span className="text-muted-foreground">{formatDateBR(topic.initial_date)}</span>
+                            <span className="font-black text-emerald-600 dark:text-emerald-400">
                               {topic.initial_correct}/{topic.initial_questions} ({topic.initial_percentage}%)
                             </span>
                           </div>
