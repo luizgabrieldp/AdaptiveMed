@@ -525,18 +525,6 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </Button>
 
               <div className="flex items-center gap-2 shrink-0">
-                {isNextCyclePaused && (
-                  <Button
-                    type="button"
-                    onClick={handleRecalculateNextCycle}
-                    disabled={isRecalculating || isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
-                    className="h-9 px-3 text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-500/20 whitespace-nowrap"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
-                    {isRecalculating ? 'Recalculando...' : `Recalcular R${review.review_number + 1}`}
-                  </Button>
-                )}
-
                 <Button
                   type="button"
                   variant="outline"

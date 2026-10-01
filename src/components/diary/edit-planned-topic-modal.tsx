@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -517,35 +516,24 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
               />
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-border">
+            {/* Rodapé Otimizado em Linha Única */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3 w-full">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="w-full sm:w-auto text-xs text-destructive hover:bg-destructive/15 gap-1.5"
+                className="text-xs text-destructive hover:bg-destructive/15 gap-1.5 h-9 px-2.5 font-semibold shrink-0"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                Excluir Estudo
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                <span>Excluir Estudo</span>
               </Button>
 
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                {isTrackPaused && (
-                  <Button
-                    type="button"
-                    onClick={handleRecalculate}
-                    disabled={isRecalculating || isSubmitting || qDone <= 0 || !isCorrectFilled || qCorrect > qDone}
-                    className="w-full sm:w-auto font-bold text-xs gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-500/20"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
-                    {isRecalculating ? 'Recalculando...' : `Recalcular Trilha (R${nextCycleToReactivate})`}
-                  </Button>
-                )}
-
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   onClick={() => onOpenChange(false)}
-                  className="w-full sm:w-auto text-xs text-muted-foreground"
+                  className="h-9 px-3 text-xs"
                 >
                   Cancelar
                 </Button>
@@ -557,13 +545,13 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                     !subjectName.trim() ||
                     (isCompleted && (qDone <= 0 || !isCorrectFilled || qCorrect > qDone))
                   }
-                  className="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
+                  className="h-9 px-3.5 text-xs font-bold gap-1.5 whitespace-nowrap shadow-md shadow-primary/20"
                 >
                   <Check className="h-4 w-4" />
                   {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
               </div>
-            </DialogFooter>
+            </div>
           </form>
         )}
       </DialogContent>
