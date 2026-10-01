@@ -29,6 +29,7 @@ import {
   Check,
   X,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/lib/store/data-context';
@@ -46,11 +47,13 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   topic,
   reviews,
 }) => {
-  const { deleteTopic, areas, updateTopicR0, updateTopic } = useData();
+  const { deleteTopic, areas, updateTopicR0, updateTopic, deleteReviewsFromCycle, recalculateTopicReviews } = useData();
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'complete' | 'edit'>('complete');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [deletingCycleNum, setDeletingCycleNum] = useState<number | null>(null);
 
   // Estados para edição do R0
   const [isEditingR0, setIsEditingR0] = useState(false);
@@ -86,10 +89,19 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   const areaColor = getAreaStyle(topic.area, areas);
 
   // Ordena as revisões existentes de 1 a 8
+  const topicReviews = reviews.filter(r => r.topic_id === topic.id);
   const existingReviewsMap = new Map<number, TopicReview>();
-  reviews
-    .filter(r => r.topic_id === topic.id)
-    .forEach(r => existingReviewsMap.set(r.review_number, r));
+  topicReviews.forEach(r => existingReviewsMap.set(r.review_number, r));
+
+  const completedReviews = topicReviews
+    .filter(r => Boolean(r.completed_date))
+    .sort((a, b) => a.review_number - b.review_number);
+  const pendingReviews = topicReviews.filter(r => !r.completed_date);
+
+  // A trilha está pausada se não houver nenhuma revisão agendada/pendente e ainda não tiver atingido os 8 ciclos
+  const isCyclePaused = pendingReviews.length === 0 && completedReviews.length < 8;
+  const nextCycleToReactivate = completedReviews.length === 0 ? 1 : completedReviews[completedReviews.length - 1].review_number + 1;
+  const lastCompletedCycle = completedReviews.length > 0 ? completedReviews[completedReviews.length - 1] : null;
 
   // Gera a lista das 8 revisões progressivas
   const reviewCycles = Array.from({ length: 8 }, (_, i) => i + 1);
@@ -97,6 +109,34 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   const r0DoneNum = parseInt(r0Questions, 10) || 0;
   const r0CorrectNum = parseInt(r0Correct, 10) || 0;
   const r0PreviewPct = r0DoneNum > 0 ? Math.round((r0CorrectNum / r0DoneNum) * 1000) / 10 : 0;
+
+  const handleRecalculate = async () => {
+    try {
+      setIsRecalculating(true);
+      await recalculateTopicReviews(topic.id);
+    } catch (err) {
+      console.error('Erro ao recalcular trilha:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
+  const handleDeleteCycle = async (reviewNum: number) => {
+    if (
+      window.confirm(
+        `Tem certeza que deseja excluir o ciclo R${reviewNum} e pausar as revisões seguintes deste assunto? O estudo inicial (R0) e os ciclos anteriores continuarão salvos.`
+      )
+    ) {
+      try {
+        setDeletingCycleNum(reviewNum);
+        await deleteReviewsFromCycle(topic.id, reviewNum);
+      } catch (err) {
+        console.error('Erro ao excluir ciclo de revisão:', err);
+      } finally {
+        setDeletingCycleNum(null);
+      }
+    }
+  };
 
   const handleSaveR0 = async () => {
     if (r0DoneNum <= 0) return;
@@ -318,26 +358,45 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                <div className="p-2 rounded-lg bg-muted/40">
-                  <p className="text-[10px] text-muted-foreground">Data Inicial</p>
-                  <p className="text-xs font-bold text-foreground mt-0.5">
-                    {formatDateBR(topic.initial_date)}
-                  </p>
+              <>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                  <div className="p-2 rounded-lg bg-muted/40">
+                    <p className="text-[10px] text-muted-foreground">Data Inicial</p>
+                    <p className="text-xs font-bold text-foreground mt-0.5">
+                      {formatDateBR(topic.initial_date)}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/40">
+                    <p className="text-[10px] text-muted-foreground">Questões</p>
+                    <p className="text-xs font-bold text-foreground mt-0.5">
+                      {topic.initial_correct} / {topic.initial_questions}
+                    </p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/40">
+                    <p className="text-[10px] text-muted-foreground">Aproveitamento</p>
+                    <p className={`text-xs font-bold mt-0.5 ${topic.initial_percentage >= 80 ? 'text-emerald-400' : topic.initial_percentage >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
+                      {topic.initial_percentage}%
+                    </p>
+                  </div>
                 </div>
-                <div className="p-2 rounded-lg bg-muted/40">
-                  <p className="text-[10px] text-muted-foreground">Questões</p>
-                  <p className="text-xs font-bold text-foreground mt-0.5">
-                    {topic.initial_correct} / {topic.initial_questions}
-                  </p>
-                </div>
-                <div className="p-2 rounded-lg bg-muted/40">
-                  <p className="text-[10px] text-muted-foreground">Aproveitamento</p>
-                  <p className={`text-xs font-bold mt-0.5 ${topic.initial_percentage >= 80 ? 'text-emerald-400' : topic.initial_percentage >= 65 ? 'text-blue-400' : 'text-amber-400'}`}>
-                    {topic.initial_percentage}%
-                  </p>
-                </div>
-              </div>
+
+                {isCyclePaused && completedReviews.length === 0 && (
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                    <span className="text-[11px] text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Trilha pausada no R0
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={handleRecalculate}
+                      disabled={isRecalculating}
+                      className="h-6 text-[10px] font-bold px-2.5 gap-1 bg-amber-600 hover:bg-amber-500 text-white"
+                    >
+                      <RefreshCw className={`h-2.5 w-2.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                      {isRecalculating ? 'Recalculando...' : 'Recalcular R1'}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -413,14 +472,37 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
 
           {/* Linha do Tempo das 8 Revisões */}
           <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <BrainCircuit className="h-3.5 w-3.5 text-primary" /> Ciclos de Revisão (R1 a R8)
-              </span>
+              </h4>
               <span className="text-[11px] text-muted-foreground lowercase">
-                {reviews.filter(r => r.topic_id === topic.id && r.completed_date).length} de 8 concluídas
+                {completedReviews.length} de 8 concluídas
               </span>
-            </h4>
+            </div>
+
+            {/* Banner de Trilha Pausada se não houver revisões agendadas */}
+            {isCyclePaused && (
+              <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    <Clock className="h-4 w-4" /> Trilha de Revisões Pausada
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Nenhum ciclo pendente no momento. Reative a trilha para gerar o ciclo R{nextCycleToReactivate} adaptado ao seu último desempenho.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleRecalculate}
+                  disabled={isRecalculating}
+                  className="h-8 px-3 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-sm shrink-0 gap-1.5"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                  {isRecalculating ? 'Recalculando...' : 'Recalcular Trilha'}
+                </Button>
+              </div>
+            )}
 
             <div className="space-y-2.5">
               {reviewCycles.map(num => {
@@ -501,16 +583,83 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
                         </span>
 
                         {!isCompleted && (
-                          <Button
-                            size="sm"
-                            variant={statusInfo.status === 'ATRASADO' ? 'destructive' : 'default'}
-                            onClick={() => handleOpenComplete(existing)}
-                            className="h-7 text-[11px] font-bold px-2.5 gap-1"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteCycle(num)}
+                              disabled={deletingCycleNum === num}
+                              className="h-7 text-[11px] px-2 text-destructive hover:bg-destructive/10"
+                              title={`Excluir R${num} e pausar revisões`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              <span className="hidden sm:inline text-[10px]">Excluir</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={statusInfo.status === 'ATRASADO' ? 'destructive' : 'default'}
+                              onClick={() => handleOpenComplete(existing)}
+                              className="h-7 text-[11px] font-bold px-2.5 gap-1"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
+                            </Button>
+                          </div>
                         )}
                       </div>
+
+                      {/* Se este foi o último concluído e a trilha está pausada */}
+                      {isCompleted && isCyclePaused && lastCompletedCycle?.review_number === num && (
+                        <div className="mt-2.5 pt-2 border-t border-border/60 flex items-center justify-between">
+                          <span className="text-[11px] text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> Trilha pausada neste ciclo
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={handleRecalculate}
+                            disabled={isRecalculating}
+                            className="h-6 text-[10px] font-bold px-2.5 gap-1 bg-amber-600 hover:bg-amber-500 text-white"
+                          >
+                            <RefreshCw className={`h-2.5 w-2.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                            {isRecalculating ? 'Recalculando...' : `Recalcular R${num + 1}`}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Se a trilha está pausada e este é o próximo ciclo a ser gerado
+                if (isCyclePaused && num === nextCycleToReactivate) {
+                  return (
+                    <div
+                      key={num}
+                      className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/5 flex items-center justify-between gap-2 transition-all shadow-sm"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <span className="h-6 w-6 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs font-bold">
+                          R{num}
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                            <span>{num}ª Revisão (Pausada)</span>
+                            <Badge variant="outline" className="text-[9px] py-0 px-1 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                              Aguardando ativação
+                            </Badge>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Próximo ciclo a ser gerado com base no último desempenho registrado
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={handleRecalculate}
+                        disabled={isRecalculating}
+                        className="h-7 text-[11px] font-bold px-2.5 gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shrink-0 shadow-sm"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${isRecalculating ? 'animate-spin' : ''}`} />
+                        {isRecalculating ? 'Recalculando...' : 'Recalcular Trilha'}
+                      </Button>
                     </div>
                   );
                 }

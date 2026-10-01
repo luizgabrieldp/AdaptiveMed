@@ -112,6 +112,8 @@ interface DataContextType {
     completedDate?: string
   ) => Promise<void>;
   deleteTopic: (topicId: string) => Promise<void>;
+  deleteReviewsFromCycle: (topicId: string, fromReviewNumber: number) => Promise<void>;
+  recalculateTopicReviews: (topicId: string) => Promise<void>;
   addMockExam: (data: {
     exam_name: string;
     exam_date: string;
@@ -1593,6 +1595,105 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // AÇÃO 3b: Excluir um ciclo de revisão e os posteriores (mantém R0 e ciclos anteriores)
+  const deleteReviewsFromCycle = async (topicId: string, fromReviewNumber: number) => {
+    setReviews(prev => {
+      const up = prev.filter(r => !(r.topic_id === topicId && r.review_number >= fromReviewNumber));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(up));
+      }
+      return up;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(
+        supabase
+          .from('topic_reviews')
+          .delete()
+          .eq('topic_id', topicId)
+          .gte('review_number', fromReviewNumber)
+      );
+    }
+  };
+
+  // AÇÃO 3c: Recalcular e reativar trilha de revisões a partir do último estágio concluído
+  const recalculateTopicReviews = async (topicId: string) => {
+    const targetTopic = topics.find(t => t.id === topicId);
+    if (!targetTopic) return;
+
+    const topicRevs = reviews.filter(r => r.topic_id === topicId);
+    const completedRevs = topicRevs
+      .filter(r => Boolean(r.completed_date))
+      .sort((a, b) => a.review_number - b.review_number);
+
+    let nextCycleNum = 1;
+    let baseAccuracy = targetTopic.initial_percentage || 80;
+    const baseQuestions = targetTopic.base_questions_count || targetTopic.initial_questions || 20;
+    let prevInterval = 7;
+
+    if (completedRevs.length > 0) {
+      const lastCompleted = completedRevs[completedRevs.length - 1];
+      nextCycleNum = lastCompleted.review_number + 1;
+      baseAccuracy = lastCompleted.percentage != null ? lastCompleted.percentage : 80;
+      prevInterval = lastCompleted.previous_interval_days || 7;
+    }
+
+    if (nextCycleNum > 8) return;
+
+    const reviewCalc = calculateNextReview({
+      currentCycle: nextCycleNum - 1,
+      accuracy: baseAccuracy,
+      baseQuestionsCount: baseQuestions,
+      previousIntervalDays: prevInterval,
+    });
+
+    const today = getTodayDateString();
+    const targetDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
+
+    const scheduledCounts = new Map<string, number>();
+    reviews.forEach(r => {
+      if (!r.completed_date) {
+        scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+      }
+    });
+    const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+    const newScheduledDate = findNextAvailableDate(targetDate, scheduledCounts, maxDailyLimit);
+
+    const newReview: TopicReview = {
+      id: isDemoMode ? `rev-${Date.now()}` : crypto.randomUUID(),
+      topic_id: topicId,
+      user_id: user?.id || 'demo-user-id',
+      review_number: nextCycleNum,
+      scheduled_date: newScheduledDate,
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      duration_minutes: null,
+      recommended_questions: reviewCalc.recommendedQuestions,
+      previous_interval_days: reviewCalc.nextIntervalDays,
+      diagnosis: reviewCalc.diagnosis,
+      diagnosis_badge: reviewCalc.diagnosisBadge,
+      pedagogical_note: reviewCalc.pedagogicalNote,
+      created_at: new Date().toISOString(),
+    };
+
+    setReviews(prev => {
+      const filtered = prev.filter(r => !(r.topic_id === topicId && r.review_number >= nextCycleNum));
+      const updated = [...filtered, newReview];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(safeInsertTopicReview(supabase, newReview));
+    }
+  };
+
   // AÇÃO 4: Adicionar Simulado Geral
   const addMockExam = async (data: {
     exam_name: string;
@@ -1911,6 +2012,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         completeReview,
         updateCompletedReview,
         deleteTopic,
+        deleteReviewsFromCycle,
+        recalculateTopicReviews,
         addMockExam,
         deleteMockExam,
         addInstitutionExam,

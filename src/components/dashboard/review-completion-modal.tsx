@@ -39,7 +39,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   topic,
   mode,
 }) => {
-  const { completeReview, updateCompletedReview, deleteTopic, topics, areas, updateTopic } = useData();
+  const { completeReview, updateCompletedReview, deleteReviewsFromCycle, topics, areas, updateTopic } = useData();
   const [area, setArea] = useState<string>('');
   const [subjectName, setSubjectName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -161,16 +161,14 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    const targetTopic = topic || topics.find(t => t.id === review.topic_id);
-    if (!targetTopic) return;
+  const handleDeleteReviewCycle = async () => {
     try {
       setIsDeleting(true);
-      await deleteTopic(targetTopic.id);
+      await deleteReviewsFromCycle(review.topic_id, review.review_number);
       setShowDeleteConfirm(false);
       onOpenChange(false);
     } catch (err) {
-      console.error('Erro ao excluir estudo:', err);
+      console.error('Erro ao excluir ciclo de revisão:', err);
     } finally {
       setIsDeleting(false);
     }
@@ -187,11 +185,11 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-foreground">
-                  Excluir estudo definitivamente?
+                  Excluir R{review.review_number} e pausar revisões?
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Isso apagará o assunto <strong className="text-foreground">"{topic?.subject_name || 'Assunto'}"</strong> e{' '}
-                  <strong className="text-destructive">todas as revisões associadas</strong> do seu cronograma.
+                  Isso apagará o ciclo <strong className="text-foreground">R{review.review_number}</strong> (e revisões seguintes) deste assunto da sua agenda.
+                  O seu <strong className="text-emerald-500 font-semibold">estudo inicial (R0) continuará salvo intacto</strong> no seu histórico.
                 </p>
               </div>
             </div>
@@ -212,11 +210,11 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 variant="destructive"
                 size="sm"
                 disabled={isDeleting}
-                onClick={handleDelete}
+                onClick={handleDeleteReviewCycle}
                 className="text-xs font-bold gap-1.5"
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                {isDeleting ? 'Excluindo...' : 'Confirmar Exclusão'}
+                {isDeleting ? 'Excluindo...' : `Confirmar Exclusão de R${review.review_number}`}
               </Button>
             </div>
           </div>
@@ -448,27 +446,26 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </div>
             </div>
 
-            <DialogFooter className="flex-col sm:flex-row justify-between items-center gap-2 pt-3 border-t border-border">
-              {topic ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="w-full sm:w-auto text-xs text-destructive hover:bg-destructive/15 gap-1.5"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Excluir Estudo
-                </Button>
-              ) : (
-                <span />
-              )}
+            {/* Rodapé Otimizado em Linha Única */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3 w-full">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-xs text-destructive hover:bg-destructive/15 gap-1.5 h-9 px-2.5 font-semibold shrink-0"
+                title={`Excluir R${review.review_number} e pausar revisões posteriores`}
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                <span>Excluir R{review.review_number}</span>
+              </Button>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => onOpenChange(false)}
                   disabled={isSubmitting}
+                  className="h-9 px-3 text-xs"
                 >
                   Cancelar
                 </Button>
@@ -476,13 +473,17 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   type="submit"
                   variant="success"
                   disabled={isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
-                  className="gap-1.5 font-bold"
+                  className="h-9 px-3.5 text-xs font-bold gap-1.5 whitespace-nowrap"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  {isSubmitting ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Gravar e Agendar Próximo'}
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  {isSubmitting
+                    ? 'Salvando...'
+                    : isEdit
+                    ? `Salvar R${review.review_number}`
+                    : `Concluir R${review.review_number}`}
                 </Button>
               </div>
-            </DialogFooter>
+            </div>
           </form>
         )}
       </DialogContent>
