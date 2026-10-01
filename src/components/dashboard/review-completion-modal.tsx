@@ -22,7 +22,7 @@ import {
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { useData } from '@/lib/store/data-context';
-import { CheckCircle2, Sparkles, BrainCircuit, Target, Trash2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Sparkles, BrainCircuit, Target, Trash2, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
 
 interface ReviewCompletionModalProps {
   open: boolean;
@@ -39,7 +39,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   topic,
   mode,
 }) => {
-  const { completeReview, updateCompletedReview, deleteReviewsFromCycle, topics, areas, updateTopic } = useData();
+  const { completeReview, updateCompletedReview, deleteReviewsFromCycle, recalculateTopicReviews, reviews, topics, areas, updateTopic } = useData();
   const [area, setArea] = useState<string>('');
   const [subjectName, setSubjectName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -48,6 +48,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
   const [durationMinutes, setDurationMinutes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -108,6 +109,46 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const today = getTodayDateString();
   const estimatedNextDate = nextCycleNumber ? addDaysToDate(today, nextInterval) : null;
   const durNum = durationMinutes.trim() !== '' ? parseInt(durationMinutes, 10) : undefined;
+
+  const topicReviews = reviews.filter(r => r.topic_id === review.topic_id);
+  const hasActiveFutureReview = topicReviews.some(
+    r => r.review_number > review.review_number && !r.completed_date
+  );
+  const isNextCyclePaused = isEdit && review.review_number < 8 && !hasActiveFutureReview;
+
+  const handleRecalculateNextCycle = async () => {
+    if (doneNum <= 0 || !isCorrectFilled || correctNum > doneNum) return;
+
+    try {
+      setIsRecalculating(true);
+      const targetTopic = topic || topics.find(t => t.id === review.topic_id);
+
+      if (targetTopic) {
+        const topicUpdates: Partial<StudyTopic> = {};
+        if (area && area !== targetTopic.area) {
+          topicUpdates.area = area;
+        }
+        if (subjectName.trim() && subjectName.trim() !== targetTopic.subject_name) {
+          topicUpdates.subject_name = subjectName.trim();
+        }
+        if (notes.trim() !== (targetTopic.notes || '')) {
+          topicUpdates.notes = notes.trim();
+        }
+
+        if (Object.keys(topicUpdates).length > 0) {
+          await updateTopic(targetTopic.id, topicUpdates);
+        }
+      }
+
+      await updateCompletedReview(review.id, doneNum, correctNum, completedDate || undefined);
+      await recalculateTopicReviews(review.topic_id);
+      onOpenChange(false);
+    } catch (err) {
+      console.error('Erro ao recalcular próximo ciclo:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -418,25 +459,49 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   </p>
                 )}
 
-                {nextCycleNumber && estimatedNextDate && (
-                  <>
-                    <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <Sparkles className="h-3.5 w-3.5 text-blue-400" />
-                        Próxima Revisão (R{nextCycleNumber}):
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        +{nextInterval} dias ({formatDateBR(estimatedNextDate)})
-                      </span>
+                {isNextCyclePaused ? (
+                  <div className="pt-2 border-t border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-amber-500/10 -mx-3 -mb-3 p-3 rounded-b-xl mt-1">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 text-xs">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        <span>Trilha de Revisões Pausada</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-tight">
+                        O ciclo R{review.review_number + 1} foi excluído e não está agendado no cronograma.
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleRecalculateNextCycle}
+                      disabled={isRecalculating || isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
+                      className="w-full sm:w-auto h-8 px-3 font-bold text-xs bg-amber-600 hover:bg-amber-500 text-white gap-1.5 shadow-sm shrink-0"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                      {isRecalculating ? 'Recalculando...' : `Recalcular R${review.review_number + 1}`}
+                    </Button>
+                  </div>
+                ) : (
+                  nextCycleNumber && estimatedNextDate && (
+                    <>
+                      <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                          Próxima Revisão (R{nextCycleNumber}):
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          +{nextInterval} dias ({formatDateBR(estimatedNextDate)})
+                        </span>
+                      </div>
 
-                    <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Meta Sugerida (R{nextCycleNumber}):</span>
-                      <span className="font-bold text-amber-400">
-                        🎯 {nextReviewCalc.recommendedQuestions} questões
-                      </span>
-                    </div>
-                  </>
+                      <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Meta Sugerida (R{nextCycleNumber}):</span>
+                        <span className="font-bold text-amber-400">
+                          🎯 {nextReviewCalc.recommendedQuestions} questões
+                        </span>
+                      </div>
+                    </>
+                  )
                 )}
                 {review.review_number === 8 && (
                   <p className="text-[11px] text-emerald-400 font-medium pt-1 border-t border-border/60">
@@ -460,6 +525,18 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               </Button>
 
               <div className="flex items-center gap-2 shrink-0">
+                {isNextCyclePaused && (
+                  <Button
+                    type="button"
+                    onClick={handleRecalculateNextCycle}
+                    disabled={isRecalculating || isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
+                    className="h-9 px-3 text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-500/20 whitespace-nowrap"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                    {isRecalculating ? 'Recalculando...' : `Recalcular R${review.review_number + 1}`}
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="outline"
@@ -472,7 +549,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 <Button
                   type="submit"
                   variant="success"
-                  disabled={isSubmitting || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
+                  disabled={isSubmitting || isRecalculating || doneNum <= 0 || !isCorrectFilled || correctNum > doneNum}
                   className="h-9 px-3.5 text-xs font-bold gap-1.5 whitespace-nowrap"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />

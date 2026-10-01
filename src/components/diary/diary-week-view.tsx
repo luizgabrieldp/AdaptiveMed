@@ -481,6 +481,20 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                         items.map(item => {
                           const style = getAreaStyle(item.area, areas);
                           const isInitialDone = item.type === 'initial_study_done';
+                          const isItemTrackPaused = (() => {
+                            if (isInitialDone && item.topic) {
+                              const topicRevs = reviews.filter(r => r.topic_id === item.topic!.id);
+                              const hasPending = topicRevs.some(r => !r.completed_date);
+                              const completedCount = topicRevs.filter(r => Boolean(r.completed_date)).length;
+                              return !hasPending && completedCount < 8;
+                            }
+                            if (item.review && item.isCompleted) {
+                              const topicRevs = reviews.filter(r => r.topic_id === item.review!.topic_id);
+                              const hasFuture = topicRevs.some(r => r.review_number > item.review!.review_number && !r.completed_date);
+                              return !hasFuture && item.review.review_number < 8;
+                            }
+                            return false;
+                          })();
 
                           return (
                             <div
@@ -534,6 +548,16 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                     >
                                       <CalendarX className="h-3 w-3" />
                                     </button>
+                                  )}
+
+                                  {isItemTrackPaused && (
+                                    <span
+                                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/35 flex items-center gap-1"
+                                      title="Trilha pausada. Clique para recalcular as revisões."
+                                    >
+                                      <Clock className="h-2.5 w-2.5" />
+                                      Pausado
+                                    </span>
                                   )}
 
                                   <span
@@ -749,6 +773,13 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1 scrollbar-thin">
                     {weeklyCompletedTopics.map(topic => {
                       const style = getAreaStyle(topic.area, areas);
+                      const isTopicTrackPaused = (() => {
+                        const topicRevs = reviews.filter(r => r.topic_id === topic.id);
+                        const hasPending = topicRevs.some(r => !r.completed_date);
+                        const completedCount = topicRevs.filter(r => Boolean(r.completed_date)).length;
+                        return !hasPending && completedCount < 8;
+                      })();
+
                       return (
                         <div
                           key={topic.id}
@@ -778,6 +809,15 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               >
                                 <Edit2 className="h-3 w-3" />
                               </button>
+                              {isTopicTrackPaused && (
+                                <span
+                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/35 flex items-center gap-1"
+                                  title="Trilha de revisões pausada. Clique para recalcular."
+                                >
+                                  <Clock className="h-2.5 w-2.5" />
+                                  Pausado
+                                </span>
+                              )}
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35 flex items-center gap-1">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 R0 Feito

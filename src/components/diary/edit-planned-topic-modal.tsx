@@ -19,7 +19,7 @@ import {
   addDaysToDate,
   formatDateBR,
 } from '@/lib/spaced-repetition';
-import { Edit3, Check, Tag, Trash2, AlertTriangle, BrainCircuit, Sparkles } from 'lucide-react';
+import { Edit3, Check, Tag, Trash2, AlertTriangle, BrainCircuit, Sparkles, Clock, RefreshCw } from 'lucide-react';
 
 interface EditPlannedTopicModalProps {
   open: boolean;
@@ -32,7 +32,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   onOpenChange,
   topic,
 }) => {
-  const { areas, updateTopic, updateTopicR0, deleteTopic } = useData();
+  const { areas, updateTopic, updateTopicR0, deleteTopic, reviews, recalculateTopicReviews } = useData();
 
   const [area, setArea] = useState('');
   const [subjectName, setSubjectName] = useState('');
@@ -48,6 +48,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -94,6 +95,17 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
       ? Math.round((qCorrect / qDone) * 1000) / 10
       : null;
 
+  const topicReviews = reviews.filter(r => r.topic_id === topic.id);
+  const completedReviews = topicReviews
+    .filter(r => Boolean(r.completed_date))
+    .sort((a, b) => a.review_number - b.review_number);
+  const pendingReviews = topicReviews.filter(r => !r.completed_date);
+  const isTrackPaused = isCompleted && pendingReviews.length === 0 && completedReviews.length < 8;
+  const nextCycleToReactivate =
+    completedReviews.length === 0
+      ? 1
+      : completedReviews[completedReviews.length - 1].review_number + 1;
+
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: percentage ?? 80,
@@ -102,6 +114,43 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   const r1Interval = reviewCalc.nextIntervalDays;
   const estimatedR1Date = addDaysToDate(studyDate || getTodayDateString(), r1Interval);
   const durNum = durationMinutes.trim() !== '' ? parseInt(durationMinutes, 10) : undefined;
+
+  const handleRecalculate = async () => {
+    if (!subjectName.trim()) return;
+    if (isCompleted && (qDone <= 0 || !isCorrectFilled || qCorrect > qDone)) return;
+
+    try {
+      setIsRecalculating(true);
+      const tags = tagInput
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean);
+
+      const targetPlannedDate = hasSpecificDate && plannedDate ? plannedDate : undefined;
+
+      const topicChanges: Partial<StudyTopic> = {
+        area,
+        subject_name: subjectName.trim(),
+        tags,
+        planned_date: targetPlannedDate,
+        initial_date: isCompleted ? studyDate : targetPlannedDate || topic.initial_date,
+        notes: notes.trim(),
+      };
+
+      if (isCompleted) {
+        await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum, topicChanges);
+      } else {
+        await updateTopic(topic.id, topicChanges);
+      }
+
+      await recalculateTopicReviews(topic.id);
+      onOpenChange(false);
+    } catch (err) {
+      console.error('Erro ao recalcular trilha:', err);
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -390,12 +439,36 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                    <span>Próxima Revisão (R1):</span>
-                    <span className="font-bold text-foreground">
-                      +{r1Interval} dias ({formatDateBR(estimatedR1Date)})
-                    </span>
-                  </div>
+                  {isTrackPaused ? (
+                    <div className="pt-2 border-t border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-amber-500/10 -mx-3 -mb-3 p-3 rounded-b-xl mt-1">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 text-xs">
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          <span>Trilha de Revisões Pausada</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          O ciclo R{nextCycleToReactivate} foi excluído e não está agendado. Reative a trilha para continuar.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleRecalculate}
+                        disabled={isRecalculating || isSubmitting || qDone <= 0 || !isCorrectFilled || qCorrect > qDone}
+                        className="w-full sm:w-auto h-8 px-3 font-bold text-xs bg-amber-600 hover:bg-amber-500 text-white gap-1.5 shadow-sm shrink-0"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                        {isRecalculating ? 'Recalculando...' : `Recalcular Trilha (R${nextCycleToReactivate})`}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                      <span>Próxima Revisão (R{nextCycleToReactivate}):</span>
+                      <span className="font-bold text-foreground">
+                        +{r1Interval} dias ({formatDateBR(estimatedR1Date)})
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -455,7 +528,19 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                 Excluir Estudo
               </Button>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                {isTrackPaused && (
+                  <Button
+                    type="button"
+                    onClick={handleRecalculate}
+                    disabled={isRecalculating || isSubmitting || qDone <= 0 || !isCorrectFilled || qCorrect > qDone}
+                    className="w-full sm:w-auto font-bold text-xs gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-500/20"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+                    {isRecalculating ? 'Recalculando...' : `Recalcular Trilha (R${nextCycleToReactivate})`}
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="ghost"
@@ -468,6 +553,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                   type="submit"
                   disabled={
                     isSubmitting ||
+                    isRecalculating ||
                     !subjectName.trim() ||
                     (isCompleted && (qDone <= 0 || !isCorrectFilled || qCorrect > qDone))
                   }
