@@ -53,66 +53,72 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // 1. Se tentar acessar páginas do app sem estar autenticado
-  if (isRestrictedAppPage && !user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    loginUrl.searchParams.set('redirectedFrom', path);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // 2. Se tentar acessar a tela de pagamento sem estar autenticado
-  if (isPaymentPage && !isPaymentSuccessPage && !user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    loginUrl.searchParams.set('redirectedFrom', '/pagamento');
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // 3. Se usuário autenticado tentar acessar páginas do app ou de pagamento
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_subscribed, subscription_status, onboarding_completed')
-      .eq('id', user.id)
-      .single();
-
-    const hasActiveSubscription = Boolean(
-      profile?.is_subscribed || profile?.subscription_status === 'active'
-    );
-
-    // Se NÃO pagou e está tentando entrar no app
-    if (isRestrictedAppPage && !hasActiveSubscription) {
-      const paymentUrl = request.nextUrl.clone();
-      paymentUrl.pathname = '/pagamento';
-      return NextResponse.redirect(paymentUrl);
+    // 1. Se tentar acessar páginas do app sem estar autenticado
+    if (isRestrictedAppPage && !user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('redirectedFrom', path);
+      return NextResponse.redirect(loginUrl);
     }
 
-    // Se JÁ pagou e está tentando acessar /pagamento
-    if (isPaymentPage && !isPaymentSuccessPage && hasActiveSubscription) {
-      const redirectUrl = request.nextUrl.clone();
-      if (profile?.onboarding_completed) {
-        redirectUrl.pathname = '/dashboard';
-      } else {
-        redirectUrl.pathname = '/onboarding';
+    // 2. Se tentar acessar a tela de pagamento sem estar autenticado
+    if (isPaymentPage && !isPaymentSuccessPage && !user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('redirectedFrom', '/pagamento');
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // 3. Se usuário autenticado tentar acessar páginas do app ou de pagamento
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_subscribed, subscription_status, onboarding_completed')
+        .eq('id', user.id)
+        .single();
+
+      const hasActiveSubscription = Boolean(
+        profile?.is_subscribed || profile?.subscription_status === 'active'
+      );
+
+      // Se NÃO pagou e está tentando entrar no app
+      if (isRestrictedAppPage && !hasActiveSubscription) {
+        const paymentUrl = request.nextUrl.clone();
+        paymentUrl.pathname = '/pagamento';
+        return NextResponse.redirect(paymentUrl);
       }
-      return NextResponse.redirect(redirectUrl);
-    }
 
-    // Se está em /login ou /signup já autenticado
-    if (isAuthPage) {
-      const redirectUrl = request.nextUrl.clone();
-      if (hasActiveSubscription) {
-        redirectUrl.pathname = profile?.onboarding_completed ? '/dashboard' : '/onboarding';
-      } else {
-        redirectUrl.pathname = '/pagamento';
+      // Se JÁ pagou e está tentando acessar /pagamento
+      if (isPaymentPage && !isPaymentSuccessPage && hasActiveSubscription) {
+        const redirectUrl = request.nextUrl.clone();
+        if (profile?.onboarding_completed) {
+          redirectUrl.pathname = '/dashboard';
+        } else {
+          redirectUrl.pathname = '/onboarding';
+        }
+        return NextResponse.redirect(redirectUrl);
       }
-      return NextResponse.redirect(redirectUrl);
+
+      // Se está em /login ou /signup já autenticado
+      if (isAuthPage) {
+        const redirectUrl = request.nextUrl.clone();
+        if (hasActiveSubscription) {
+          redirectUrl.pathname = profile?.onboarding_completed ? '/dashboard' : '/onboarding';
+        } else {
+          redirectUrl.pathname = '/pagamento';
+        }
+        return NextResponse.redirect(redirectUrl);
+      }
     }
+  } catch (error) {
+    console.warn('Supabase inacessível ou pausado no middleware:', error);
+    // Se o Supabase estiver indisponível/pausado, permite prosseguir com as páginas de fallback
+    return response;
   }
 
   return response;
