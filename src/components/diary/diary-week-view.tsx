@@ -33,6 +33,7 @@ import {
   CalendarX,
   AlertCircle,
   Edit2,
+  MoveRight,
 } from 'lucide-react';
 
 interface DiaryWeekViewProps {
@@ -46,6 +47,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     areas,
     prevalentTopics,
     updatePlannedTopicDate,
+    rescheduleReview,
     deleteTopic,
     addPlannedTopic,
     distributeWeeklyAutoStudy,
@@ -67,7 +69,8 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedTopicToEdit, setSelectedTopicToEdit] = useState<StudyTopic | null>(null);
 
-  // Seção de concluídos na lista lateral
+  // Seções recolhíveis na barra lateral
+  const [showOverdueSection, setShowOverdueSection] = useState(false);
   const [showCompletedSection, setShowCompletedSection] = useState(true);
 
   // Ref para auto-scroll na coluna de hoje
@@ -309,9 +312,39 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     setPlanModalOpen(true);
   };
 
+  // Revisões de Repetição Espaçada que venceram e não foram feitas (Atrasadas)
+  const overdueReviews = useMemo(() => {
+    return reviews
+      .filter(r => !r.completed_date && r.scheduled_date < todayStr)
+      .map(r => {
+        const topic = topicMap.get(r.topic_id);
+        const daysOverdue = Math.max(
+          1,
+          Math.round(
+            (new Date(`${todayStr}T00:00:00`).getTime() - new Date(`${r.scheduled_date}T00:00:00`).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        );
+        return {
+          review: r,
+          topic,
+          daysOverdue,
+        };
+      })
+      .filter((item): item is { review: TopicReview; topic: StudyTopic; daysOverdue: number } => Boolean(item.topic))
+      .sort((a, b) => a.review.scheduled_date.localeCompare(b.review.scheduled_date));
+  }, [reviews, todayStr, topicMap]);
+
   // Drag and Drop Handlers
-  const handleDragStart = (e: React.DragEvent, topicId: string) => {
+  const handleDragTopicStart = (e: React.DragEvent, topicId: string) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({ type: 'topic', id: topicId }));
     e.dataTransfer.setData('text/plain', topicId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragReviewStart = (e: React.DragEvent, reviewId: string) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({ type: 'review', id: reviewId }));
+    e.dataTransfer.setData('text/plain', `review:${reviewId}`);
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -332,10 +365,30 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   const handleDropOnDay = async (e: React.DragEvent, dateStr: string) => {
     e.preventDefault();
     setDragOverDay(null);
-    const topicId = e.dataTransfer.getData('text/plain');
-    if (!topicId) return;
 
-    await updatePlannedTopicDate(topicId, dateStr);
+    const jsonData = e.dataTransfer.getData('application/json');
+    if (jsonData) {
+      try {
+        const parsed = JSON.parse(jsonData);
+        if (parsed.type === 'review' && parsed.id) {
+          await rescheduleReview(parsed.id, dateStr);
+          return;
+        }
+        if (parsed.type === 'topic' && parsed.id) {
+          await updatePlannedTopicDate(parsed.id, dateStr);
+          return;
+        }
+      } catch {}
+    }
+
+    const plain = e.dataTransfer.getData('text/plain');
+    if (!plain) return;
+    if (plain.startsWith('review:')) {
+      const revId = plain.replace('review:', '');
+      await rescheduleReview(revId, dateStr);
+    } else {
+      await updatePlannedTopicDate(plain, dateStr);
+    }
   };
 
   return (
@@ -499,10 +552,12 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                           return (
                             <div
                               key={item.id}
-                              draggable={item.type === 'planned_study'}
+                              draggable={item.type === 'planned_study' || (item.type === 'review' && !item.isCompleted)}
                               onDragStart={e => {
-                                if (item.topic) {
-                                  handleDragStart(e, item.topic.id);
+                                if (item.type === 'planned_study' && item.topic) {
+                                  handleDragTopicStart(e, item.topic.id);
+                                } else if (item.type === 'review' && item.review) {
+                                  handleDragReviewStart(e, item.review.id);
                                 }
                               }}
                               onClick={() => handleOpenItem(item)}
@@ -642,8 +697,150 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
           </div>
         </div>
 
-        {/* Coluna Lateral: Assuntos da Semana (A Estudar / Arrastáveis) */}
+        {/* Coluna Lateral: Revisões Atrasadas + Assuntos da Semana */}
         <div className="lg:col-span-1 space-y-3">
+          {/* Seção / Card de Revisões Atrasadas (Expandível) */}
+          <Card
+            className={`p-3.5 transition-all shadow-xs ${
+              overdueReviews.length > 0
+                ? 'bg-rose-500/[0.06] dark:bg-rose-950/20 border-rose-500/30'
+                : 'bg-card border-border/80'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setShowOverdueSection(prev => !prev)}
+              className="flex items-center justify-between w-full text-left select-none group"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className={`p-2 rounded-xl shrink-0 ${
+                    overdueReviews.length > 0
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <h4 className="text-xs font-bold text-foreground">Revisões Atrasadas</h4>
+                    {overdueReviews.length > 0 && (
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-rose-500 text-white animate-pulse">
+                        Urgente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {overdueReviews.length === 0
+                      ? 'Nenhuma pendência acumulada'
+                      : `${overdueReviews.length} ${
+                          overdueReviews.length === 1 ? 'revisão pendente' : 'revisões pendentes'
+                        }`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge
+                  variant={overdueReviews.length > 0 ? 'destructive' : 'secondary'}
+                  className={`text-[10px] font-extrabold px-2 py-0.5 ${
+                    overdueReviews.length > 0
+                      ? 'bg-rose-500 text-white shadow-xs'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {overdueReviews.length}
+                </Badge>
+                {showOverdueSection ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-transform" />
+                )}
+              </div>
+            </button>
+
+            {/* Conteúdo Expansível ao Clicar ("cresce") */}
+            {showOverdueSection && (
+              <div className="pt-3 border-t border-border/60 mt-3 space-y-2.5">
+                {overdueReviews.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground/80 border border-dashed border-border/50 rounded-xl space-y-1">
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400">Tudo em dia!</p>
+                    <p className="text-[11px]">Você não possui revisões pendentes de datas passadas.</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[10.5px] text-muted-foreground leading-snug">
+                      💡 <strong>Arraste o card</strong> para um dia da semana para reagendar, ou clique para concluir agora:
+                    </p>
+
+                    <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
+                      {overdueReviews.map(({ review: rev, topic: top, daysOverdue }) => {
+                        const style = getAreaStyle(top.area, areas);
+
+                        return (
+                          <div
+                            key={rev.id}
+                            draggable={true}
+                            onDragStart={e => handleDragReviewStart(e, rev.id)}
+                            onClick={() => {
+                              setSelectedReview(rev);
+                              setCompletionModalOpen(true);
+                            }}
+                            className={`p-3 rounded-xl border text-xs space-y-2 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01] hover:shadow-md shadow-2xs group/overdue ${style.cardBg} ${style.cardBorder} ${style.cardHover}`}
+                            title="Arraste para uma coluna de dia para reagendar, ou clique para registrar rendimento"
+                          >
+                            {/* Linha 1: Topo com Grip, Grande Área e Badge do Ciclo */}
+                            <div className="flex items-center justify-between gap-1 w-full">
+                              <div className="flex items-center gap-1.5 min-w-0 max-w-[78%]">
+                                <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0 group-hover/overdue:text-primary transition-colors" />
+                                <span
+                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate bg-background/80 ${style.text} ${style.border}`}
+                                  title={top.area}
+                                >
+                                  {top.area}
+                                </span>
+                              </div>
+
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-primary/20 text-primary border border-primary/40 shrink-0 shadow-2xs">
+                                R{rev.review_number}
+                              </span>
+                            </div>
+
+                            {/* Linha 2: Badge de Atraso em Destaque */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 flex items-center gap-1 shadow-2xs">
+                                <AlertCircle className="h-2.5 w-2.5 shrink-0" />
+                                Atrasado há {daysOverdue} {daysOverdue === 1 ? 'dia' : 'dias'} ({formatDateBR(rev.scheduled_date)})
+                              </span>
+                            </div>
+
+                            {/* Linha 3: Título do Assunto */}
+                            <h5 className="font-bold text-xs text-foreground line-clamp-2 leading-snug">
+                              {top.subject_name}
+                            </h5>
+
+                            {/* Linha 4: Rodapé com Ação */}
+                            <div className="flex items-center justify-between text-[10px] pt-1 border-t border-border/40">
+                              <span className="text-muted-foreground font-medium flex items-center gap-1">
+                                <MoveRight className="h-2.5 w-2.5 text-muted-foreground" />
+                                Arraste para o dia
+                              </span>
+                              <span className="font-bold text-primary group-hover/overdue:underline flex items-center gap-0.5">
+                                Concluir →
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Card dos Assuntos da Semana */}
           <Card className="p-4 bg-card border-border shadow-xs">
             <div className="flex items-center justify-between pb-3 border-b border-border/60">
               <div className="flex items-center space-x-2">
@@ -680,7 +877,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                     <div
                       key={topic.id}
                       draggable={true}
-                      onDragStart={e => handleDragStart(e, topic.id)}
+                      onDragStart={e => handleDragTopicStart(e, topic.id)}
                       className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} transition-all cursor-grab active:cursor-grabbing shadow-2xs space-y-2 group`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
