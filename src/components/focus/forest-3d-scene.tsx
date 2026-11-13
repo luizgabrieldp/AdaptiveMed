@@ -70,6 +70,52 @@ function terrainHeightAt(x: number, z: number, islandRadius: number): number {
   return gentleRoll;
 }
 
+function hashSeed(input: string | number): number {
+  const str = String(input);
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function nextRand(state: { value: number }): number {
+  // Mulberry32 determinístico para espalhar plantas e árvores de modo natural por todo o mapa
+  let t = (state.value += 0x6d2b79f5);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function pickOrganicMapPoint(
+  seedInput: string | number,
+  islandRadius: number,
+  pondPos: THREE.Vector2,
+  occupied: Array<{ x: number; z: number }>,
+  minDistance: number,
+  minCenterRadius = 0.25
+): { x: number; z: number } {
+  const rng = { value: hashSeed(seedInput) };
+  const maxR = Math.max(1.2, islandRadius - 0.72);
+  let best = { x: 0, z: 0 };
+
+  for (let attempt = 0; attempt < 28; attempt++) {
+    const r = minCenterRadius + Math.sqrt(nextRand(rng)) * Math.max(0.5, maxR - minCenterRadius);
+    const theta = nextRand(rng) * Math.PI * 2;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+    best = { x, z };
+
+    const nearPond = Math.hypot(x - pondPos.x, z - pondPos.y) < islandRadius * 0.27;
+    const nearTree = occupied.some(p => Math.hypot(x - p.x, z - p.z) < minDistance);
+    if (!nearPond && !nearTree) {
+      return best;
+    }
+  }
+  return best;
+}
+
 /**
  * Cria geometria orgânica de copa de árvore deformando suavemente um Icosahedron.
  */
@@ -242,7 +288,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
         const stepBucket = Math.floor(prog.progressRatio * 12);
         const hasBees = Boolean(slot.beesActiveUntilMs && slot.beesActiveUntilMs > Date.now());
         const recentBoost = Boolean(slot.lastBoostAtMs && Date.now() - slot.lastBoostAtMs < 15000);
-        return `${slot.area}:${prog.stageNumber}:${stepBucket}:${hasBees}:${recentBoost}`;
+        return `${slot.area}:${slot.plotSeed ?? idx}:${prog.stageNumber}:${stepBucket}:${hasBees}:${recentBoost}`;
       })
       .join('|');
   }, [nurserySlots, activeSlotIndex, activeSlotLiveSeconds]);
@@ -327,12 +373,6 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       new THREE.MeshStandardMaterial({
         color: isDark ? 0x3b281c : 0x5d3d28,
         roughness: 0.96,
-      })
-    );
-    const bedRimMat = trackMat(
-      new THREE.MeshStandardMaterial({
-        color: isDark ? 0x645040 : 0x9b7454,
-        roughness: 0.82,
       })
     );
     const beeBodyMat = trackMat(
@@ -563,12 +603,11 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       }
 
       const areaColor = new THREE.Color(colorHex || '#10b981');
-      // Mistura sutil de verde botânico natural com o pigmento da Grande Área (para ficar orgânico e realista)
-      const naturalLeafGreen = new THREE.Color(isDark ? 0x15803d : 0x22c55e);
-      const canopyMainColor = naturalLeafGreen.clone().lerp(areaColor, 0.52);
-      const canopyLightColor = canopyMainColor.clone().offsetHSL(0.01, 0.04, 0.11);
-      const canopyShadowColor = canopyMainColor.clone().multiplyScalar(0.76);
-      const blossomColor = areaColor.clone().offsetHSL(0, 0.08, 0.14);
+      // Folhagem fiel à coloração da Grande Área escolhida, com variação tonal orgânica (luz e sombra)
+      const canopyMainColor = areaColor.clone();
+      const canopyLightColor = areaColor.clone().lerp(new THREE.Color(0xffffff), 0.22);
+      const canopyShadowColor = areaColor.clone().multiplyScalar(0.72);
+      const blossomColor = areaColor.clone().lerp(new THREE.Color(0xffffff), 0.38);
 
       const leafMainMat = trackMat(
         new THREE.MeshStandardMaterial({ color: canopyMainColor, roughness: 0.78 })
@@ -768,16 +807,16 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       const areaColor = new THREE.Color(colorHex || '#10b981');
       const leafMat = trackMat(
         new THREE.MeshStandardMaterial({
-          color: new THREE.Color(0x22c55e).lerp(areaColor, 0.35),
-          roughness: 0.65,
+          color: areaColor.clone(),
+          roughness: 0.62,
         })
       );
       const budColorMat = trackMat(
         new THREE.MeshStandardMaterial({
-          color: areaColor,
-          roughness: 0.5,
+          color: areaColor.clone().lerp(new THREE.Color(0xffffff), 0.28),
+          roughness: 0.45,
           emissive: areaColor,
-          emissiveIntensity: 0.14,
+          emissiveIntensity: 0.18,
         })
       );
 
@@ -873,12 +912,20 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       return group;
     };
 
-    // 3 Canteiros do Viveiro posicionados em arco frontal bem visível
-    const bedPositions: Array<{ x: number; z: number }> = [
-      { x: -1.75, z: Math.min(islandRadius * 0.52, 2.35) },
-      { x: 0, z: Math.min(islandRadius * 0.6, 2.65) },
-      { x: 1.75, z: Math.min(islandRadius * 0.52, 2.35) },
-    ];
+    // Posições orgânicas espalhadas aleatoriamente por toda a ilha (sem canteiros fixos)
+    const occupiedPoints: Array<{ x: number; z: number }> = [];
+    const nurseryPositions: Array<{ x: number; z: number }> = nurserySlots.map((slot, idx) => {
+      const pt = pickOrganicMapPoint(
+        `nursery-${idx}-${slot.plotSeed ?? (idx * 317 + 137)}`,
+        islandRadius,
+        pondPos,
+        occupiedPoints,
+        1.55,
+        0.35
+      );
+      occupiedPoints.push(pt);
+      return pt;
+    });
 
     const animatedBees: Array<{
       group: THREE.Group;
@@ -901,7 +948,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
     let activeBedPlantGroup: THREE.Group | null = null;
 
     nurserySlots.forEach((slot, idx) => {
-      const pos = bedPositions[idx];
+      const pos = nurseryPositions[idx];
       const groundY = terrainHeightAt(pos.x, pos.z, islandRadius);
       const isSelected = idx === activeSlotIndex;
       const slotStyle = getAreaStyle(slot.area, areas);
@@ -912,26 +959,17 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       bedGroup.position.set(pos.x, groundY, pos.z);
       bedGroup.userData = { nurserySlotIndex: idx };
 
-      // Borda elevada orgânica do canteiro + monte de terra fértil
-      const rimGeo = trackGeo(new THREE.TorusGeometry(0.62, 0.065, 10, 28));
-      const rim = new THREE.Mesh(rimGeo, bedRimMat);
-      rim.rotation.x = Math.PI / 2;
-      rim.position.y = 0.04;
-      rim.receiveShadow = true;
-      rim.castShadow = true;
-      rim.userData = { nurserySlotIndex: idx };
-      bedGroup.add(rim);
-
-      const moundGeo = trackGeo(new THREE.SphereGeometry(0.6, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2));
+      // Pequeno monte natural de terra fértil no chão (sem borda rígida/quadrada)
+      const moundGeo = trackGeo(new THREE.SphereGeometry(0.46, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2));
       const mound = new THREE.Mesh(moundGeo, soilMat);
-      mound.scale.set(1, 0.22, 1);
+      mound.scale.set(1, 0.16, 1);
       mound.position.y = 0.01;
       mound.receiveShadow = true;
       mound.userData = { nurserySlotIndex: idx };
       bedGroup.add(mound);
 
       if (isSelected) {
-        const ringGeo = trackGeo(new THREE.RingGeometry(0.7, 0.8, 36));
+        const ringGeo = trackGeo(new THREE.RingGeometry(0.56, 0.65, 36));
         const ringMat = trackMat(
           new THREE.MeshBasicMaterial({
             color: new THREE.Color(slotStyle.primary),
@@ -953,7 +991,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
         liveSec,
         idx + 1
       );
-      plant.position.y = 0.1;
+      plant.position.y = 0.06;
       plant.traverse(child => {
         child.userData = { nurserySlotIndex: idx };
       });
@@ -1018,37 +1056,19 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       clickableBedTargets.push(bedGroup);
     });
 
-    // Floresta Permanente distribuída organicamente ao fundo & laterais (sem invadir canteiros nem lago)
-    const goldenAngle = 2.399963229728653;
-    const minForestRadius = 1.25;
-    const maxForestRadius = islandRadius - 0.72;
-
+    // Árvores maduras espalhadas de modo orgânico e aleatório por toda a ilha
     permanentTrees.forEach((treeItem, idx) => {
-      let attempt = 0;
-      let tx = 0;
-      let tz = 0;
-      let valid = false;
+      const pt = pickOrganicMapPoint(
+        treeItem.id,
+        islandRadius,
+        pondPos,
+        occupiedPoints,
+        0.92,
+        0.3
+      );
+      occupiedPoints.push(pt);
 
-      while (attempt < 14 && !valid) {
-        const seedIdx = idx * 3 + attempt;
-        const ratio =
-          permanentTrees.length <= 1 ? 0.45 : ((idx + attempt * 0.35) % permanentTrees.length) / Math.max(1, permanentTrees.length);
-        const r = minForestRadius + Math.sqrt(Math.min(1, ratio + 0.08)) * Math.max(0.9, maxForestRadius - minForestRadius);
-        const theta = seedIdx * goldenAngle;
-        tx = Math.cos(theta) * r;
-        tz = Math.sin(theta) * r;
-
-        const nearPond = Math.hypot(tx - pondPos.x, tz - pondPos.y) < islandRadius * 0.28;
-        const nearBed = bedPositions.some(bp => Math.hypot(tx - bp.x, tz - bp.z) < 1.18);
-        if (!nearPond && !nearBed) {
-          valid = true;
-        }
-        attempt++;
-      }
-
-      if (!valid) return;
-
-      const ty = terrainHeightAt(tx, tz, islandRadius);
+      const ty = terrainHeightAt(pt.x, pt.z, islandRadius);
       const treeMesh = buildOrganicTree(
         treeItem.colorHex,
         treeItem.species,
@@ -1056,7 +1076,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
         treeItem.isWithered,
         idx
       );
-      treeMesh.position.set(tx, ty - 0.02, tz);
+      treeMesh.position.set(pt.x, ty - 0.02, pt.z);
       treeMesh.rotation.y = (idx * 1.37) % (Math.PI * 2);
       worldGroup.add(treeMesh);
     });
@@ -1302,7 +1322,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       {/* Dica de interação no rodapé */}
       <div className="absolute bottom-2.5 left-3 pointer-events-none">
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-card/80 backdrop-blur-sm border border-border/60 text-muted-foreground">
-          Arraste para girar 360° • Clique em um dos 3 canteiros na frente para alternar • Cada Grande Área cultiva uma espécie
+          Arraste para girar 360° • Plantas nascem espalhadas pelo mapa com a cor da área escolhida
         </span>
       </div>
     </div>

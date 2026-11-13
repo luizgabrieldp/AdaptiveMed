@@ -70,6 +70,7 @@ export default function FocoFlorestaPage() {
     setMode,
     setPomodoroDurations,
     setSelectedArea,
+    setSlotArea,
     setSelectedTopicId,
     selectNurserySlot,
     applyBoost,
@@ -604,13 +605,13 @@ export default function FocoFlorestaPage() {
 
               {/* Viveiro Paralelo: 3 Plantas Simultâneas por Estágios de 25 min */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <p className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
                     <Sprout className="h-3.5 w-3.5 text-emerald-500" />
-                    Viveiro Paralelo (3 Plantas Simultâneas • 4 Estágios de 25 min)
+                    Cultivos Simultâneos no Mapa (3 plantas • 4 estágios de 25 min)
                   </p>
                   <span className="text-[11px] text-muted-foreground">
-                    Alterne entre os canteiros a qualquer momento
+                    Escolha qualquer área (GO, Preventiva, Clínica, etc.) em cada planta
                   </span>
                 </div>
 
@@ -625,25 +626,36 @@ export default function FocoFlorestaPage() {
                     );
 
                     return (
-                      <button
+                      <div
                         key={slot.slotIndex}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => selectNurserySlot(slot.slotIndex)}
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            selectNurserySlot(slot.slotIndex);
+                          }
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           isSelected
                             ? 'border-emerald-500/70 bg-emerald-500/10 ring-1 ring-emerald-500/30 shadow-sm'
                             : 'border-border bg-muted/25 hover:bg-muted/50'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-1.5">
-                          <span className="text-[11px] font-extrabold text-foreground">
-                            Canteiro #{slot.slotIndex + 1}
+                          <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1.5">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: sStyle.primary }}
+                            />
+                            Planta #{slot.slotIndex + 1}
                           </span>
                           <div className="flex items-center gap-1">
                             {hasBees && (
                               <span
                                 className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300"
-                                title="Abelhas polinizando este canteiro"
+                                title="Abelhas polinizando esta planta"
                               >
                                 Abelhas
                               </span>
@@ -657,11 +669,28 @@ export default function FocoFlorestaPage() {
                           </div>
                         </div>
 
-                        <p className="text-xs font-bold text-foreground truncate mt-1">
-                          {slot.area}
-                        </p>
+                        <div
+                          className="mt-1.5"
+                          onClick={e => e.stopPropagation()}
+                          onKeyDown={e => e.stopPropagation()}
+                        >
+                          <select
+                            value={slot.area}
+                            disabled={status !== 'idle' && isSelected}
+                            onChange={e => setSlotArea(slot.slotIndex, e.target.value)}
+                            aria-label={`Área da Planta ${slot.slotIndex + 1}`}
+                            className="w-full h-7 rounded-lg border border-border bg-background px-2 text-[11px] font-bold text-foreground disabled:opacity-60"
+                          >
+                            {areas.map(a => (
+                              <option key={a.id} value={a.name}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         {slot.subjectName && (
-                          <p className="text-[10px] text-muted-foreground truncate">
+                          <p className="text-[10px] text-muted-foreground truncate mt-1">
                             {slot.subjectName}
                           </p>
                         )}
@@ -695,7 +724,7 @@ export default function FocoFlorestaPage() {
                           {Math.round(liveSec / 60)}/100 min • faltam{' '}
                           {Math.ceil(prog.remainingToNextStageSec / 60)} min p/ próx. estágio
                         </p>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

@@ -74,6 +74,7 @@ interface FocusTimerContextType {
   setMode: (mode: FocusMode) => void;
   setPomodoroDurations: (focusMins: number, breakMins: number) => void;
   setSelectedArea: (area: string) => void;
+  setSlotArea: (slotIndex: 0 | 1 | 2, area: string) => void;
   setSelectedTopicId: (topicId: string | null) => void;
   selectNurserySlot: (slotIndex: 0 | 1 | 2) => void;
   applyBoost: (boostType: ForestBoostType, targetSlotIndex?: 0 | 1 | 2) => Promise<void>;
@@ -374,15 +375,17 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
   }, []);
 
-  const setSelectedArea = useCallback(
-    (area: string) => {
-      setState(prev => ({
-        ...prev,
-        selectedArea: area,
-        selectedTopicId: null,
-      }));
+  const setSlotArea = useCallback(
+    (slotIndex: 0 | 1 | 2, area: string) => {
+      if (slotIndex === activeSlotIndex) {
+        setState(prev => ({
+          ...prev,
+          selectedArea: area,
+          selectedTopicId: null,
+        }));
+      }
       const nextSlots = forestGarden.slots.map((s, idx) =>
-        idx === activeSlotIndex ? { ...s, area, topicId: null, subjectName: null } : s
+        idx === slotIndex ? { ...s, area, topicId: null, subjectName: null } : s
       ) as [NurserySlotState, NurserySlotState, NurserySlotState];
       void updateForestGarden({
         ...forestGarden,
@@ -390,6 +393,13 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     },
     [forestGarden, activeSlotIndex, updateForestGarden]
+  );
+
+  const setSelectedArea = useCallback(
+    (area: string) => {
+      setSlotArea(activeSlotIndex, area);
+    },
+    [setSlotArea, activeSlotIndex]
   );
 
   const setSelectedTopicId = useCallback(
@@ -645,6 +655,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setMode,
         setPomodoroDurations,
         setSelectedArea,
+        setSlotArea,
         setSelectedTopicId,
         selectNurserySlot,
         applyBoost,

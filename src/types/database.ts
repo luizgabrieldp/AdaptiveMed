@@ -378,6 +378,7 @@ export interface NurserySlotState {
   subjectName?: string | null;
   accumulatedSeconds: number; // Progresso no ciclo atual (0 até 6000s = 4 estágios de 25 min)
   boostedSeconds: number;     // Quanto deste ciclo veio de Água / Adubo / Abelhas
+  plotSeed?: number;          // Semente determinística de posição aleatória na ilha 3D
   beesActiveUntilMs?: number; // Timestamp até quando as abelhas polinizam visualmente este canteiro
   lastBoostAtMs?: number;     // Timestamp do último boost para efeito visual imediato na cena 3D
 }

@@ -110,15 +110,21 @@ export function getTreeStageLabel(stage: TreeGrowthStage): string {
 }
 
 export function createDefaultForestGarden(areaNames: string[]): ForestGardenState {
-  const fallback = ['Clínica Médica', 'Cirurgia Geral', 'Pediatria'];
+  const fallback = [
+    'Clínica Médica',
+    'Cirurgia Geral',
+    'Pediatria',
+    'Ginecologia e Obstetrícia',
+    'Medicina Preventiva',
+  ];
   const getArea = (idx: number) => areaNames[idx] || areaNames[0] || fallback[idx] || 'Clínica Médica';
 
   return {
     activeSlotIndex: 0,
     slots: [
-      { slotIndex: 0, area: getArea(0), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0 },
-      { slotIndex: 1, area: getArea(1), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0 },
-      { slotIndex: 2, area: getArea(2), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0 },
+      { slotIndex: 0, area: getArea(0), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0, plotSeed: 137 },
+      { slotIndex: 1, area: getArea(1), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0, plotSeed: 491 },
+      { slotIndex: 2, area: getArea(2), topicId: null, subjectName: null, accumulatedSeconds: 0, boostedSeconds: 0, plotSeed: 829 },
     ],
     boostsSpent: { water: 0, fertilizer: 0, bees: 0 },
     maturedTrees: [],
@@ -148,6 +154,7 @@ export function normalizeForestGarden(raw: unknown, areaNames: string[]): Forest
       subjectName: typeof src.subjectName === 'string' ? src.subjectName : null,
       accumulatedSeconds: Math.max(0, Math.min(FULL_TREE_SECONDS - 1, Math.floor(Number(src.accumulatedSeconds) || 0))),
       boostedSeconds: Math.max(0, Math.min(FULL_TREE_SECONDS - 1, Math.floor(Number(src.boostedSeconds) || 0))),
+      plotSeed: typeof src.plotSeed === 'number' ? src.plotSeed : def.plotSeed,
       beesActiveUntilMs: typeof src.beesActiveUntilMs === 'number' ? src.beesActiveUntilMs : undefined,
       lastBoostAtMs: typeof src.lastBoostAtMs === 'number' ? src.lastBoostAtMs : undefined,
     };
@@ -270,6 +277,10 @@ export function advanceNurserySlot(
     ...slot,
     accumulatedSeconds: remainderSeconds,
     boostedSeconds: nextBoosted,
+    plotSeed:
+      maturedCount > 0
+        ? Math.floor(((nowMs % 99991) + (slot.plotSeed || 1) * 7 + slot.slotIndex * 131 + 17) % 100000)
+        : slot.plotSeed,
     lastBoostAtMs: isBoost ? nowMs : slot.lastBoostAtMs,
     beesActiveUntilMs: extraFlags?.activateBees ? nowMs + 6 * 60 * 60 * 1000 : slot.beesActiveUntilMs,
   };
