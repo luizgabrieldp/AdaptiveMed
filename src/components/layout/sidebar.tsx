@@ -108,7 +108,7 @@ export const Sidebar: React.FC = () => {
             </div>
             {!isCollapsed && (
               <div className="truncate">
-                <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent block truncate">
+                <span className="font-extrabold text-lg tracking-tight text-foreground block truncate">
                   AdaptiveMed
                 </span>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
@@ -135,7 +135,7 @@ export const Sidebar: React.FC = () => {
             className="mb-5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center cursor-default"
             title={`${stats.currentStreak} dias de ofensiva ativa`}
           >
-            <Flame className="h-4 w-4 text-amber-500 fill-amber-500 animate-pulse" />
+            <Flame className="h-4 w-4 text-amber-500 fill-amber-500" />
             <span className="text-[11px] font-black text-amber-400 mt-0.5">
               {stats.currentStreak}d
             </span>
@@ -144,7 +144,7 @@ export const Sidebar: React.FC = () => {
           <div className="mb-6 mx-1 p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 border border-amber-500/20 flex items-center justify-between">
             <div className="flex items-center space-x-2.5 min-w-0">
               <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
-                <Flame className="h-4 w-4 fill-amber-500 text-amber-500 animate-pulse" />
+                <Flame className="h-4 w-4 fill-amber-500 text-amber-500" />
               </div>
               <div className="truncate">
                 <p className="text-xs font-bold text-foreground truncate">

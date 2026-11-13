@@ -561,7 +561,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
 
                       {hasOverdue && (
                         <span
-                          className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse"
+                          className="h-1.5 w-1.5 rounded-full bg-rose-500"
                           title="Possui pendência atrasada"
                         />
                       )}
@@ -772,7 +772,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
             <CardContent className="p-3 space-y-2 max-h-[340px] overflow-y-auto">
               {overdueReviews.length === 0 ? (
                 <div className="py-6 text-center text-xs text-emerald-400 font-medium">
-                  🎉 Nenhuma revisão em atraso!
+                  Nenhuma revisão em atraso.
                 </div>
               ) : (
                 overdueReviews.map(({ review, topic, statusInfo }) => {

@@ -197,10 +197,19 @@ export const DEFAULT_WORKLOAD_CONFIG: WorkloadConfig = {
 
 export interface PedagogicalDiagnosis {
   level: 'lapse' | 'unstable' | 'desirable' | 'solid' | 'mastery';
-  badge: string;           // Ex: "🔴 Ruptura Crítica (Lapse)"
+  badge: string;           // Ex: "Ruptura Crítica (Lapse)"
   title: string;           // Ex: "Ruptura Crítica (Lapse)"
   pedagogicalNote: string; // Ex: "Foco em bloco corretivo enxuto para retestar os erros em 48h sem causar fadiga cognitiva."
   colorVariant: 'destructive' | 'warning' | 'success' | 'info' | 'purple';
+}
+
+export interface FsrsCardState {
+  stability: number;
+  difficulty: number;
+  reps: number;
+  lapses: number;
+  state: number;
+  lastReview?: string;
 }
 
 export interface Profile {
@@ -280,6 +289,11 @@ export interface ReviewCalculationInput {
   accuracy: number; // 0 a 100
   baseQuestionsCount: number;
   previousIntervalDays?: number;
+  actualElapsedDays?: number; // Tempo real decorrido desde o último estudo/revisão
+  targetYear?: number; // Ano da prova alvo (modulação Cepeda et al., 2008)
+  fsrsState?: FsrsCardState;
+  reviewHistory?: Array<{ date: string; accuracy: number }>;
+  referenceDate?: string;
 }
 
 export interface ReviewCalculationResult {
@@ -289,6 +303,8 @@ export interface ReviewCalculationResult {
   diagnosis: string;
   diagnosisBadge: string;
   pedagogicalNote: string;
+  fsrsState?: FsrsCardState;
+  fsrsRating?: number;
 }
 
 export interface TopicWithReviews extends StudyTopic {

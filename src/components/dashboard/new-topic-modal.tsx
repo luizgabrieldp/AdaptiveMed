@@ -432,7 +432,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
                 {calculatedPct !== null && (
                   <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
-                    💡 {reviewCalc.pedagogicalNote}
+                    {reviewCalc.pedagogicalNote}
                   </p>
                 )}
 
@@ -440,15 +440,15 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                   <span className="text-muted-foreground flex items-center gap-1">
                     <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Agendamento de R1:
                   </span>
-                  <span className="font-bold text-foreground">
+                  <span className="font-bold text-foreground font-mono tabular-nums">
                     +{r1Interval} dias ({formatDateBR(r1EstimatedDate)})
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
                   <span className="text-muted-foreground">Meta Sugerida para R1:</span>
-                  <span className="font-bold text-amber-400">
-                    🎯 {reviewCalc.recommendedQuestions} questões
+                  <span className="font-bold text-amber-400 font-mono tabular-nums">
+                    {reviewCalc.recommendedQuestions} questões
                   </span>
                 </div>
               </div>

@@ -726,7 +726,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <h4 className="text-xs font-bold text-foreground">Revisões Atrasadas</h4>
                     {overdueReviews.length > 0 && (
-                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-rose-500 text-white animate-pulse">
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
                         Urgente
                       </span>
                     )}
@@ -771,7 +771,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                 ) : (
                   <>
                     <p className="text-[10.5px] text-muted-foreground leading-snug">
-                      💡 <strong>Arraste o card</strong> para um dia da semana para reagendar, ou clique para concluir agora:
+                      <strong>Arraste o card</strong> para um dia da semana para reagendar, ou clique para concluir agora:
                     </p>
 
                     <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
@@ -853,7 +853,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
             </div>
 
             <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
-              💡 <strong>Dica:</strong> Arraste o card diretamente para a coluna do dia em que estudou, ou clique em <em>Registrar Estudo</em>.
+              <strong>Dica:</strong> Arraste o card diretamente para a coluna do dia em que estudou, ou clique em <em>Registrar Estudo</em>.
             </p>
 
             <div className="mt-3 space-y-2 max-h-[500px] overflow-y-auto pr-1 scrollbar-thin">

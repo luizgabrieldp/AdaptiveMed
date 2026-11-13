@@ -35,7 +35,7 @@ export default function DashboardPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                 Olá, {formatGreetingName(profile?.full_name)}
               </h1>
-              <HeartPulse className="h-6 w-6 text-rose-500 animate-pulse" />
+              <HeartPulse className="h-6 w-6 text-rose-500" />
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground capitalize mt-0.5">
               {todayFormatted} • Foco:{' '}

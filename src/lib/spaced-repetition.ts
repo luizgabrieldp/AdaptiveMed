@@ -1,10 +1,19 @@
 import {
+  fsrs,
+  createEmptyCard,
+  Rating,
+  State,
+  type Card,
+  type Grade,
+} from 'ts-fsrs';
+import {
   ReviewStatus,
   ReviewCalculationInput,
   ReviewCalculationResult,
   PedagogicalDiagnosis,
   StreakConfig,
   DEFAULT_STREAK_CONFIG,
+  FsrsCardState,
 } from '@/types/database';
 
 /**
@@ -12,10 +21,66 @@ import {
  * Suporta tanto entradas de 0.0 a 1.0 quanto de 0 a 100.
  */
 export function normalizePercentage(percentage: number): number {
-  if (percentage <= 1 && percentage > 0) {
+  if (!Number.isFinite(percentage) || percentage <= 0) return 0;
+  if (percentage <= 1) {
     return Math.round(percentage * 100 * 10) / 10;
   }
-  return Math.round(percentage * 10) / 10;
+  return Math.min(100, Math.round(percentage * 10) / 10);
+}
+
+/**
+ * Mapeia o percentual de acerto (0-100) para os 4 ratings do FSRS-6:
+ * - < 50%: Rating.Again (Ruptura Crítica / Lapse)
+ * - 50% a 69.9%: Rating.Hard (Retenção Instável)
+ * - 70% a 89.9%: Rating.Good (Dificuldade Desejável / Fixação Sólida)
+ * - >= 90%: Rating.Easy (Domínio Pleno)
+ */
+export function mapAccuracyToFsrsRating(rawAccuracy: number): Grade {
+  const accuracy = normalizePercentage(rawAccuracy);
+  if (accuracy < 50) return Rating.Again;
+  if (accuracy < 70) return Rating.Hard;
+  if (accuracy < 90) return Rating.Good;
+  return Rating.Easy;
+}
+
+/**
+ * Modula o intervalo máximo de revisão pelo horizonte até a prova alvo (Cepeda et al., 2008).
+ * Evita que revisões ultrapassem a data da prova ou fiquem espaçadas demais perto do exame.
+ */
+export function computeMaxIntervalForExamHorizon(
+  targetYear?: number,
+  referenceDate?: string
+): number {
+  if (!targetYear || !Number.isFinite(targetYear)) {
+    return 75;
+  }
+
+  const today = referenceDate || getTodayDateString();
+  const examDate = `${Math.round(targetYear)}-11-15`;
+  const daysToExam = diffInDays(examDate, today);
+
+  if (daysToExam <= 0) {
+    return 21;
+  }
+
+  // Cepeda et al. (2008): ISI ótimo ~ 10% a 20% do intervalo de retenção até a prova
+  return Math.min(90, Math.max(14, Math.round(daysToExam * 0.2)));
+}
+
+function serializeFsrsCard(card: Card): FsrsCardState {
+  return {
+    stability: Number(card.stability.toFixed(4)),
+    difficulty: Number(card.difficulty.toFixed(4)),
+    reps: card.reps,
+    lapses: card.lapses,
+    state: card.state,
+    lastReview: card.last_review ? card.last_review.toISOString().slice(0, 10) : undefined,
+  };
+}
+
+function parseDateUTC(dateStr: string): Date {
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
 }
 
 /**
@@ -27,9 +92,10 @@ export function getPedagogicalDiagnosis(accuracy: number): PedagogicalDiagnosis 
   if (norm < 50) {
     return {
       level: 'lapse',
-      badge: '🔴 Ruptura Crítica (Lapse)',
+      badge: 'Ruptura Crítica (Lapse)',
       title: 'Ruptura Crítica (Lapse)',
-      pedagogicalNote: 'Foco em bloco corretivo enxuto para retestar os erros em 48h sem causar fadiga cognitiva.',
+      pedagogicalNote:
+        'Foco em bloco corretivo enxuto para retestar os erros em 48h sem causar fadiga cognitiva.',
       colorVariant: 'destructive',
     };
   }
@@ -37,9 +103,10 @@ export function getPedagogicalDiagnosis(accuracy: number): PedagogicalDiagnosis 
   if (norm < 70) {
     return {
       level: 'unstable',
-      badge: '🟡 Retenção Instável',
+      badge: 'Retenção Instável',
       title: 'Retenção Instável',
-      pedagogicalNote: 'Volume em esforço máximo para treinar diferenciação diagnóstica e eliminação de distratores.',
+      pedagogicalNote:
+        'Volume em esforço máximo para treinar diferenciação diagnóstica e eliminação de distratores.',
       colorVariant: 'warning',
     };
   }
@@ -47,9 +114,10 @@ export function getPedagogicalDiagnosis(accuracy: number): PedagogicalDiagnosis 
   if (norm < 85) {
     return {
       level: 'desirable',
-      badge: '🟢 Dificuldade Desejável',
+      badge: 'Dificuldade Desejável',
       title: 'Dificuldade Desejável',
-      pedagogicalNote: 'Amostragem equilibrada para manutenção sólida e consolidação na zona ideal de aprendizado.',
+      pedagogicalNote:
+        'Amostragem equilibrada para manutenção sólida e consolidação na zona ideal de aprendizado.',
       colorVariant: 'success',
     };
   }
@@ -57,29 +125,31 @@ export function getPedagogicalDiagnosis(accuracy: number): PedagogicalDiagnosis 
   if (norm < 95) {
     return {
       level: 'solid',
-      badge: '🔵 Fixação Sólida',
+      badge: 'Fixação Sólida',
       title: 'Fixação Sólida',
-      pedagogicalNote: 'Validação rápida de memória para comprovar retenção estável sem sobrecarga desnecessária.',
+      pedagogicalNote:
+        'Validação rápida de memória para comprovar retenção estável sem sobrecarga desnecessária.',
       colorVariant: 'info',
     };
   }
 
   return {
     level: 'mastery',
-    badge: '🟣 Domínio Pleno',
+    badge: 'Domínio Pleno',
     title: 'Domínio Pleno',
-    pedagogicalNote: 'Micro-checagem pontual de alto nível para evitar perda de tempo e sobreaprendizagem (overlearning).',
+    pedagogicalNote:
+      'Micro-checagem pontual de alto nível para evitar perda de tempo e sobreaprendizagem (overlearning).',
     colorVariant: 'purple',
   };
 }
 
 /**
- * Dimensionamento Dinâmico do Volume de Questões via Curva Contínua de Esforço Cognitivo:
+ * Dimensionamento Dinâmico do Volume de Questões via Curva Contínua de Esforço Cognitivo
+ * (Dificuldades Desejáveis de Bjork & Bjork; anti-overlearning de Rohrer & Pashler):
  * - Pico máximo em 60% de acerto (~67% da base).
  * - Decai suavemente para notas baixas (bloco corretivo) e notas altas (anti-overlearning).
  * - Fator = 0.25 + (0.67 - 0.25) * exp(- ((acuracia - 60)^2) / (2 * 25^2))
- * - Piso geral: 10 a 12 questões
- * - Teto geral: 28 a 30 questões
+ * - Piso geral: 10 questões; Teto geral: 30 questões.
  */
 export function calculateDynamicQuestionVolume(
   rawAccuracy: number,
@@ -92,12 +162,10 @@ export function calculateDynamicQuestionVolume(
   const accuracy = normalizePercentage(rawAccuracy);
   const base = Math.max(baseQuestionsCount || 30, 15);
 
-  // Curva contínua gaussiana de esforço cognitivo centrada em 60%
   const exponent = -Math.pow(accuracy - 60, 2) / (2 * Math.pow(25, 2));
   const factor = 0.25 + (0.67 - 0.25) * Math.exp(exponent);
 
   const rawVolume = Math.round(base * factor);
-  // Travas de segurança: piso mínimo de 10 e teto máximo de 30 questões
   const volume = Math.min(30, Math.max(10, rawVolume));
 
   const diagnosis = getPedagogicalDiagnosis(accuracy);
@@ -110,67 +178,114 @@ export function calculateDynamicQuestionVolume(
 }
 
 /**
- * Motor Científico de Repetição Espaçada AdaptiveMed
- * 
- * Fase 1: Do Estudo Inicial para a Revisão 1 (R1)
- *   - < 50%: 2 dias fixos (reteste corretivo em 48h)
- *   - >= 50%: dias = 1.5 * exp(0.028 * acuracia) -> floor(dias), min 3d, max 21d
- * 
- * Fase 2: Entre Revisões Subsequentes (R2 a R8)
- *   - < 50%: 2 dias fixos (reset) e regride 1 nível de ciclo
- *   - 50% a 64%: 5 dias fixos (intervalo travado para reforço intermediário)
- *   - >= 65%: multiplicador = 1.0 + 1.5 * ((acuracia - 65) / 35)^1.2 -> floor(anterior * mult)
- *             piso de expansão de +8 dias, teto de 75 dias
+ * Motor Científico de Repetição Espaçada AdaptiveMed (FSRS-6 via ts-fsrs)
+ *
+ * - Usa FSRS-6 (enable_short_term: false, request_retention: 0.90)
+ * - Mapeia acurácia -> Rating.Again / Hard / Good / Easy
+ * - Considera o tempo real decorrido (actualElapsedDays)
+ * - Modula intervalo máximo pelo horizonte até a prova (target_year, Cepeda et al., 2008)
+ * - Desacopla review_number sequencial monotônico (sem regressão/colisão em lapses)
  */
 export function calculateNextReview(input: ReviewCalculationInput): ReviewCalculationResult {
-  const { currentCycle, accuracy: rawAccuracy, baseQuestionsCount = 30, previousIntervalDays = 7 } = input;
+  const {
+    currentCycle,
+    accuracy: rawAccuracy,
+    baseQuestionsCount = 30,
+    previousIntervalDays = 7,
+    actualElapsedDays,
+    targetYear,
+    fsrsState,
+    reviewHistory,
+    referenceDate,
+  } = input;
+
   const accuracy = normalizePercentage(rawAccuracy);
   const base = Math.max(baseQuestionsCount || 30, 15);
-
-  // 1. Volume de questões e diagnóstico pedagógico dinâmico
   const volumeData = calculateDynamicQuestionVolume(accuracy, base);
+  const maxInterval = computeMaxIntervalForExamHorizon(targetYear, referenceDate);
 
-  // 2. FASE 1: Estudo Inicial (R0) -> Agendamento da R1
-  if (currentCycle === 0) {
-    let nextIntervalDays: number;
-    if (accuracy < 50) {
-      nextIntervalDays = 2; // Reteste corretivo rápido em 48h
-    } else {
-      const calcDays = 1.5 * Math.exp(0.028 * accuracy);
-      nextIntervalDays = Math.min(21, Math.max(3, Math.floor(calcDays)));
+  const scheduler = fsrs({
+    enable_short_term: false,
+    request_retention: 0.9,
+    maximum_interval: maxInterval,
+    enable_fuzz: false,
+  });
+
+  const nowStr = referenceDate || getTodayDateString();
+  const nowDate = parseDateUTC(nowStr);
+  const rating = mapAccuracyToFsrsRating(accuracy);
+
+  let card: Card;
+
+  if (fsrsState) {
+    const lastRevDate = fsrsState.lastReview
+      ? parseDateUTC(fsrsState.lastReview)
+      : new Date(nowDate.getTime() - Math.max(1, actualElapsedDays ?? previousIntervalDays) * 86400000);
+
+    card = {
+      due: nowDate,
+      stability: fsrsState.stability,
+      difficulty: fsrsState.difficulty,
+      elapsed_days: Math.max(0, actualElapsedDays ?? previousIntervalDays),
+      scheduled_days: previousIntervalDays,
+      reps: fsrsState.reps,
+      lapses: fsrsState.lapses,
+      learning_steps: 0,
+      state: fsrsState.state as State,
+      last_review: lastRevDate,
+    };
+  } else if (reviewHistory && reviewHistory.length > 0) {
+    // Reconstrói o estado FSRS-6 deterministicamente a partir do histórico real de revisões
+    const sortedHist = [...reviewHistory].sort((a, b) => a.date.localeCompare(b.date));
+    card = createEmptyCard(parseDateUTC(sortedHist[0].date));
+    for (const entry of sortedHist) {
+      const entryDate = parseDateUTC(entry.date);
+      const entryRating = mapAccuracyToFsrsRating(entry.accuracy);
+      card = scheduler.next(card, entryDate, entryRating).card;
     }
+  } else if (currentCycle === 0) {
+    card = createEmptyCard(nowDate);
+  } else {
+    // Fallback determinístico quando não há histórico nem estado FSRS salvo:
+    // sintetiza um estado compatível com o ciclo e intervalo real decorrido
+    const elapsed = Math.max(1, actualElapsedDays ?? previousIntervalDays ?? 7);
+    const synthInitDate = new Date(nowDate.getTime() - elapsed * 86400000);
+    card = createEmptyCard(synthInitDate);
+    card = scheduler.next(card, synthInitDate, Rating.Good).card;
 
-    return {
-      nextIntervalDays,
-      nextCycle: 1,
-      recommendedQuestions: volumeData.volume,
-      diagnosis: volumeData.diagnosis.title,
-      diagnosisBadge: volumeData.diagnosis.badge,
-      pedagogicalNote: volumeData.diagnosis.pedagogicalNote,
+    for (let step = 1; step < currentCycle; step++) {
+      const stepDays = Math.max(1, Math.round(card.scheduled_days || elapsed));
+      const stepDate = new Date(
+        Math.min(
+          nowDate.getTime() - 86400000,
+          (card.last_review?.getTime() || synthInitDate.getTime()) + stepDays * 86400000
+        )
+      );
+      card = scheduler.next(card, stepDate, Rating.Good).card;
+    }
+    // Ajusta last_review para refletir exatamente actualElapsedDays antes do review atual
+    card = {
+      ...card,
+      last_review: new Date(nowDate.getTime() - elapsed * 86400000),
     };
   }
 
-  // 3. FASE 2: Revisões Subsequentes (R1 a R7 -> agendando R2 a R8)
-  let nextIntervalDays: number;
-  let nextCycle = Math.min(8, currentCycle + 1);
+  const nextResult = scheduler.next(card, nowDate, rating);
+  const nextCard = nextResult.card;
 
-  if (accuracy < 50) {
-    // Reset corretivo para 2 dias e penalidade de 1 ciclo
+  let nextIntervalDays = Math.round(nextCard.scheduled_days);
+
+  if (rating === Rating.Again) {
+    // Reteste corretivo em 48h para ruptura crítica
     nextIntervalDays = 2;
-    nextCycle = Math.max(1, currentCycle - 1);
-  } else if (accuracy < 65) {
-    // Congela em 5 dias para reforço intermediário
-    nextIntervalDays = 5;
+  } else if (currentCycle === 0) {
+    nextIntervalDays = Math.min(maxInterval, Math.max(3, nextIntervalDays));
   } else {
-    // Expansão dinâmica contínua (>= 65%)
-    const normalizedProgress = (accuracy - 65) / 35; // 0.0 a 1.0
-    const multiplier = 1.0 + 1.5 * Math.pow(Math.max(0, normalizedProgress), 1.2);
-    const calculatedInterval = Math.floor(previousIntervalDays * multiplier);
-
-    // Piso mínimo de expansão de pelo menos +8 dias e teto de 75 dias
-    const minExpanded = previousIntervalDays + 8;
-    nextIntervalDays = Math.min(75, Math.max(minExpanded, calculatedInterval));
+    nextIntervalDays = Math.min(maxInterval, Math.max(3, nextIntervalDays));
   }
+
+  // review_number é estritamente monotônico (desacoplado da estabilidade FSRS para evitar colisão em lapses)
+  const nextCycle = currentCycle === 0 ? 1 : Math.min(8, currentCycle + 1);
 
   return {
     nextIntervalDays,
@@ -179,7 +294,42 @@ export function calculateNextReview(input: ReviewCalculationInput): ReviewCalcul
     diagnosis: volumeData.diagnosis.title,
     diagnosisBadge: volumeData.diagnosis.badge,
     pedagogicalNote: volumeData.diagnosis.pedagogicalNote,
+    fsrsState: serializeFsrsCard(nextCard),
+    fsrsRating: rating,
   };
+}
+
+/**
+ * Interleaving de Grandes Áreas (Rohrer & Taylor, 2007; Kornell & Bjork, 2008):
+ * Reordena a fila priorizada para evitar blocos consecutivos da mesma Grande Área
+ * sempre que houver outra área disponível na fila.
+ */
+export function interleaveQueueByArea<T>(
+  items: T[],
+  getArea: (item: T) => string | undefined
+): T[] {
+  if (items.length <= 2) return items;
+
+  const remaining = [...items];
+  const result: T[] = [];
+  let lastArea: string | undefined = undefined;
+
+  while (remaining.length > 0) {
+    let pickIndex = remaining.findIndex(item => {
+      const area = getArea(item);
+      return area && area !== lastArea;
+    });
+
+    if (pickIndex === -1) {
+      pickIndex = 0;
+    }
+
+    const [picked] = remaining.splice(pickIndex, 1);
+    result.push(picked);
+    lastArea = getArea(picked);
+  }
+
+  return result;
 }
 
 /**
@@ -232,7 +382,7 @@ export function addDaysToDate(dateStr: string, days: number): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   date.setDate(date.getDate() + days);
-  
+
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -262,12 +412,7 @@ export function formatDateBR(dateStr?: string | null): string {
 }
 
 /**
- * Cálculo Dinâmico de Status em relação à data atual (hoje):
- * - Se completed_date estiver preenchido -> Status: "CONCLUÍDO"
- * - Se completed_date for nulo:
- *   * Se scheduled_date < hoje -> Status: "ATRASADO"
- *   * Se scheduled_date === hoje -> Status: "REVISAR HOJE"
- *   * Se scheduled_date > hoje -> Status: "PROGRAMADO"
+ * Cálculo Dinâmico de Status em relação à data atual (hoje)
  */
 export function calculateReviewStatus(
   scheduledDate: string,
@@ -275,7 +420,7 @@ export function calculateReviewStatus(
   referenceDate?: string
 ): {
   status: ReviewStatus;
-  daysDiff: number; // positivo se atrasado, negativo se dias restantes, 0 se hoje
+  daysDiff: number;
   badgeText: string;
 } {
   const today = referenceDate || getTodayDateString();
@@ -316,7 +461,6 @@ export function calculateReviewStatus(
 
 /**
  * Calcula a sequência de estudos ativa (streak em dias consecutivos).
- * Considera dias de atividade contíguos terminando em hoje ou ontem.
  */
 export function calculateStreak(activityDates: string[], referenceDate?: string): number {
   if (!activityDates || activityDates.length === 0) return 0;
@@ -324,15 +468,15 @@ export function calculateStreak(activityDates: string[], referenceDate?: string)
   const today = referenceDate || getTodayDateString();
   const yesterday = addDaysToDate(today, -1);
 
-  // Normaliza e remove duplicatas
-  const uniqueDates = Array.from(new Set(activityDates.map(d => d.slice(0, 10)))).sort((a, b) => b.localeCompare(a));
-  
+  const uniqueDates = Array.from(new Set(activityDates.map(d => d.slice(0, 10)))).sort((a, b) =>
+    b.localeCompare(a)
+  );
+
   if (uniqueDates.length === 0) return 0;
 
-  // A sequência está ativa se houver atividade hoje ou ontem
   const mostRecent = uniqueDates[0];
   if (mostRecent !== today && mostRecent !== yesterday) {
-    return 0; // Sequência interrompida
+    return 0;
   }
 
   let streak = 0;
@@ -351,9 +495,7 @@ export function calculateStreak(activityDates: string[], referenceDate?: string)
 }
 
 /**
- * Regra da Ofensiva:
- * O estudante só pontua a ofensiva do dia se realizar pelo menos 10 questões
- * (soma de questões feitas em estudos/revisões daquele dia) OU concluir 1 simulado no dia.
+ * Regra da Ofensiva
  */
 export function calculateQualifiedStreak(
   topics: Array<{ initial_date: string; initial_questions: number; is_planned?: boolean }>,
@@ -389,7 +531,6 @@ export function calculateQualifiedStreak(
   const dailyQuestions: Record<string, number> = {};
   const dailyMocks: Record<string, number> = {};
 
-  // Questões de estudos iniciais não planejados
   topics.forEach(t => {
     if (!t.is_planned && t.initial_questions > 0 && t.initial_date) {
       const d = t.initial_date.slice(0, 10);
@@ -397,7 +538,6 @@ export function calculateQualifiedStreak(
     }
   });
 
-  // Questões de revisões concluídas
   reviews.forEach(r => {
     if (r.completed_date && r.questions_done && r.questions_done > 0) {
       const d = r.completed_date.slice(0, 10);
@@ -405,7 +545,6 @@ export function calculateQualifiedStreak(
     }
   });
 
-  // Simulados concluídos
   mockExams.forEach(m => {
     if (m.exam_date) {
       const d = m.exam_date.slice(0, 10);
@@ -417,11 +556,7 @@ export function calculateQualifiedStreak(
   const todayMockCompleted = (dailyMocks[today] || 0) >= 1;
   const streakQualifiedToday = isQualified(todayQuestionsCount, todayMockCompleted ? 1 : 0);
 
-  // Dias que qualificam com base na regra configurada
-  const allDates = new Set([
-    ...Object.keys(dailyQuestions),
-    ...Object.keys(dailyMocks),
-  ]);
+  const allDates = new Set([...Object.keys(dailyQuestions), ...Object.keys(dailyMocks)]);
 
   const qualifyingDates: string[] = [];
   allDates.forEach(date => {
@@ -441,4 +576,3 @@ export function calculateQualifiedStreak(
     streakQualifiedToday,
   };
 }
-

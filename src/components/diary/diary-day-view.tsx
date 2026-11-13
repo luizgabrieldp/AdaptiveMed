@@ -428,8 +428,8 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                             R{review.review_number}
                           </span>
                           {review.recommended_questions && (
-                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded">
-                              🎯 {review.recommended_questions} Qs
+                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded font-mono tabular-nums">
+                              {review.recommended_questions} Qs
                             </span>
                           )}
                           <Badge
@@ -587,7 +587,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
             <CardContent className="p-3 space-y-2.5 max-h-[460px] overflow-y-auto">
               {overdueReviews.length === 0 ? (
                 <div className="py-6 text-center text-xs text-emerald-400 font-medium">
-                  🎉 Nenhuma revisão em atraso pendente!
+                  Nenhuma revisão em atraso pendente.
                 </div>
               ) : (
                 <>
@@ -678,7 +678,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                       {isBacklogExpanded && (
                         <div className="space-y-2 pt-1 animate-in fade-in">
                           <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] text-muted-foreground leading-relaxed">
-                            💡 <strong>Anti-Sobrecarga:</strong> Estes assuntos estão em espera para evitar fadiga cognitiva. Eles entrarão na sua fila de hoje automaticamente à medida que você liquidar os prioritários, ou você pode reprogramá-los manualmente abaixo.
+                            <strong>Anti-Sobrecarga:</strong> Estes assuntos estão em espera para evitar fadiga cognitiva. Eles entrarão na sua fila de hoje automaticamente à medida que você liquidar os prioritários, ou você pode reprogramá-los manualmente abaixo.
                           </div>
 
                           {backlogOverdueReviews.map(({ review, topic, statusInfo }) => {

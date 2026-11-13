@@ -52,7 +52,7 @@ export default function SignupPage() {
 
     if (!isSupabaseConfigured()) {
       setErrorMessage(
-        'Supabase ainda não configurado no .env.local. Para acessar a demonstração, entre com admin123 na tela de login.'
+        'Serviço de autenticação não configurado no ambiente atual.'
       );
       return;
     }
@@ -157,8 +157,6 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         <div className="text-center space-y-2">

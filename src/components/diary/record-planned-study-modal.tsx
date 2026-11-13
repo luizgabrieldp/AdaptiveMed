@@ -274,21 +274,21 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
               {percentage !== null && (
                 <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
-                  💡 {reviewCalc.pedagogicalNote}
+                  {reviewCalc.pedagogicalNote}
                 </p>
               )}
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1.5 border-t border-border/60">
                 <span>Próxima Revisão (R1):</span>
-                <span className="font-bold text-foreground">
+                <span className="font-bold text-foreground font-mono tabular-nums">
                   +{r1Interval} dias ({formatDateBR(estimatedR1Date)})
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
                 <span>Meta Sugerida para R1:</span>
-                <span className="font-bold text-amber-400">
-                  🎯 {reviewCalc.recommendedQuestions} questões
+                <span className="font-bold text-amber-400 font-mono tabular-nums">
+                  {reviewCalc.recommendedQuestions} questões
                 </span>
               </div>
             </div>

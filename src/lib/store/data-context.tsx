@@ -879,11 +879,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    // Calcula o primeiro ciclo de revisão (R1) usando o motor científico
+    // Calcula o primeiro ciclo de revisão (R1) usando o motor científico FSRS-6
     const reviewCalc = calculateNextReview({
       currentCycle: 0,
       accuracy: percentage,
       baseQuestionsCount: data.initial_questions,
+      targetYear: profile?.target_year,
+      referenceDate: data.initial_date,
     });
     const targetR1Date = addDaysToDate(data.initial_date, reviewCalc.nextIntervalDays);
 
@@ -896,6 +898,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
     const r1ScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
+    const actualR1Interval = Math.max(1, diffInDays(r1ScheduledDate, data.initial_date));
 
     const r1Review: TopicReview = {
       id: isDemoMode ? `rev-${Date.now()}-1` : crypto.randomUUID(),
@@ -908,7 +911,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_correct: null,
       percentage: null,
       recommended_questions: reviewCalc.recommendedQuestions,
-      previous_interval_days: reviewCalc.nextIntervalDays,
+      previous_interval_days: actualR1Interval,
       diagnosis: reviewCalc.diagnosis,
       diagnosis_badge: reviewCalc.diagnosisBadge,
       pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1002,6 +1005,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentCycle: 0,
       accuracy: percentage,
       baseQuestionsCount: data.questions_done,
+      targetYear: profile?.target_year,
+      referenceDate: data.study_date,
     });
     const targetR1Date = addDaysToDate(data.study_date, reviewCalc.nextIntervalDays);
 
@@ -1150,6 +1155,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentCycle: 0,
         accuracy: percentage,
         baseQuestionsCount: questionsDone,
+        targetYear: profile?.target_year,
+        referenceDate: finalInitialDate,
       });
       const targetR1Date = addDaysToDate(finalInitialDate, reviewCalc.nextIntervalDays);
 
@@ -1161,12 +1168,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
       const newScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
+      const actualR1Interval = Math.max(1, diffInDays(newScheduledDate, finalInitialDate));
 
       updatedR1 = {
         ...r1Review,
         scheduled_date: newScheduledDate,
         recommended_questions: reviewCalc.recommendedQuestions,
-        previous_interval_days: reviewCalc.nextIntervalDays,
+        previous_interval_days: actualR1Interval,
         diagnosis: reviewCalc.diagnosis,
         diagnosis_badge: reviewCalc.diagnosisBadge,
         pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1376,18 +1384,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetTopic = topics.find(t => t.id === currentReview.topic_id);
     const baseQuestions = targetTopic?.base_questions_count || targetTopic?.initial_questions || 20;
 
-    // Intervalo anterior: se tiver previous_interval_days gravado usa ele, senão calcula a diferença de dias
+    // Tempo real decorrido desde o último contato/revisão concluída
+    const priorCompleted = reviews
+      .filter(
+        r =>
+          r.topic_id === currentReview.topic_id &&
+          r.completed_date &&
+          r.review_number < currentReview.review_number
+      )
+      .sort((a, b) => a.review_number - b.review_number);
+
+    const lastActivityDate =
+      priorCompleted.length > 0
+        ? priorCompleted[priorCompleted.length - 1].completed_date!
+        : targetTopic?.initial_date;
+
+    const actualElapsedDays = lastActivityDate
+      ? Math.max(1, diffInDays(today, lastActivityDate))
+      : currentReview.previous_interval_days || 7;
+
     let prevInterval = currentReview.previous_interval_days;
     if (!prevInterval && targetTopic?.initial_date) {
       prevInterval = Math.max(1, diffInDays(currentReview.scheduled_date, targetTopic.initial_date));
     }
-    if (!prevInterval) prevInterval = 7;
+    if (!prevInterval) prevInterval = actualElapsedDays;
+
+    // Reconstrói histórico real para o estado FSRS-6
+    const reviewHistory: Array<{ date: string; accuracy: number }> = [];
+    if (targetTopic?.initial_date) {
+      reviewHistory.push({
+        date: targetTopic.initial_date,
+        accuracy: targetTopic.initial_percentage ?? 75,
+      });
+    }
+    priorCompleted.forEach(pr => {
+      if (pr.completed_date && pr.percentage !== null && pr.percentage !== undefined) {
+        reviewHistory.push({ date: pr.completed_date, accuracy: pr.percentage });
+      }
+    });
 
     const reviewCalc = calculateNextReview({
       currentCycle: currentReview.review_number,
       accuracy: percentage,
       baseQuestionsCount: baseQuestions,
       previousIntervalDays: prevInterval,
+      actualElapsedDays,
+      targetYear: profile?.target_year,
+      reviewHistory,
+      referenceDate: today,
     });
 
     const updatedReview: TopicReview = {
@@ -1405,7 +1449,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let nextReviewObj: TopicReview | null = null;
     let nextScheduledDate: string | undefined = undefined;
 
-    // Se o próximo ciclo for <= 8 e a revisão atual < 8, agenda o próximo ciclo
+    // Se o próximo ciclo for <= 8 e a revisão atual < 8, agenda o próximo ciclo (sem colisão)
     if (reviewCalc.nextCycle <= 8 && currentReview.review_number < 8) {
       const targetNextDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
 
@@ -1418,6 +1462,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
       nextScheduledDate = findNextAvailableDate(targetNextDate, scheduledCounts, maxDailyLimit);
+      const actualScheduledInterval = Math.max(1, diffInDays(nextScheduledDate, today));
 
       nextReviewObj = {
         id: isDemoMode ? `rev-${Date.now()}-${reviewCalc.nextCycle}` : crypto.randomUUID(),
@@ -1430,7 +1475,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         questions_correct: null,
         percentage: null,
         recommended_questions: reviewCalc.recommendedQuestions,
-        previous_interval_days: reviewCalc.nextIntervalDays,
+        previous_interval_days: actualScheduledInterval,
         diagnosis: reviewCalc.diagnosis,
         diagnosis_badge: reviewCalc.diagnosisBadge,
         pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1489,11 +1534,46 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const baseQuestions = targetTopic?.base_questions_count || questionsDone || 20;
     const prevInterval = targetRev.previous_interval_days || 7;
 
+    const priorCompleted = reviews
+      .filter(
+        r =>
+          r.topic_id === targetRev.topic_id &&
+          r.completed_date &&
+          r.review_number < targetRev.review_number
+      )
+      .sort((a, b) => a.review_number - b.review_number);
+
+    const lastActivityDate =
+      priorCompleted.length > 0
+        ? priorCompleted[priorCompleted.length - 1].completed_date!
+        : targetTopic?.initial_date;
+
+    const actualElapsedDays = lastActivityDate
+      ? Math.max(1, diffInDays(finalDate, lastActivityDate))
+      : prevInterval;
+
+    const reviewHistory: Array<{ date: string; accuracy: number }> = [];
+    if (targetTopic?.initial_date) {
+      reviewHistory.push({
+        date: targetTopic.initial_date,
+        accuracy: targetTopic.initial_percentage ?? 75,
+      });
+    }
+    priorCompleted.forEach(pr => {
+      if (pr.completed_date && pr.percentage !== null && pr.percentage !== undefined) {
+        reviewHistory.push({ date: pr.completed_date, accuracy: pr.percentage });
+      }
+    });
+
     const reviewCalc = calculateNextReview({
       currentCycle: targetRev.review_number,
       accuracy: percentage,
       baseQuestionsCount: baseQuestions,
       previousIntervalDays: prevInterval,
+      actualElapsedDays,
+      targetYear: profile?.target_year,
+      reviewHistory,
+      referenceDate: finalDate,
     });
 
     const updatedReview: TopicReview = {
@@ -1523,12 +1603,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
         const newScheduledDate = findNextAvailableDate(targetNextDate, scheduledCounts, maxDailyLimit);
+        const actualScheduledInterval = Math.max(1, diffInDays(newScheduledDate, finalDate));
 
         updatedNextRev = {
           ...nextRev,
           scheduled_date: newScheduledDate,
           recommended_questions: reviewCalc.recommendedQuestions,
-          previous_interval_days: reviewCalc.nextIntervalDays,
+          previous_interval_days: actualScheduledInterval,
           diagnosis: reviewCalc.diagnosis,
           diagnosis_badge: reviewCalc.diagnosisBadge,
           pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1646,6 +1727,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       accuracy: baseAccuracy,
       baseQuestionsCount: baseQuestions,
       previousIntervalDays: prevInterval,
+      actualElapsedDays: prevInterval,
+      targetYear: profile?.target_year,
     });
 
     const today = getTodayDateString();
@@ -1659,6 +1742,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
     const newScheduledDate = findNextAvailableDate(targetDate, scheduledCounts, maxDailyLimit);
+    const actualScheduledInterval = Math.max(1, diffInDays(newScheduledDate, today));
 
     const newReview: TopicReview = {
       id: isDemoMode ? `rev-${Date.now()}` : crypto.randomUUID(),
@@ -1672,7 +1756,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       percentage: null,
       duration_minutes: null,
       recommended_questions: reviewCalc.recommendedQuestions,
-      previous_interval_days: reviewCalc.nextIntervalDays,
+      previous_interval_days: actualScheduledInterval,
       diagnosis: reviewCalc.diagnosis,
       diagnosis_badge: reviewCalc.diagnosisBadge,
       pedagogical_note: reviewCalc.pedagogicalNote,

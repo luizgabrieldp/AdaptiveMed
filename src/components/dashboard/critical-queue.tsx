@@ -10,6 +10,7 @@ import {
   calculateReviewStatus,
   getTodayDateString,
   formatDateBR,
+  interleaveQueueByArea,
 } from '@/lib/spaced-repetition';
 import { ReviewCompletionModal } from './review-completion-modal';
 import { CheckCircle2, Clock, AlertCircle, Sparkles, Plus, Tag } from 'lucide-react';
@@ -27,10 +28,10 @@ export const CriticalQueue: React.FC = () => {
     return map;
   }, [topics]);
 
-  // Fila crítica: pendentes com scheduled_date <= hoje, ordenadas pelos mais atrasados primeiro
+  // Fila crítica: pendentes com scheduled_date <= hoje, priorizadas por atraso e intercaladas por Grande Área (Interleaving)
   const criticalItems = useMemo(() => {
     const today = getTodayDateString();
-    return reviews
+    const prioritized = reviews
       .filter(r => !r.completed_date && r.scheduled_date <= today)
       .map(r => {
         const topic = topicMap.get(r.topic_id);
@@ -42,6 +43,8 @@ export const CriticalQueue: React.FC = () => {
         };
       })
       .sort((a, b) => b.statusInfo.daysDiff - a.statusInfo.daysDiff);
+
+    return interleaveQueueByArea(prioritized, item => item.topic?.area);
   }, [reviews, topicMap]);
 
   const handleOpenReview = (review: TopicReview) => {

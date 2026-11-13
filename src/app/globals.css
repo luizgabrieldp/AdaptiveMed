@@ -75,6 +75,10 @@
     @apply bg-background text-foreground antialiased selection:bg-blue-500 selection:text-white;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  .font-mono,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* Custom Scrollbar */

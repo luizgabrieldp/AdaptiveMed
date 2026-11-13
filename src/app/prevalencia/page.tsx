@@ -732,7 +732,7 @@ export default function PrevalenciaPage() {
                         : 'border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {level === 'ALTA' ? '🔥 Alta' : level === 'MEDIA' ? '⚡ Média' : 'Baixa'}
+                    {level === 'ALTA' ? 'Alta' : level === 'MEDIA' ? 'Média' : 'Baixa'}
                   </button>
                 ))}
               </div>

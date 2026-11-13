@@ -1,65 +1,65 @@
-// Teste de validação rigorosa do algoritmo adaptativo e regras de negócio
+// Runner para a suite TypeScript real em scripts/test-algorithm.ts
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 
-function normalizePercentage(percentage) {
-  if (percentage <= 1 && percentage > 0) {
-    return Math.round(percentage * 100 * 10) / 10;
-  }
-  return Math.round(percentage * 10) / 10;
+const rootDir = path.resolve(__dirname, '..');
+const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adaptivemed-test-'));
+
+try {
+  const tscBin = path.join(rootDir, 'node_modules', '.bin', 'tsc');
+  const tmpTsConfigPath = path.join(outDir, 'tsconfig.test.json');
+  fs.writeFileSync(
+    tmpTsConfigPath,
+    JSON.stringify({
+      compilerOptions: {
+        target: 'ES2020',
+        module: 'commonjs',
+        moduleResolution: 'node',
+        esModuleInterop: true,
+        skipLibCheck: true,
+        strict: true,
+        outDir,
+        rootDir,
+        baseUrl: rootDir,
+        typeRoots: [path.join(rootDir, 'node_modules', '@types')],
+        types: ['node'],
+        paths: {
+          '@/*': ['src/*'],
+        },
+      },
+      include: [path.join(rootDir, 'scripts', 'test-algorithm.ts')],
+    })
+  );
+
+  execFileSync(tscBin, ['-p', tmpTsConfigPath], { stdio: 'inherit' });
+
+  // Rewrite '@/' imports in compiled JS to relative paths
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.js')) {
+        let code = fs.readFileSync(full, 'utf8');
+        const rel = path.relative(path.dirname(full), path.join(outDir, 'src')) || '.';
+        code = code.replace(/require\("@\/([^"]+)"\)/g, (_, p) => {
+          const target = path.join(rel, p).replace(/\\/g, '/');
+          return `require("${target.startsWith('.') ? target : './' + target}")`;
+        });
+        fs.writeFileSync(full, code);
+      }
+    }
+  };
+  walk(outDir);
+
+  execFileSync(process.execPath, [path.join(outDir, 'scripts', 'test-algorithm.js')], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      NODE_PATH: path.join(rootDir, 'node_modules'),
+    },
+  });
+} finally {
+  fs.rmSync(outDir, { recursive: true, force: true });
 }
-
-function calculateNextReviewInterval(percentage, reviewNumber) {
-  const normPct = normalizePercentage(percentage);
-
-  if (reviewNumber <= 1) {
-    if (normPct < 60) return 3;
-    if (normPct <= 65) return 10;
-    if (normPct <= 70) return 13;
-    if (normPct <= 80) return 20;
-    return 23;
-  }
-
-  // reviewNumber >= 2
-  if (normPct < 60) return 7;
-  if (normPct <= 65) return 13;
-  if (normPct <= 70) return 18;
-  if (normPct <= 80) return 25;
-  return 30;
-}
-
-const testCases = [
-  // Ciclo R1
-  { pct: 55, r: 1, expected: 3 },
-  { pct: 60, r: 1, expected: 10 },
-  { pct: 64.5, r: 1, expected: 10 },
-  { pct: 65, r: 1, expected: 10 },
-  { pct: 66, r: 1, expected: 13 },
-  { pct: 70, r: 1, expected: 13 },
-  { pct: 71, r: 1, expected: 20 },
-  { pct: 80, r: 1, expected: 20 },
-  { pct: 85, r: 1, expected: 23 },
-  { pct: 100, r: 1, expected: 23 },
-
-  // Ciclos R2 a R8
-  { pct: 55, r: 2, expected: 7 },
-  { pct: 60, r: 2, expected: 13 },
-  { pct: 65, r: 2, expected: 13 },
-  { pct: 68, r: 3, expected: 18 },
-  { pct: 70, r: 4, expected: 18 },
-  { pct: 75, r: 5, expected: 25 },
-  { pct: 80, r: 6, expected: 25 },
-  { pct: 82, r: 7, expected: 30 },
-  { pct: 95, r: 8, expected: 30 },
-];
-
-let passed = 0;
-for (const tc of testCases) {
-  const result = calculateNextReviewInterval(tc.pct, tc.r);
-  if (result === tc.expected) {
-    passed++;
-  } else {
-    console.error(`Falha no caso: pct=${tc.pct}%, R${tc.r} -> esperado ${tc.expected}, obtido ${result}`);
-    process.exit(1);
-  }
-}
-
-console.log(`Todos os ${passed} testes de intervalo adaptativo passaram com 100% de sucesso!`);

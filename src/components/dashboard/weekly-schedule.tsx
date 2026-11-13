@@ -138,7 +138,7 @@ export const WeeklySchedule: React.FC = () => {
         const badgeText = isCompleted
           ? `R${r.review_number} Concluída`
           : r.recommended_questions
-          ? `R${r.review_number} (🎯 ${r.recommended_questions} Qs)`
+          ? `R${r.review_number} (${r.recommended_questions} Qs)`
           : `R${r.review_number}`;
 
         map.get(r.scheduled_date)!.push({

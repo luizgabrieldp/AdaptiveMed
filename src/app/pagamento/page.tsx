@@ -107,17 +107,13 @@ export default function PagamentoPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col justify-between">
-      {/* Luzes decorativas de fundo */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
       {/* Topo / Header */}
       <header className="border-b border-border bg-card/60 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30">
         <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-md shadow-blue-500/20">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm">
             <Stethoscope className="h-5 w-5 text-white stroke-[2.2]" />
           </div>
-          <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent">
+          <span className="font-extrabold text-lg tracking-tight text-foreground">
             AdaptiveMed
           </span>
         </Link>
@@ -238,8 +234,8 @@ export default function PagamentoPage() {
             onClick={() => setSelectedPlan('annual')}
           >
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <Badge className="bg-gradient-to-r from-blue-600 to-emerald-500 text-white font-extrabold text-[11px] px-3 py-0.5 shadow-md">
-                🔥 MAIS ESCOLHIDO (ECONOMIZE 27%)
+              <Badge className="bg-primary text-primary-foreground font-extrabold text-[11px] px-3 py-0.5 shadow-md">
+                MAIS ESCOLHIDO (ECONOMIZE 27%)
               </Badge>
             </div>
 

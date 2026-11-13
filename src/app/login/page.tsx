@@ -200,9 +200,9 @@ export default function LoginPage() {
 
     if (!isSupabaseConfigured()) {
       setResetNotice({
-        type: 'success',
+        type: 'error',
         message:
-          'No modo de demonstração, utilize o login admin123 e senha admin123 para acessar.',
+          'Serviço de autenticação não configurado. Entre em contato com o suporte.',
       });
       return;
     }
@@ -240,7 +240,7 @@ export default function LoginPage() {
     setErrorMessage(null);
     if (!isSupabaseConfigured()) {
       setErrorMessage(
-        'Autenticação social requer chaves ativas do Supabase. Utilize seu E-mail e Senha ou o acesso admin123.'
+        'Autenticação social requer chaves ativas do Supabase.'
       );
       return;
     }
@@ -282,9 +282,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
-      {/* Luzes de fundo sutis */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand */}

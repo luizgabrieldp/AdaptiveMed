@@ -55,13 +55,13 @@ export default function LandingPage() {
       const reason = params.get('reason');
       if (reason === 'no_account') {
         setRedirectNotice(
-          '⚠️ Não encontramos uma conta cadastrada com este e-mail. Escolha seu plano abaixo para liberar seu acesso imediato!'
+          'Não encontramos uma conta cadastrada com este e-mail. Escolha seu plano abaixo para liberar seu acesso imediato.'
         );
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       } else if (reason === 'inactive_account') {
         setRedirectNotice(
-          '🔒 Você não tem assinatura finalizada. Finalize sua assinatura escolhendo um dos planos abaixo para liberar seu acesso:'
+          'Sua conta ainda não possui assinatura ativa. Escolha um dos planos abaixo para liberar seu acesso.'
         );
         const el = document.getElementById('planos');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -136,7 +136,7 @@ export default function LandingPage() {
                   <Button
                     onClick={() => router.push('/pagamento')}
                     size="sm"
-                    className="gap-2 font-bold text-xs shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/20 animate-pulse"
+                    className="gap-2 font-bold text-xs shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950 font-black shadow-amber-500/20"
                   >
                     Finalizar Assinatura <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
@@ -208,7 +208,7 @@ export default function LandingPage() {
         ) : (
           <div className="bg-amber-500/15 border-b border-amber-500/30 py-3 px-4 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2 animate-in fade-in">
             <span>
-              ⚠️ Olá, <strong>{profile?.full_name || user?.email}</strong>! Falta você finalizar o pagamento para liberar seu cronograma adaptativo.
+              Olá, <strong>{profile?.full_name || user?.email}</strong>. Finalize o pagamento para liberar seu cronograma adaptativo.
             </span>
             <Link
               href="/pagamento"
@@ -237,8 +237,6 @@ export default function LandingPage() {
 
       {/* HERO SECTION */}
       <section className="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-gradient-to-tr from-blue-500/15 via-indigo-500/10 to-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold tracking-wide animate-in fade-in">
             <Sparkles className="h-3.5 w-3.5" />
@@ -247,7 +245,7 @@ export default function LandingPage() {
 
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-foreground leading-[1.12] max-w-4xl mx-auto">
             Sua aprovação não depende de sorte.{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-indigo-400 to-emerald-400">
+            <span className="text-primary">
               Depende de repetição adaptativa.
             </span>
           </h1>
@@ -447,7 +445,7 @@ export default function LandingPage() {
               </div>
 
               <div className="pt-2 text-center text-xs text-muted-foreground">
-                ✨ <em>Reagende qualquer revisão ou tema pendente apenas arrastando o card para o dia desejado da semana.</em>
+                <em>Reagende qualquer revisão ou tema pendente apenas arrastando o card para o dia desejado da semana.</em>
               </div>
             </div>
           </div>
@@ -684,10 +682,11 @@ export default function LandingPage() {
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-rose-500">&lt; 50%</td>
+                    <td className="py-3.5 px-4 font-bold font-mono tabular-nums text-rose-500">&lt; 50%</td>
                     <td className="py-3.5 px-4 font-extrabold text-foreground">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-500 border border-rose-500/30">
-                        🔴 Ruptura Crítica (Lapse)
+                      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-rose-500/15 text-rose-500 border border-rose-500/30">
+                        <span className="h-2 w-2 rounded-full bg-rose-500" />
+                        Ruptura Crítica (Lapse)
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground font-medium">Reteste em 48h</td>
@@ -697,10 +696,11 @@ export default function LandingPage() {
                   </tr>
 
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-amber-500">50% a 69%</td>
+                    <td className="py-3.5 px-4 font-bold font-mono tabular-nums text-amber-500">50% a 69%</td>
                     <td className="py-3.5 px-4 font-extrabold text-foreground">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                        🟡 Retenção Instável
+                      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                        Retenção Instável
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground font-medium">Ciclo curto</td>
@@ -710,10 +710,11 @@ export default function LandingPage() {
                   </tr>
 
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-emerald-500">70% a 84%</td>
+                    <td className="py-3.5 px-4 font-bold font-mono tabular-nums text-emerald-500">70% a 84%</td>
                     <td className="py-3.5 px-4 font-extrabold text-foreground">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
-                        🟢 Dificuldade Desejável
+                      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Dificuldade Desejável
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground font-medium">Zona Ideal</td>
@@ -723,10 +724,11 @@ export default function LandingPage() {
                   </tr>
 
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-blue-500">85% a 94%</td>
+                    <td className="py-3.5 px-4 font-bold font-mono tabular-nums text-blue-500">85% a 94%</td>
                     <td className="py-3.5 px-4 font-extrabold text-foreground">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-500 border border-blue-500/30">
-                        🔵 Fixação Sólida
+                      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-blue-500/15 text-blue-500 border border-blue-500/30">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        Fixação Sólida
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground font-medium">Intervalo expandido</td>
@@ -736,10 +738,11 @@ export default function LandingPage() {
                   </tr>
 
                   <tr className="hover:bg-muted/30 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-purple-500">&ge; 95%</td>
+                    <td className="py-3.5 px-4 font-bold font-mono tabular-nums text-purple-500">&ge; 95%</td>
                     <td className="py-3.5 px-4 font-extrabold text-foreground">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-500 border border-purple-500/30">
-                        🟣 Domínio Pleno
+                      <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-md bg-purple-500/15 text-purple-500 border border-purple-500/30">
+                        <span className="h-2 w-2 rounded-full bg-purple-500" />
+                        Domínio Pleno
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-muted-foreground font-medium">Manutenção longa</td>
@@ -774,7 +777,7 @@ export default function LandingPage() {
             <div className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 to-transparent space-y-3 relative overflow-hidden sm:col-span-2 lg:col-span-1 shadow-sm">
               <div className="absolute top-2 right-2">
                 <Badge className="bg-emerald-500 text-slate-950 font-bold text-[10px]">
-                  🌟 Foco Nordeste
+                  Foco Nordeste
                 </Badge>
               </div>
               <div className="h-9 w-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
@@ -877,7 +880,6 @@ export default function LandingPage() {
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-primary font-bold flex items-center gap-1.5">
-                  <span>🏷️</span>
                   <span>Com cupom de desconto: apenas R$ 4,99 no 1º mês!</span>
                 </div>
 
@@ -919,8 +921,8 @@ export default function LandingPage() {
             {/* PLANO ANUAL (DESTAQUE) */}
             <Card className="border-2 border-primary bg-card shadow-2xl relative scale-[1.02]">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                <Badge className="bg-gradient-to-r from-blue-600 to-emerald-500 text-white font-black text-xs px-3.5 py-1 shadow-md shadow-blue-500/25">
-                  🔥 MAIS ESCOLHIDO (ECONOMIZE 27%)
+                <Badge className="bg-primary text-primary-foreground font-black text-xs px-3.5 py-1 shadow-md">
+                  MAIS ESCOLHIDO (ECONOMIZE 27%)
                 </Badge>
               </div>
 

@@ -1,6 +1,19 @@
 import { TopicReview, StudyTopic } from '@/types/database';
 import { addDaysToDate, getTodayDateString } from '@/lib/spaced-repetition';
 
+/**
+ * Escape conforme RFC 5545 (seção 3.3.11 Text) para prevenir iCalendar Injection:
+ * remove caracteres de controle e escapa \, ;, , e quebras de linha.
+ */
+export function escapeICalText(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n|\r|\n/g, '\\n');
+}
+
 export function generateICalendarFile(
   topics: StudyTopic[],
   reviews: TopicReview[],
@@ -12,7 +25,6 @@ export function generateICalendarFile(
   const topicMap = new Map<string, StudyTopic>();
   topics.forEach(t => topicMap.set(t.id, t));
 
-  // Filtra revisões pendentes com scheduled_date <= maxDate
   const upcomingReviews = reviews.filter(
     r => !r.completed_date && r.scheduled_date <= maxDate
   );
@@ -29,14 +41,15 @@ export function generateICalendarFile(
 
   upcomingReviews.forEach(rev => {
     const topic = topicMap.get(rev.topic_id);
-    const subjectName = topic?.subject_name || 'Assunto de Residência';
-    const area = topic?.area || 'Medicina';
+    const subjectName = escapeICalText(topic?.subject_name || 'Assunto de Residência');
+    const area = escapeICalText(topic?.area || 'Medicina');
+    const safeId = String(rev.id).replace(/[^a-zA-Z0-9_-]/g, '');
 
     const dateFormatted = rev.scheduled_date.replace(/-/g, '');
     const nextDay = addDaysToDate(rev.scheduled_date, 1).replace(/-/g, '');
 
     lines.push('BEGIN:VEVENT');
-    lines.push(`UID:adaptivemed-rev-${rev.id}@adaptivemed.app`);
+    lines.push(`UID:adaptivemed-rev-${safeId}@adaptivemed.app`);
     lines.push(`DTSTAMP:${dateFormatted}T000000Z`);
     lines.push(`DTSTART;VALUE=DATE:${dateFormatted}`);
     lines.push(`DTEND;VALUE=DATE:${nextDay}`);

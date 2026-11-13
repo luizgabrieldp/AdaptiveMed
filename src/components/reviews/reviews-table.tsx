@@ -219,10 +219,10 @@ export const ReviewsTable: React.FC = () => {
             className="h-9 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="TODOS">Todos os Status</option>
-            <option value="ATRASADO">🔴 Em Atraso</option>
-            <option value="REVISAR HOJE">🟡 Revisar Hoje</option>
-            <option value="PROGRAMADO">🔵 Programados</option>
-            <option value="CONCLUÍDO">🟢 Concluídos</option>
+            <option value="ATRASADO">Em Atraso</option>
+            <option value="REVISAR HOJE">Revisar Hoje</option>
+            <option value="PROGRAMADO">Programados</option>
+            <option value="CONCLUÍDO">Concluídos</option>
           </select>
         </div>
       </div>

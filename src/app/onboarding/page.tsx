@@ -98,7 +98,7 @@ interface ExamCategory {
 const CATEGORIZED_EXAMS: ExamCategory[] = [
   {
     category: 'Região Nordeste (Destaque Principal)',
-    badge: '🌟 Nordeste em Foco',
+    badge: 'Nordeste em Foco',
     highlight: true,
     exams: [
       { code: 'ENARE', name: 'Exame Nacional de Residência (Forte presença no NE)' },
@@ -117,7 +117,7 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
   },
   {
     category: 'Região Sudeste',
-    badge: '🏛️ Sudeste',
+    badge: 'Sudeste',
     exams: [
       { code: 'USP-SP', name: 'Universidade de São Paulo (Capital)', state: 'SP' },
       { code: 'USP-RP', name: 'Universidade de São Paulo (Ribeirão Preto)', state: 'SP' },
@@ -134,7 +134,7 @@ const CATEGORIZED_EXAMS: ExamCategory[] = [
   },
   {
     category: 'Sul, Centro-Oeste e Demais Regiões',
-    badge: '🌎 Outras Regiões',
+    badge: 'Outras Regiões',
     exams: [
       { code: 'AMRIGS', name: 'Associação Médica do Rio Grande do Sul / SC / MT' },
       { code: 'AMP', name: 'Associação Médica do Paraná', state: 'PR' },
@@ -347,9 +347,6 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 py-8 sm:py-12 bg-background relative overflow-y-auto">
-      {/* Luzes de fundo sutis */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-2xl space-y-6 relative z-10">
         {/* Topo / Logo */}
@@ -755,7 +752,7 @@ export default function OnboardingPage() {
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      <span>🌟 Nordeste</span>
+                      <span>Nordeste</span>
                       <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[0].exams.length})</span>
                     </button>
 
@@ -768,7 +765,7 @@ export default function OnboardingPage() {
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      <span>🏛️ Sudeste</span>
+                      <span>Sudeste</span>
                       <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[1].exams.length})</span>
                     </button>
 
@@ -781,7 +778,7 @@ export default function OnboardingPage() {
                           : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      <span>🌎 Demais Regiões</span>
+                      <span>Demais Regiões</span>
                       <span className="text-[10px] opacity-80">({CATEGORIZED_EXAMS[2].exams.length})</span>
                     </button>
                   </div>
@@ -993,10 +990,10 @@ export default function OnboardingPage() {
                   <div className="p-3.5 rounded-xl bg-card border border-border text-xs space-y-1">
                     <p className="font-bold text-foreground">
                       {cutoffPercentage >= 85
-                        ? '🔥 Meta de Alto Rendimento'
+                        ? 'Meta de Alto Rendimento'
                         : cutoffPercentage >= 80
-                        ? '🎯 Meta de Aprovação Competitiva'
-                        : '📈 Meta de Construção de Base'}
+                        ? 'Meta de Aprovação Competitiva'
+                        : 'Meta de Construção de Base'}
                     </p>
                     <p className="text-muted-foreground">
                       {cutoffPercentage >= 85

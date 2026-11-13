@@ -380,7 +380,6 @@ export default function ContaPage() {
 
         {/* CARD PRINCIPAL: GESTÃO DA ASSINATURA */}
         <Card className="border-border shadow-sm overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
 
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -632,8 +631,8 @@ export default function ContaPage() {
                   <label className="text-xs font-bold text-foreground">
                     Meta Mínima Diária de Questões
                   </label>
-                  <span className="text-xs font-extrabold text-primary">
-                    🎯 {selectedMinQuestions || 0} questões/dia
+                  <span className="text-xs font-extrabold text-primary font-mono tabular-nums">
+                    {selectedMinQuestions || 0} questões/dia
                   </span>
                 </div>
                 <div className="relative max-w-xs">
@@ -901,7 +900,7 @@ export default function ContaPage() {
               <div className="p-3 rounded-lg bg-muted/30 border border-border/60">
                 <span className="text-muted-foreground text-[11px]">E-mail de Acesso</span>
                 <p className="font-bold text-foreground text-sm mt-0.5 truncate">
-                  {user?.email || (isDemoMode ? 'admin123@adaptivemed.app' : 'Não informado')}
+                  {user?.email || (isDemoMode ? 'demo@adaptivemed.app' : 'Não informado')}
                 </p>
               </div>
 

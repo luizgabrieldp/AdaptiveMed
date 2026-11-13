@@ -116,8 +116,14 @@ export async function middleware(request: NextRequest) {
       }
     }
   } catch (error) {
-    console.warn('Supabase inacessível ou pausado no middleware:', error);
-    // Se o Supabase estiver indisponível/pausado, permite prosseguir com as páginas de fallback
+    console.warn('Erro ao validar sessão no middleware:', error);
+    // Fail-closed para rotas restritas e de pagamento em caso de falha de sessão
+    if (isRestrictedAppPage || (isPaymentPage && !isPaymentSuccessPage)) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('redirectedFrom', path);
+      return NextResponse.redirect(loginUrl);
+    }
     return response;
   }
 

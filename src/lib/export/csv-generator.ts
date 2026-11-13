@@ -1,13 +1,21 @@
 import { StudyTopic, TopicReview, MockExam, InstitutionExam } from '@/types/database';
 import { getTodayDateString, formatDateBR } from '@/lib/spaced-repetition';
 
+/**
+ * Proteção contra CSV Formula Injection (DDE/Excel/Calc):
+ * Prefixa células que iniciam com =, +, -, @, \t ou \r com apóstrofo (')
+ * e escapa aspas duplas conforme RFC 4180.
+ */
+export function sanitizeCsvCell(raw: string | number | null | undefined): string {
+  const str = String(raw ?? '').replace(/[\r\n]+/g, ' ');
+  const safe = /^[=+\-@\t\r]/.test(str.trimStart()) ? `'${str}` : str;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 export function exportTopicsAndReviewsToCSV(
   topics: StudyTopic[],
   reviews: TopicReview[]
 ): void {
-  const topicMap = new Map<string, StudyTopic>();
-  topics.forEach(t => topicMap.set(t.id, t));
-
   const headers = [
     'Grande Área',
     'Nome do Assunto',
@@ -32,8 +40,8 @@ export function exportTopicsAndReviewsToCSV(
 
     if (topicReviews.length === 0) {
       rows.push([
-        `"${topic.area}"`,
-        `"${topic.subject_name.replace(/"/g, '""')}"`,
+        sanitizeCsvCell(topic.area),
+        sanitizeCsvCell(topic.subject_name),
         formatDateBR(topic.initial_date),
         String(topic.initial_questions),
         String(topic.initial_correct),
@@ -48,8 +56,8 @@ export function exportTopicsAndReviewsToCSV(
     } else {
       topicReviews.forEach(r => {
         rows.push([
-          `"${topic.area}"`,
-          `"${topic.subject_name.replace(/"/g, '""')}"`,
+          sanitizeCsvCell(topic.area),
+          sanitizeCsvCell(topic.subject_name),
           formatDateBR(topic.initial_date),
           String(topic.initial_questions),
           String(topic.initial_correct),
@@ -84,13 +92,20 @@ export function exportExamsToCSV(
   mockExams: MockExam[],
   institutionExams: InstitutionExam[]
 ): void {
-  const headers = ['Tipo', 'Nome / Instituição', 'Data / Ano', 'Questões Totais', 'Acertos', 'Percentual (%)'];
+  const headers = [
+    'Tipo',
+    'Nome / Instituição',
+    'Data / Ano',
+    'Questões Totais',
+    'Acertos',
+    'Percentual (%)',
+  ];
   const rows: string[][] = [];
 
   mockExams.forEach(m => {
     rows.push([
       'Simulado Geral',
-      `"${m.exam_name.replace(/"/g, '""')}"`,
+      sanitizeCsvCell(m.exam_name),
       formatDateBR(m.exam_date),
       String(m.total_questions),
       String(m.correct_answers),
@@ -101,8 +116,8 @@ export function exportExamsToCSV(
   institutionExams.forEach(i => {
     rows.push([
       'Prova de Instituição',
-      `"${i.institution_name.replace(/"/g, '""')}"`,
-      String(i.exam_year),
+      sanitizeCsvCell(i.institution_name),
+      sanitizeCsvCell(i.exam_year),
       '-',
       '-',
       String(i.score_percentage),

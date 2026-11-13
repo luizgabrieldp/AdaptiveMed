@@ -332,8 +332,8 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   <span className="font-semibold text-amber-300 flex items-center gap-1.5">
                     <Target className="h-4 w-4 text-amber-400" /> Meta Científica (R{review.review_number}):
                   </span>
-                  <span className="font-black text-amber-400">
-                    🎯 {review.recommended_questions} questões
+                  <span className="font-black text-amber-400 font-mono tabular-nums">
+                    {review.recommended_questions} questões
                   </span>
                 </div>
               ) : null}
@@ -455,7 +455,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
                 {calculatedPct !== null && (
                   <p className="text-[11px] text-muted-foreground italic leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50">
-                    💡 {nextReviewCalc.pedagogicalNote}
+                    {nextReviewCalc.pedagogicalNote}
                   </p>
                 )}
 
@@ -496,8 +496,8 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
                       <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Meta Sugerida (R{nextCycleNumber}):</span>
-                        <span className="font-bold text-amber-400">
-                          🎯 {nextReviewCalc.recommendedQuestions} questões
+                        <span className="font-bold text-amber-400 font-mono tabular-nums">
+                          {nextReviewCalc.recommendedQuestions} questões
                         </span>
                       </div>
                     </>
@@ -505,7 +505,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 )}
                 {review.review_number === 8 && (
                   <p className="text-[11px] text-emerald-400 font-medium pt-1 border-t border-border/60">
-                    🎉 Último ciclo de revisão deste assunto! Fixação consolidada na memória de longo prazo.
+                    Último ciclo de revisão deste assunto! Fixação consolidada na memória de longo prazo.
                   </p>
                 )}
               </div>
