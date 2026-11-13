@@ -66,7 +66,7 @@ export const BottomNav: React.FC = () => {
             <div className="relative">
               <Icon className={`h-5 w-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
               {item.badge && item.badge > 0 && (
-                <span className="absolute -top-1.5 -right-2.5 h-4 min-w-[16px] px-1 bg-amber-500 text-slate-950 text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute -top-1.5 -right-2.5 h-4 min-w-[16px] px-1 bg-amber-500 text-slate-950 text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
                   {item.badge}
                 </span>
               )}

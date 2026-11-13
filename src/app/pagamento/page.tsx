@@ -30,10 +30,23 @@ export default function PagamentoPage() {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
 
   useEffect(() => {
+    let urlPlan: string | null = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      urlPlan = params.get('plan');
+      if (urlPlan === 'monthly' || urlPlan === 'annual') {
+        setSelectedPlan(urlPlan);
+      }
+    }
+
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
-        router.replace('/login?redirectedFrom=/pagamento');
+        const redirectTarget =
+          urlPlan === 'monthly' || urlPlan === 'annual'
+            ? `/pagamento?plan=${urlPlan}`
+            : '/pagamento';
+        router.replace(`/login?redirectedFrom=${encodeURIComponent(redirectTarget)}`);
         return;
       }
       setUser(user);
@@ -138,7 +151,7 @@ export default function PagamentoPage() {
       <main className="max-w-4xl mx-auto px-4 py-8 sm:py-12 space-y-8 flex-1 w-full relative z-10">
         {/* Banner de Aviso: Falta finalizar pagamento */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold animate-in fade-in">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold animate-fade-in">
             <Lock className="h-3.5 w-3.5" />
             <span>Falta você finalizar o pagamento</span>
           </div>

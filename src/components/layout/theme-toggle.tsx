@@ -75,7 +75,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         onMouseLeave={() => setIsHovered(false)}
       >
         {isHovered ? (
-          <div className="flex items-center rounded-xl bg-muted/95 p-1 border border-border/90 shadow-lg animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center rounded-xl bg-muted/95 p-1 border border-border/90 shadow-lg animate-zoom-in">
             <button
               type="button"
               onClick={() => {
@@ -84,7 +84,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                 theme === 'light'
-                  ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
                   : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
               }`}
               title="Modo Claro"
@@ -101,7 +101,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                 theme === 'dark'
-                  ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
                   : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
               }`}
               title="Modo Escuro"
@@ -118,7 +118,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                 theme === 'system'
-                  ? 'bg-card text-foreground shadow-xs ring-1 ring-border'
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
                   : 'text-muted-foreground hover:text-foreground hover:bg-card/40'
               }`}
               title="Automático (Acompanha o Sistema Operacional)"
@@ -131,7 +131,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
           <button
             type="button"
             onClick={() => setIsHovered(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 hover:bg-muted text-xs font-semibold text-foreground border border-border/80 transition-all shadow-2xs group"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 hover:bg-muted text-xs font-semibold text-foreground border border-border/80 transition-all shadow-sm group"
             title="Passe o mouse ou clique para alterar o tema"
           >
             {getThemeIcon(theme)}
@@ -151,7 +151,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         onClick={() => setTheme('light')}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
           theme === 'light'
-            ? 'bg-card text-foreground shadow-xs'
+            ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title="Modo Claro"
@@ -165,7 +165,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         onClick={() => setTheme('dark')}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
           theme === 'dark'
-            ? 'bg-card text-foreground shadow-xs'
+            ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title="Modo Escuro"
@@ -179,7 +179,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         onClick={() => setTheme('system')}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
           theme === 'system'
-            ? 'bg-card text-foreground shadow-xs'
+            ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title="Automático (Acompanha o Sistema Operacional)"

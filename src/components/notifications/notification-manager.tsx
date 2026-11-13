@@ -204,7 +204,7 @@ export const NotificationManager: React.FC = () => {
             )}
 
             {testSent && (
-              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-2 animate-in fade-in">
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-2 animate-fade-in">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Notificação enviada! Verifique a central de notificações do seu sistema.</span>
               </div>

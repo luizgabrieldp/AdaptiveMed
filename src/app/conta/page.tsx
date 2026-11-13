@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { CancelSubscriptionModal } from '@/components/subscription/cancel-subscription-modal';
 import { createClient } from '@/lib/supabase/client';
+import { exportTopicsAndReviewsToCSV, exportExamsToCSV } from '@/lib/export/csv-generator';
+import { downloadICalendar } from '@/lib/export/ical-generator';
 import {
   CreditCard,
   User,
@@ -31,6 +33,9 @@ import {
   Gauge,
   Layers,
   Sparkle,
+  Download,
+  CalendarPlus,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   StreakRuleType,
@@ -84,6 +89,10 @@ export default function ContaPage() {
     workloadConfig,
     updateWorkloadConfig,
     stats,
+    topics,
+    reviews,
+    mockExams,
+    institutionExams,
   } = useData();
   const [subData, setSubData] = useState<SubscriptionData | null>(null);
   const [isLoadingSub, setIsLoadingSub] = useState<boolean>(true);
@@ -363,14 +372,14 @@ export default function ContaPage() {
         {/* Notificação de Sucesso ou Erro */}
         {actionNotice && (
           <div
-            className={`p-4 rounded-xl border text-xs flex items-start gap-2.5 animate-in fade-in ${
+            className={`p-4 rounded-xl border text-xs flex items-start gap-2.5 animate-fade-in ${
               actionNotice.type === 'success'
-                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                 : 'bg-destructive/15 border-destructive/30 text-destructive'
             }`}
           >
             {actionNotice.type === 'success' ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
             ) : (
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             )}
@@ -402,8 +411,8 @@ export default function ContaPage() {
                     <Sparkles className="h-3 w-3 text-blue-400" /> Modo Demonstração
                   </Badge>
                 ) : subData?.cancelAtPeriodEnd ? (
-                  <Badge variant="atrasado" className="gap-1 font-semibold text-xs bg-amber-500/15 text-amber-300 border-amber-500/30">
-                    <AlertTriangle className="h-3 w-3 text-amber-400" /> Cancelamento Agendado
+                  <Badge variant="atrasado" className="gap-1 font-semibold text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                    <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400" /> Cancelamento Agendado
                   </Badge>
                 ) : subData?.isSubscribed ? (
                   <Badge variant="concluido" className="gap-1 font-semibold text-xs">
@@ -453,9 +462,9 @@ export default function ContaPage() {
             {subData?.cancelAtPeriodEnd && (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-2">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-amber-300">
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
                       Sua assinatura não será renovada
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
@@ -534,8 +543,8 @@ export default function ContaPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/25">
-                  <Flame className="h-4 w-4 fill-amber-400" />
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-full border border-amber-500/25">
+                  <Flame className="h-4 w-4 fill-amber-500 dark:fill-amber-400" />
                   {stats.currentStreak} {stats.currentStreak === 1 ? 'dia' : 'dias'} de ofensiva
                 </span>
               </div>
@@ -547,21 +556,21 @@ export default function ContaPage() {
             <div
               className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                 stats.streakQualifiedToday
-                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
-                  : 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                  ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-amber-500/10 border-amber-500/25 text-amber-800 dark:text-amber-300'
               }`}
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
                   {stats.streakQualifiedToday ? (
                     <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span className="text-emerald-400">Ofensiva de hoje garantida! Parabéns pelo foco.</span>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="text-emerald-700 dark:text-emerald-400">Ofensiva de hoje garantida! Parabéns pelo foco.</span>
                     </>
                   ) : (
                     <>
-                      <Flame className="h-4 w-4 text-amber-400 shrink-0" />
-                      <span className="text-amber-300">Ofensiva de hoje pendente — continue praticando para manter o fogo aceso!</span>
+                      <Flame className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span className="text-amber-800 dark:text-amber-300">Ofensiva de hoje pendente — continue praticando para manter o fogo aceso!</span>
                     </>
                   )}
                 </div>
@@ -670,7 +679,7 @@ export default function ContaPage() {
             <div className="flex items-center justify-between pt-2 border-t border-border/60">
               <div className="text-xs text-muted-foreground">
                 {streakSuccessMessage ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 animate-fade-in">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {streakSuccessMessage}
                   </span>
@@ -683,7 +692,7 @@ export default function ContaPage() {
                 size="sm"
                 onClick={() => handleSaveStreakConfig()}
                 disabled={isUpdatingStreak}
-                className="h-8 text-xs font-bold gap-1.5 shadow-xs"
+                className="h-8 text-xs font-bold gap-1.5 shadow-sm"
               >
                 {isUpdatingStreak && <Loader2 className="h-3 w-3 animate-spin" />}
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -698,7 +707,7 @@ export default function ContaPage() {
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400">
+                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400">
                   <Gauge className="h-5 w-5" />
                 </div>
                 <div>
@@ -710,7 +719,7 @@ export default function ContaPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-purple-400 flex items-center gap-1 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/25">
+                <span className="text-xs font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/25">
                   <Layers className="h-3.5 w-3.5" />
                   Até {maxDailyReviews} revisões/dia
                 </span>
@@ -720,8 +729,8 @@ export default function ContaPage() {
 
           <CardContent className="p-5 space-y-5">
             <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-1.5">
-              <p className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-purple-400" />
+              <p className="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 Algoritmo Anti-Acúmulo com Rolagem Automática
               </p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -736,7 +745,7 @@ export default function ContaPage() {
                   <label className="text-xs font-bold text-foreground">
                     Revisões por Dia
                   </label>
-                  <span className="text-xs font-black text-purple-400">
+                  <span className="text-xs font-black text-purple-700 dark:text-purple-400">
                     {maxDailyReviews} temas/dia
                   </span>
                 </div>
@@ -754,7 +763,7 @@ export default function ContaPage() {
                       }}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                         maxDailyReviews === num
-                          ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
+                          ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
                           : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
                       }`}
                     >
@@ -771,7 +780,7 @@ export default function ContaPage() {
                   <label className="text-xs font-bold text-foreground">
                     Cota de Atrasados
                   </label>
-                  <span className="text-xs font-black text-amber-400">
+                  <span className="text-xs font-black text-amber-600 dark:text-amber-400">
                     {maxDailyOverdue} na fila hoje
                   </span>
                 </div>
@@ -789,7 +798,7 @@ export default function ContaPage() {
                       }}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                         maxDailyOverdue === num
-                          ? 'bg-amber-600 text-white border-amber-500 shadow-xs'
+                          ? 'bg-amber-600 text-white border-amber-500 shadow-sm'
                           : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
                       }`}
                     >
@@ -806,7 +815,7 @@ export default function ContaPage() {
                   <label className="text-xs font-bold text-foreground">
                     Novos Assuntos (R0)
                   </label>
-                  <span className="text-xs font-black text-blue-400">
+                  <span className="text-xs font-black text-blue-600 dark:text-blue-400">
                     {maxDailyNewTopics} novo/dia
                   </span>
                 </div>
@@ -824,7 +833,7 @@ export default function ContaPage() {
                       }}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                         maxDailyNewTopics === num
-                          ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                          ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
                           : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted'
                       }`}
                     >
@@ -840,7 +849,7 @@ export default function ContaPage() {
             <div className="flex items-center justify-between pt-2 border-t border-border/60">
               <div className="text-xs text-muted-foreground">
                 {workloadSuccessMessage ? (
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 animate-fade-in">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {workloadSuccessMessage}
                   </span>
@@ -853,7 +862,7 @@ export default function ContaPage() {
                 size="sm"
                 onClick={() => handleSaveWorkloadConfig()}
                 disabled={isUpdatingWorkload}
-                className="h-8 text-xs font-bold gap-1.5 shadow-xs bg-purple-600 hover:bg-purple-500 text-white"
+                className="h-8 text-xs font-bold gap-1.5 shadow-sm bg-purple-600 hover:bg-purple-500 text-white"
               >
                 {isUpdatingWorkload && <Loader2 className="h-3 w-3 animate-spin" />}
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -868,7 +877,7 @@ export default function ContaPage() {
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
+                <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
                   <Target className="h-5 w-5" />
                 </div>
                 <div>
@@ -943,7 +952,7 @@ export default function ContaPage() {
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                 <KeyRound className="h-5 w-5" />
               </div>
               <div>
@@ -1020,14 +1029,14 @@ export default function ContaPage() {
 
               {passwordNotice && (
                 <div
-                  className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                  className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-fade-in ${
                     passwordNotice.type === 'success'
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                       : 'bg-destructive/15 border-destructive/30 text-destructive'
                   }`}
                 >
                   {passwordNotice.type === 'success' ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                   )}
@@ -1077,6 +1086,60 @@ export default function ContaPage() {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* CARD DE BACKUP & PORTABILIDADE DE DADOS */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold">Backup & Portabilidade de Dados</CardTitle>
+                <CardDescription className="text-xs">
+                  Exporte seu cronograma de revisões, histórico de simulados ou integre com Google/Apple Calendar.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={topics.length === 0}
+                onClick={() => exportTopicsAndReviewsToCSV(topics, reviews)}
+                className="h-10 text-xs font-semibold gap-2 justify-start"
+              >
+                <Download className="h-4 w-4 text-primary shrink-0" />
+                <span className="truncate">Revisões & Assuntos (.csv)</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={mockExams.length === 0 && institutionExams.length === 0}
+                onClick={() => exportExamsToCSV(mockExams, institutionExams)}
+                className="h-10 text-xs font-semibold gap-2 justify-start"
+              >
+                <Download className="h-4 w-4 text-blue-500 shrink-0" />
+                <span className="truncate">Simulados & Provas (.csv)</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={reviews.length === 0}
+                onClick={() => downloadICalendar(topics, reviews)}
+                className="h-10 text-xs font-semibold gap-2 justify-start"
+              >
+                <CalendarPlus className="h-4 w-4 text-emerald-500 shrink-0" />
+                <span className="truncate">Agenda Calendar (.ics)</span>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

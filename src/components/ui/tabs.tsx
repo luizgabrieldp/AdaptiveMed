@@ -86,7 +86,7 @@ export const TabsContent: React.FC<{
   return (
     <div
       tabIndex={0}
-      className={cn('mt-4 focus-visible:outline-none animate-in fade-in-50', className)}
+      className={cn('mt-4 focus-visible:outline-none animate-fade-in', className)}
     >
       {children}
     </div>

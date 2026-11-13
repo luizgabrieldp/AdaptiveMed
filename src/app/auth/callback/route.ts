@@ -63,9 +63,19 @@ export async function GET(request: NextRequest) {
           profile && (profile.is_subscribed || profile.subscription_status === 'active')
         );
 
-        // Se NÃO tem plano ativo, mantém o usuário logado e direciona para o pagamento
+        // Se NÃO tem plano ativo, mantém o usuário logado e direciona para o pagamento preservando ?plan=
         if (!hasActivePlan) {
-          return NextResponse.redirect(new URL('/pagamento', requestUrl.origin));
+          let planSuffix = '';
+          try {
+            const parsedNext = new URL(next, requestUrl.origin);
+            const planParam = parsedNext.searchParams.get('plan');
+            if (planParam === 'monthly' || planParam === 'annual') {
+              planSuffix = `?plan=${planParam}`;
+            }
+          } catch {
+            // Ignora erro de parse
+          }
+          return NextResponse.redirect(new URL(`/pagamento${planSuffix}`, requestUrl.origin));
         }
 
         if (profile && !profile.onboarding_completed) {

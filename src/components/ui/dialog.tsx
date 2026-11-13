@@ -60,7 +60,7 @@ export const DialogContent = React.forwardRef<
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity animate-in fade-in"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={() => onOpenChange(false)}
       />
       {/* Dialog Body */}
@@ -69,7 +69,7 @@ export const DialogContent = React.forwardRef<
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-50 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl transition-all animate-in zoom-in-95',
+          'relative z-50 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl transition-all animate-zoom-in',
           className
         )}
         onClick={e => e.stopPropagation()}

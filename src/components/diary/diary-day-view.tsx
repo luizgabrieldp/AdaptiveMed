@@ -255,7 +255,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                               title={t.area}
                             >
                               {t.area}
@@ -308,7 +308,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                               title={t.area}
                             >
                               {t.area}
@@ -676,7 +676,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                       </button>
 
                       {isBacklogExpanded && (
-                        <div className="space-y-2 pt-1 animate-in fade-in">
+                        <div className="space-y-2 pt-1 animate-fade-in">
                           <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] text-muted-foreground leading-relaxed">
                             <strong>Anti-Sobrecarga:</strong> Estes assuntos estão em espera para evitar fadiga cognitiva. Eles entrarão na sua fila de hoje automaticamente à medida que você liquidar os prioritários, ou você pode reprogramá-los manualmente abaixo.
                           </div>

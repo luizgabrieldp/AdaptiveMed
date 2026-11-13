@@ -5,6 +5,7 @@ import {
   InstitutionExam,
   Profile,
   PrevalentTopic,
+  ErrorLog,
 } from '@/types/database';
 import { getTodayDateString, addDaysToDate } from '@/lib/spaced-repetition';
 
@@ -508,6 +509,56 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       banca: 'Todas as Bancas',
       frequency_notes: 'Universalidade, equidade, integralidade e controle social',
       created_at: today,
+    },
+  ];
+}
+
+export function getInitialDemoErrorLogs(): ErrorLog[] {
+  const today = getTodayDateString();
+  return [
+    {
+      id: 'err-1',
+      user_id: 'demo-user-id',
+      topic_id: 'topic-1',
+      cause: 'Pegadinha da banca',
+      concept_summary:
+        'CURB-65 >= 2 já indica internação hospitalar; confundi com PSI classe III e não considerei Ureia > 50 mg/dL (ou > 43 mg/dL em algumas referências).',
+      question_ref: 'USP-SP 2024 • Q18',
+      is_reviewed: true,
+      created_at: addDaysToDate(today, -10),
+    },
+    {
+      id: 'err-2',
+      user_id: 'demo-user-id',
+      topic_id: 'topic-3',
+      cause: 'Lacuna teórica',
+      concept_summary:
+        'Na Bronquiolite Viral Aguda, broncodilatador, corticoide e fisioterapia respiratória de rotina NÃO reduzem tempo de internação. Conduta padrão: suporte com O2 (se SatO2 < 90-92%) e hidratação.',
+      question_ref: 'ENARE 2024 • Q42',
+      is_reviewed: false,
+      created_at: addDaysToDate(today, -4),
+    },
+    {
+      id: 'err-3',
+      user_id: 'demo-user-id',
+      topic_id: 'topic-5',
+      cause: 'Interpretação',
+      concept_summary:
+        'Valor Preditivo Positivo (VPP) depende diretamente da prevalência da doença na população testada; Sensibilidade e Especificidade são propriedades intrínsecas do teste.',
+      question_ref: 'SUS-SP 2025 • Q09',
+      is_reviewed: false,
+      created_at: addDaysToDate(today, -2),
+    },
+    {
+      id: 'err-4',
+      user_id: 'demo-user-id',
+      topic_id: 'topic-7',
+      cause: 'Distração',
+      concept_summary:
+        'Paciente instável com FAST positivo tem indicação imediata de laparotomia exploradora — não enviar para TC de abdome!',
+      question_ref: 'UNICAMP 2024 • Q55',
+      is_reviewed: false,
+      created_at: addDaysToDate(today, -1),
     },
   ];
 }

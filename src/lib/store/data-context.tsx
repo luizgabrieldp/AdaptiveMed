@@ -17,6 +17,8 @@ import {
   DEFAULT_STREAK_CONFIG,
   WorkloadConfig,
   DEFAULT_WORKLOAD_CONFIG,
+  ErrorLog,
+  ErrorLogCause,
 } from '@/types/database';
 import {
   getInitialDemoTopics,
@@ -24,6 +26,7 @@ import {
   getInitialDemoMockExams,
   getInitialDemoInstitutionExams,
   getInitialDemoPrevalentTopics,
+  getInitialDemoErrorLogs,
   INITIAL_DEMO_PROFILE,
 } from './demo-data';
 import {
@@ -35,6 +38,7 @@ import {
   calculateStreak,
   calculateQualifiedStreak,
   findNextAvailableDate,
+  computeRebalancedSchedule,
 } from '@/lib/spaced-repetition';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -44,6 +48,7 @@ interface DataContextType {
   mockExams: MockExam[];
   institutionExams: InstitutionExam[];
   prevalentTopics: PrevalentTopic[];
+  errorLogs: ErrorLog[];
   profile: Profile | null;
   areas: StudyArea[];
   allTags: string[];
@@ -93,6 +98,7 @@ interface DataContextType {
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
   updatePlannedTopicDate: (topicId: string, planned_date: string | null) => Promise<void>;
   rescheduleReview: (reviewId: string, newScheduledDate: string) => Promise<void>;
+  rebalanceOverdueReviews: () => Promise<number>;
   distributeWeeklyAutoStudy: (weekStartStr: string) => Promise<number>;
   addArea: (name: string, colorHex: string) => Promise<void>;
   updateArea: (id: string, name: string, colorHex: string) => Promise<void>;
@@ -131,6 +137,16 @@ interface DataContextType {
   updatePrevalentTopic: (id: string, data: Partial<PrevalentTopic>) => Promise<void>;
   deletePrevalentTopic: (id: string) => Promise<void>;
   reorderPrevalentTopics: (orderedIds: string[]) => Promise<void>;
+  addErrorLog: (data: {
+    topic_id: string;
+    review_id?: string | null;
+    cause: ErrorLogCause;
+    concept_summary: string;
+    question_ref?: string;
+  }) => Promise<void>;
+  toggleErrorLogReviewed: (id: string, is_reviewed?: boolean) => Promise<void>;
+  updateErrorLog: (id: string, data: Partial<ErrorLog>) => Promise<void>;
+  deleteErrorLog: (id: string) => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   resetToDemo: () => void;
   signInDemo: () => void;
@@ -145,6 +161,7 @@ const LOCAL_STORAGE_KEYS = {
   MOCK_EXAMS: 'adaptivemed_mock_exams_v1',
   INST_EXAMS: 'adaptivemed_inst_exams_v1',
   PREVALENT_TOPICS: 'adaptivemed_prevalent_topics_v1',
+  ERROR_LOGS: 'adaptivemed_error_logs_v1',
   PROFILE: 'adaptivemed_profile_v1',
   AREAS: 'adaptivemed_areas_v1',
   STREAK_CONFIG: 'adaptivemed_streak_config_v1',
@@ -285,6 +302,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mockExams, setMockExams] = useState<MockExam[]>([]);
   const [institutionExams, setInstitutionExams] = useState<InstitutionExam[]>([]);
   const [prevalentTopics, setPrevalentTopics] = useState<PrevalentTopic[]>([]);
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [areas, setAreas] = useState<StudyArea[]>(DEFAULT_STUDY_AREAS);
   const [streakConfig, setStreakConfig] = useState<StreakConfig>(DEFAULT_STREAK_CONFIG);
@@ -323,6 +341,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMockExams([]);
       setInstitutionExams([]);
       setPrevalentTopics([]);
+      setErrorLogs([]);
       setAreas(DEFAULT_STUDY_AREAS);
       setIsDemoMode(false);
       setIsLoading(false);
@@ -341,6 +360,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('mock_exams').select('*').eq('user_id', userId).order('exam_date', { ascending: false }),
         supabase.from('institution_exams').select('*').eq('user_id', userId).order('exam_year', { ascending: true }),
         supabase.from('prevalent_topics').select('*').eq('user_id', userId).order('rank_order', { ascending: true }),
+        supabase.from('error_logs').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
       ]);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout de carregamento do Supabase')), 10000)
@@ -353,6 +373,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { data: mockData },
         { data: instData },
         prevResult,
+        errResult,
       ] = await Promise.race([loadPromise, timeoutPromise]);
 
       if (profData) {
@@ -557,6 +578,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch {}
         }
       }
+
+      // 5. Caderno de Erros (error_logs) com merge local seguro
+      let mergedErrorLogs: ErrorLog[] = (errResult?.data as ErrorLog[]) || [];
+      const storedErrorsRaw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.ERROR_LOGS) : null;
+      if (storedErrorsRaw) {
+        try {
+          const localErrors = JSON.parse(storedErrorsRaw) as ErrorLog[];
+          const remoteErrIds = new Set(mergedErrorLogs.map(e => e.id));
+          const pendingErrors = localErrors.filter(le => !remoteErrIds.has(le.id) && le.user_id === userId);
+          if (pendingErrors.length > 0) {
+            mergedErrorLogs = [...pendingErrors, ...mergedErrorLogs];
+            pendingErrors.forEach(pe => syncSupabase(supabase.from('error_logs').insert(pe)));
+          }
+        } catch {}
+      }
+      setErrorLogs(mergedErrorLogs);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(mergedErrorLogs));
+      }
     } catch (err) {
       console.warn('Aviso ou timeout no carregamento do Supabase. Carregando dados locais de segurança:', err);
       // Fallback seguro: se falhar a rede/timeout, carrega todos os dados locais do localStorage
@@ -572,6 +612,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (storedInsts) setInstitutionExams(JSON.parse(storedInsts));
           const storedPrev = localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS);
           if (storedPrev) setPrevalentTopics(JSON.parse(storedPrev));
+          const storedErrors = localStorage.getItem(LOCAL_STORAGE_KEYS.ERROR_LOGS);
+          if (storedErrors) setErrorLogs(JSON.parse(storedErrors));
         } catch (storageErr) {
           console.error('Erro ao restaurar dados do localStorage no fallback:', storageErr);
         }
@@ -585,6 +627,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dMocks = getInitialDemoMockExams();
     const dInsts = getInitialDemoInstitutionExams();
     const dPrevalent = getInitialDemoPrevalentTopics();
+    const dErrors = getInitialDemoErrorLogs();
     const dProf = INITIAL_DEMO_PROFILE;
 
     setTopics(dTopics);
@@ -592,6 +635,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMockExams(dMocks);
     setInstitutionExams(dInsts);
     setPrevalentTopics(dPrevalent);
+    setErrorLogs(dErrors);
     setProfile(dProf);
     setAreas(DEFAULT_STUDY_AREAS);
     setStreakConfig(DEFAULT_STREAK_CONFIG);
@@ -603,6 +647,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(dMocks));
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(dInsts));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(dPrevalent));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(dErrors));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(dProf));
       localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEFAULT_STUDY_AREAS));
       localStorage.setItem(LOCAL_STORAGE_KEYS.STREAK_CONFIG, JSON.stringify(DEFAULT_STREAK_CONFIG));
@@ -632,6 +677,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMockExams([]);
     setInstitutionExams([]);
     setPrevalentTopics([]);
+    setErrorLogs([]);
     setProfile(null);
     if (typeof window !== 'undefined') {
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
@@ -686,9 +732,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS, JSON.stringify(mockExams));
         localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(institutionExams));
         localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(prevalentTopics));
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(errorLogs));
       } catch {}
     }
-  }, [topics, reviews, mockExams, institutionExams, prevalentTopics]);
+  }, [topics, reviews, mockExams, institutionExams, prevalentTopics, errorLogs]);
 
   // GESTÃO DE GRANDES ÁREAS CUSTOMIZADAS
   const addArea = async (name: string, colorHex: string) => {
@@ -1305,6 +1352,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // AÇÃO 1.4c: Rebalanceamento em 1 Clique das Revisões Atrasadas respeitando cota diária
+  const rebalanceOverdueReviews = async (): Promise<number> => {
+    const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
+    const updates = computeRebalancedSchedule(reviews, maxDailyLimit, getTodayDateString());
+
+    if (updates.length === 0) return 0;
+
+    const updateMap = new Map<string, string>();
+    updates.forEach(u => updateMap.set(u.reviewId, u.newScheduledDate));
+
+    setReviews(prev => {
+      const updated = prev.map(r => {
+        const newDate = updateMap.get(r.id);
+        return newDate ? { ...r, scheduled_date: newDate } : r;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      const calls = updates.map(u =>
+        supabase
+          .from('topic_reviews')
+          .update({ scheduled_date: u.newScheduledDate })
+          .eq('id', u.reviewId)
+      );
+      syncSupabase(Promise.allSettled(calls));
+    }
+
+    return updates.length;
+  };
+
   // AÇÃO 1.5: Distribuir Automaticamente os Assuntos da Semana (Auto-Estudo)
   const distributeWeeklyAutoStudy = async (weekStartStr: string): Promise<number> => {
     const [year, month, day] = weekStartStr.split('-').map(Number);
@@ -1669,6 +1751,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(up));
       return up;
     });
+    setErrorLogs(prev => {
+      const up = prev.filter(e => e.topic_id !== topicId);
+      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(up));
+      return up;
+    });
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1933,6 +2020,89 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // AÇÃO 7: Caderno de Erros Estruturado (error_logs)
+  const addErrorLog = async (data: {
+    topic_id: string;
+    review_id?: string | null;
+    cause: ErrorLogCause;
+    concept_summary: string;
+    question_ref?: string;
+  }) => {
+    const newError: ErrorLog = {
+      id: isDemoMode ? `err-${Date.now()}` : crypto.randomUUID(),
+      user_id: user?.id || 'demo-user-id',
+      topic_id: data.topic_id,
+      review_id: data.review_id || null,
+      cause: data.cause,
+      concept_summary: data.concept_summary.trim(),
+      question_ref: data.question_ref?.trim() || null,
+      is_reviewed: false,
+      created_at: new Date().toISOString(),
+    };
+
+    setErrorLogs(prev => {
+      const updated = [newError, ...prev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('error_logs').insert(newError));
+    }
+  };
+
+  const toggleErrorLogReviewed = async (id: string, is_reviewed?: boolean) => {
+    const target = errorLogs.find(e => e.id === id);
+    if (!target) return;
+    const nextValue = is_reviewed !== undefined ? is_reviewed : !target.is_reviewed;
+
+    setErrorLogs(prev => {
+      const updated = prev.map(e => (e.id === id ? { ...e, is_reviewed: nextValue } : e));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('error_logs').update({ is_reviewed: nextValue }).eq('id', id));
+    }
+  };
+
+  const updateErrorLog = async (id: string, data: Partial<ErrorLog>) => {
+    setErrorLogs(prev => {
+      const updated = prev.map(e => (e.id === id ? { ...e, ...data } : e));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('error_logs').update(data).eq('id', id));
+    }
+  };
+
+  const deleteErrorLog = async (id: string) => {
+    setErrorLogs(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('error_logs').delete().eq('id', id));
+    }
+  };
+
   // Estatísticas Dinâmicas Computadas
   const stats = useMemo<UserStats>(() => {
     const today = getTodayDateString();
@@ -2068,6 +2238,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mockExams,
         institutionExams,
         prevalentTopics,
+        errorLogs,
         profile,
         areas,
         allTags,
@@ -2087,6 +2258,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateTopicWeeklyGoal,
         updatePlannedTopicDate,
         rescheduleReview,
+        rebalanceOverdueReviews,
         distributeWeeklyAutoStudy,
         addArea,
         updateArea,
@@ -2106,6 +2278,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatePrevalentTopic,
         deletePrevalentTopic,
         reorderPrevalentTopics,
+        addErrorLog,
+        toggleErrorLogReviewed,
+        updateErrorLog,
+        deleteErrorLog,
         updateProfile,
         resetToDemo,
         signInDemo,

@@ -122,16 +122,16 @@ export const RetentionChart: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Badge & Botão de Edição de Meta */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300">
-            <Target className="h-3.5 w-3.5 text-amber-400" />
-            <span>Sua Meta: <strong className="text-amber-200">{targetCutoff}%</strong></span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300">
+            <Target className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Sua Meta: <strong className="text-amber-900 dark:text-amber-200">{targetCutoff}%</strong></span>
             <button
               type="button"
               onClick={() => {
                 setMetaInput(targetCutoff);
                 setEditModalOpen(true);
               }}
-              className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-amber-400 hover:text-amber-200 underline transition-colors"
+              className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 underline transition-colors"
               title="Clique para alterar sua meta de corte"
             >
               <Pencil className="h-2.5 w-2.5" />
@@ -162,20 +162,20 @@ export const RetentionChart: React.FC = () => {
         <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border opacity-60" />
               <XAxis
                 dataKey="stage"
                 stroke="#64748B"
                 fontSize={12}
                 tickLine={false}
-                axisLine={{ stroke: '#334155' }}
+                axisLine={{ stroke: '#475569' }}
               />
               <YAxis
                 domain={[40, 100]}
                 stroke="#64748B"
                 fontSize={11}
                 tickLine={false}
-                axisLine={{ stroke: '#334155' }}
+                axisLine={{ stroke: '#475569' }}
                 tickFormatter={val => `${val}%`}
               />
               <Tooltip
@@ -186,7 +186,7 @@ export const RetentionChart: React.FC = () => {
                       <div className="rounded-xl border border-border bg-card p-3 shadow-xl text-xs space-y-1">
                         <p className="font-bold text-foreground">{label}</p>
                         {data.suaMedia !== null ? (
-                          <p className="text-emerald-400 font-semibold">
+                          <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
                             Seu Desempenho Real: {data.suaMedia}%
                           </p>
                         ) : (
@@ -194,7 +194,7 @@ export const RetentionChart: React.FC = () => {
                             Aguardando conclusão de revisões neste ciclo
                           </p>
                         )}
-                        <p className="text-blue-400 font-medium">
+                        <p className="text-blue-600 dark:text-blue-400 font-medium">
                           Meta de Fixação: {data.metaIdeal}%
                         </p>
                         {data.amostras > 0 && (
@@ -248,10 +248,10 @@ export const RetentionChart: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 flex items-start gap-3">
-          <Sparkles className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+        <div className="mt-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-3">
+          <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
           <p>
-            <span className="font-bold text-white">Como interpretar sua curva:</span> À medida que os ciclos R1 a R8 avançam, os intervalos de tempo aumentam progressivamente (de 3-10 dias até 30 dias). Uma curva ascendente acima de 80% indica que as conexões sinápticas foram consolidadas na memória de longo prazo, garantindo rapidez na prova de residência.
+            <span className="font-bold text-foreground">Como interpretar sua curva:</span> À medida que os ciclos R1 a R8 avançam, os intervalos de tempo aumentam progressivamente (de 3-10 dias até 30 dias). Uma curva ascendente acima de 80% indica que as conexões sinápticas foram consolidadas na memória de longo prazo, garantindo rapidez na prova de residência.
           </p>
         </div>
       </CardContent>
@@ -261,7 +261,7 @@ export const RetentionChart: React.FC = () => {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <div className="flex items-center space-x-2">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                 <Target className="h-5 w-5" />
               </div>
               <div>

@@ -7,10 +7,12 @@ import { MockExamsSection } from '@/components/exams/mock-exams-section';
 import { InstitutionExamsSection } from '@/components/exams/institution-exams-section';
 import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
-import { GraduationCap } from 'lucide-react';
+import { exportExamsToCSV } from '@/lib/export/csv-generator';
+import { GraduationCap, Download } from 'lucide-react';
 
 export default function SimuladosPage() {
   const { mockExams, institutionExams } = useData();
+  const hasExams = mockExams.length > 0 || institutionExams.length > 0;
 
   return (
     <AppLayout>
@@ -28,6 +30,16 @@ export default function SimuladosPage() {
               Gestão de desempenho em simulados nacionais e evolução histórica em provas na íntegra de bancas.
             </p>
           </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasExams}
+            onClick={() => exportExamsToCSV(mockExams, institutionExams)}
+            className="text-xs gap-1.5 font-semibold shrink-0 self-start sm:self-auto"
+          >
+            <Download className="h-3.5 w-3.5" /> Exportar CSV
+          </Button>
         </div>
 
         {/* Abas: Simulados Gerais vs Provas por Instituição */}

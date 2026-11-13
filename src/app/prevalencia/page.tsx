@@ -396,8 +396,8 @@ export default function PrevalenciaPage() {
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                       selectedPrevalenceFilter === level
                         ? level === 'ALTA'
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-primary text-primary-foreground shadow-xs'
+                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                          : 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
                     }`}
                   >
@@ -426,7 +426,7 @@ export default function PrevalenciaPage() {
               onClick={() => setSelectedAreaFilter('TODAS')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                 selectedAreaFilter === 'TODAS'
-                  ? 'bg-foreground text-background font-bold shadow-xs'
+                  ? 'bg-foreground text-background font-bold shadow-sm'
                   : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
               }`}
             >
@@ -467,7 +467,7 @@ export default function PrevalenciaPage() {
                 onClick={() => setSelectedBancaFilter('TODAS')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                   selectedBancaFilter === 'TODAS'
-                    ? 'bg-blue-600 text-white font-bold shadow-xs'
+                    ? 'bg-blue-600 text-white font-bold shadow-sm'
                     : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
                 }`}
               >
@@ -485,7 +485,7 @@ export default function PrevalenciaPage() {
                     onClick={() => setSelectedBancaFilter(isSelected ? 'TODAS' : banca)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-bold shadow-xs ring-1 ring-blue-400'
+                        ? 'bg-blue-600 text-white font-bold shadow-sm ring-1 ring-blue-400'
                         : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground border border-border/60'
                     }`}
                   >
@@ -703,7 +703,7 @@ export default function PrevalenciaPage() {
               <select
                 value={formArea}
                 onChange={e => setFormArea(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-card px-3 text-xs text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full h-9 rounded-md border border-input bg-card px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 {areas.map(a => (
                   <option key={a.name} value={a.name}>
@@ -727,8 +727,8 @@ export default function PrevalenciaPage() {
                     className={`py-2 rounded-xl text-xs font-bold border transition-all ${
                       formPrevalence === level
                         ? level === 'ALTA'
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                          : 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
+                          : 'bg-primary text-primary-foreground border-primary shadow-sm'
                         : 'border-border bg-card text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -761,7 +761,7 @@ export default function PrevalenciaPage() {
                 onChange={e => setFormNotes(e.target.value)}
                 rows={3}
                 placeholder="Ex: Incidência altíssima em questões clínicas. Foco nas indicações cirúrgicas e sintomas de alarme."
-                className="w-full rounded-md border border-input bg-card p-2 text-xs text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full rounded-md border border-input bg-card p-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
 

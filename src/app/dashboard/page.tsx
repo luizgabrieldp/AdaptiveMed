@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { BentoGrid } from '@/components/dashboard/bento-grid';
 import { WeeklySchedule } from '@/components/dashboard/weekly-schedule';
 import { AreaPerformanceChart } from '@/components/dashboard/area-chart';
+import { ActivityHeatmap } from '@/components/evolution/activity-heatmap';
 import { Button } from '@/components/ui/button';
 import { useData } from '@/lib/store/data-context';
 import { formatGreetingName } from '@/lib/utils';
@@ -39,16 +40,16 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground capitalize mt-0.5">
               {todayFormatted} • Foco:{' '}
-              <span className="font-semibold text-blue-400">
+              <span className="font-semibold text-blue-600 dark:text-blue-400">
                 {profile?.target_specialty || 'Residência Médica'}
               </span>
               {profile?.target_cutoff_percentage && (
-                <span className="ml-2 font-medium text-emerald-400">
+                <span className="ml-2 font-medium text-emerald-600 dark:text-emerald-400">
                   • Meta de Corte: {profile.target_cutoff_percentage}%
                 </span>
               )}
               {profile?.target_exams && profile.target_exams.length > 0 && (
-                <span className="ml-2 font-medium text-indigo-400">
+                <span className="ml-2 font-medium text-indigo-600 dark:text-indigo-400">
                   • Bancas: {profile.target_exams.join(', ')}
                 </span>
               )}
@@ -77,6 +78,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-6">
           <AreaPerformanceChart />
         </div>
+
+        {/* Heatmap Anual de Consistência */}
+        <ActivityHeatmap />
       </div>
     </AppLayout>
   );

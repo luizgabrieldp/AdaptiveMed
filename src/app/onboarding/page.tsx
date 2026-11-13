@@ -563,7 +563,7 @@ export default function OnboardingPage() {
                       {selectedSpecialties.map(spec => (
                         <span
                           key={spec}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-primary text-primary-foreground shadow-sm animate-in fade-in"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-primary text-primary-foreground shadow-sm animate-fade-in"
                         >
                           {spec}
                           <button
@@ -724,7 +724,7 @@ export default function OnboardingPage() {
                       {selectedExams.map(exam => (
                         <span
                           key={exam}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 shadow-sm animate-in fade-in"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 shadow-sm animate-fade-in"
                         >
                           {exam}
                           <button

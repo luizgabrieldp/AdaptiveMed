@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { StudyTopic, TopicReview, getAreaStyle } from '@/types/database';
+import { StudyTopic, TopicReview, getAreaStyle, ERROR_LOG_CAUSES, ErrorLogCause } from '@/types/database';
 import {
   calculateReviewStatus,
   formatDateBR,
@@ -30,6 +30,8 @@ import {
   X,
   FileText,
   RefreshCw,
+  AlertTriangle,
+  Plus,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useData } from '@/lib/store/data-context';
@@ -47,13 +49,31 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
   topic,
   reviews,
 }) => {
-  const { deleteTopic, areas, updateTopicR0, updateTopic, deleteReviewsFromCycle, recalculateTopicReviews } = useData();
+  const {
+    deleteTopic,
+    areas,
+    updateTopicR0,
+    updateTopic,
+    deleteReviewsFromCycle,
+    recalculateTopicReviews,
+    errorLogs,
+    addErrorLog,
+    toggleErrorLogReviewed,
+    deleteErrorLog,
+  } = useData();
   const [selectedReviewToComplete, setSelectedReviewToComplete] = useState<TopicReview | null>(null);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'complete' | 'edit'>('complete');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [deletingCycleNum, setDeletingCycleNum] = useState<number | null>(null);
+
+  // Estados do Caderno de Erros
+  const [showErrorForm, setShowErrorForm] = useState(false);
+  const [errorCause, setErrorCause] = useState<ErrorLogCause>('Lacuna teórica');
+  const [errorConcept, setErrorConcept] = useState('');
+  const [errorQuestionRef, setErrorQuestionRef] = useState('');
+  const [isSavingError, setIsSavingError] = useState(false);
 
   // Estados para edição do R0
   const [isEditingR0, setIsEditingR0] = useState(false);
@@ -81,8 +101,50 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
       setNotesDraft(topic.notes || '');
       setIsEditingR0(false);
       setIsEditingNotes(false);
+      setShowErrorForm(false);
+      setErrorConcept('');
+      setErrorQuestionRef('');
     }
   }, [topic, open, areas]);
+
+  const topicErrors = React.useMemo(
+    () => (topic ? errorLogs.filter(e => e.topic_id === topic.id) : []),
+    [errorLogs, topic]
+  );
+
+  const handleAddErrorLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic || !errorConcept.trim()) return;
+    setIsSavingError(true);
+    try {
+      await addErrorLog({
+        topic_id: topic.id,
+        cause: errorCause,
+        concept_summary: errorConcept.trim(),
+        question_ref: errorQuestionRef.trim() || undefined,
+      });
+      setErrorConcept('');
+      setErrorQuestionRef('');
+      setShowErrorForm(false);
+    } catch (err) {
+      console.error('Erro ao salvar no Caderno de Erros:', err);
+    } finally {
+      setIsSavingError(false);
+    }
+  };
+
+  const getCauseBadgeStyle = (cause: ErrorLogCause) => {
+    switch (cause) {
+      case 'Lacuna teórica':
+        return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
+      case 'Interpretação':
+        return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
+      case 'Pegadinha da banca':
+        return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30';
+      case 'Distração':
+        return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
+    }
+  };
 
   if (!topic) return null;
 
@@ -467,6 +529,168 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
               <p className="text-xs text-muted-foreground italic">
                 Nenhuma anotação registrada ainda para este estudo.
               </p>
+            )}
+          </div>
+
+          {/* Caderno de Erros Estruturado */}
+          <div className="p-3.5 rounded-xl bg-muted/20 border border-border/70 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Caderno de Erros ({topicErrors.length})
+                </span>
+              </div>
+              {!showErrorForm ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowErrorForm(true)}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
+                >
+                  <Plus className="h-3 w-3" /> Registrar Erro
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowErrorForm(false)}
+                  className="h-6 text-[11px] font-semibold px-2 gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" /> Fechar
+                </Button>
+              )}
+            </div>
+
+            {showErrorForm && (
+              <form onSubmit={handleAddErrorLog} className="p-3 rounded-xl border border-rose-500/30 bg-card space-y-2.5 animate-fade-in">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Causa Raiz do Erro
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ERROR_LOG_CAUSES.map(cause => (
+                      <button
+                        key={cause}
+                        type="button"
+                        onClick={() => setErrorCause(cause)}
+                        className={`text-left px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
+                          errorCause === cause
+                            ? 'bg-primary/15 text-primary border-primary/50 ring-1 ring-primary/30'
+                            : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted/60'
+                        }`}
+                      >
+                        {cause}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Referência da Questão (opcional)
+                  </label>
+                  <Input
+                    value={errorQuestionRef}
+                    onChange={e => setErrorQuestionRef(e.target.value)}
+                    placeholder="Ex: ENARE 2024 Q18, USP-SP Q42..."
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Conceito / Regra para Nunca Mais Errar
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={errorConcept}
+                    onChange={e => setErrorConcept(e.target.value)}
+                    placeholder="Ex: Contraindicação de betabloqueador na intoxicação aguda por cocaína..."
+                    className="w-full rounded-lg border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isSavingError || !errorConcept.trim()}
+                    className="h-7 text-xs font-bold gap-1"
+                  >
+                    <Check className="h-3 w-3" /> {isSavingError ? 'Salvando...' : 'Salvar Erro'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {topicErrors.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                Nenhum erro catalogado para este assunto ainda. Registre erros recorrentes para fixar conceitos.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {topicErrors.map(err => (
+                  <div
+                    key={err.id}
+                    className={`p-2.5 rounded-xl border transition-all space-y-1.5 ${
+                      err.is_reviewed
+                        ? 'bg-emerald-500/5 border-emerald-500/25 opacity-80'
+                        : 'bg-card border-border/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getCauseBadgeStyle(
+                            err.cause
+                          )}`}
+                        >
+                          {err.cause}
+                        </span>
+                        {err.question_ref && (
+                          <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/60">
+                            {err.question_ref}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleErrorLogReviewed(err.id)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-colors flex items-center gap-1 ${
+                            err.is_reviewed
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                              : 'bg-muted/50 text-muted-foreground border-border hover:text-foreground'
+                          }`}
+                          title={err.is_reviewed ? 'Marcar como pendente de revisão' : 'Marcar erro como dominado/revisado'}
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          {err.is_reviewed ? 'Revisado' : 'Marcar Revisado'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteErrorLog(err.id)}
+                          className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Excluir registro de erro"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p
+                      className={`text-xs leading-relaxed ${
+                        err.is_reviewed ? 'line-through text-muted-foreground' : 'text-foreground'
+                      }`}
+                    >
+                      {err.concept_summary}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

@@ -12,6 +12,7 @@ import {
   diffInDays,
   calculateReviewStatus,
   calculateQualifiedStreak,
+  computeRebalancedSchedule,
 } from '../src/lib/spaced-repetition';
 import { sanitizeCsvCell } from '../src/lib/export/csv-generator';
 import { escapeICalText, generateICalendarFile } from '../src/lib/export/ical-generator';
@@ -230,6 +231,49 @@ test('escapeICalText e generateICalendarFile previnem iCalendar Injection (RFC 5
   const ics = generateICalendarFile(topics, reviews, 30);
   const eventCount = (ics.match(/^BEGIN:VEVENT$/gm) || []).length;
   assert.equal(eventCount, 1, 'Injeção não pode criar linha BEGIN:VEVENT extra');
+});
+
+test('computeRebalancedSchedule redistribui atrasados respeitando cota diária e ordem cronológica', () => {
+  const ref = '2026-06-15';
+  const mkRev = (id: string, scheduled_date: string, completed_date: string | null = null): TopicReview => ({
+    id,
+    topic_id: 't1',
+    user_id: 'u1',
+    review_number: 1,
+    scheduled_date,
+    completed_date,
+    questions_done: completed_date ? 20 : null,
+    questions_correct: completed_date ? 16 : null,
+    percentage: completed_date ? 80 : null,
+    created_at: '2026-06-01T00:00:00Z',
+  });
+
+  const mockReviews: TopicReview[] = [
+    mkRev('done', '2026-06-05', '2026-06-05'),
+    mkRev('today-1', ref),
+    mkRev('future-1', '2026-06-16'),
+    mkRev('future-2', '2026-06-16'),
+    mkRev('over-old', '2026-06-08'),
+    mkRev('over-mid', '2026-06-10'),
+    mkRev('over-new', '2026-06-14'),
+  ];
+
+  // Cota máxima = 2/dia. Hoje já tem 1 ('today-1'), amanhã (16) já tem 2 ('future-1', 'future-2').
+  // Então 'over-old' vai para 2026-06-15 (completa cota 2),
+  // 2026-06-16 já está lotado (2/2), então 'over-mid' e 'over-new' vão para 2026-06-17!
+  const updates = computeRebalancedSchedule(mockReviews, 2, ref);
+  assert.equal(updates.length, 3);
+  assert.deepEqual(updates, [
+    { reviewId: 'over-old', newScheduledDate: '2026-06-15' },
+    { reviewId: 'over-mid', newScheduledDate: '2026-06-17' },
+    { reviewId: 'over-new', newScheduledDate: '2026-06-17' },
+  ]);
+
+  // Lista sem atrasos retorna []
+  assert.deepEqual(
+    computeRebalancedSchedule([mkRev('f', '2026-06-20')], 2, ref),
+    []
+  );
 });
 
 console.log(`\nTodos os ${passed} testes passaram com 100% de sucesso!`);

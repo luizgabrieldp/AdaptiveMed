@@ -44,13 +44,20 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetNotice, setResetNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [planParam, setPlanParam] = useState<'monthly' | 'annual' | null>(null);
 
   // DETECÇÃO AUTOMÁTICA DE SESSÃO ATIVA (ELIMINA A NECESSIDADE DE 2 CLIQUES)
   React.useEffect(() => {
+    let capturedPlan: 'monthly' | 'annual' | null = null;
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const reason = params.get('reason');
       const emailParam = params.get('email');
+      const pId = params.get('plan');
+      if (pId === 'monthly' || pId === 'annual') {
+        capturedPlan = pId;
+        setPlanParam(pId);
+      }
       if (emailParam) setEmail(emailParam);
       if (reason === 'inactive_account') {
         setContractWarning(true);
@@ -60,6 +67,7 @@ export default function LoginPage() {
 
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
+    const paymentPath = capturedPlan ? `/pagamento?plan=${capturedPlan}` : '/pagamento';
 
     // 1. Checa se o usuário já chegou autenticado pelo Google
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -75,7 +83,7 @@ export default function LoginPage() {
             );
 
             if (!hasActivePlan) {
-              router.replace('/pagamento');
+              router.replace(paymentPath);
               return;
             }
 
@@ -104,7 +112,7 @@ export default function LoginPage() {
             );
 
             if (!hasActivePlan) {
-              router.replace('/pagamento');
+              router.replace(paymentPath);
               return;
             }
 
@@ -168,7 +176,7 @@ export default function LoginPage() {
         // Se a conta não tiver assinatura paga ativa, vai direto para a tela de pagamento já autenticado
         if (!hasActivePlan) {
           setIsLoading(false);
-          router.push('/pagamento');
+          router.push(planParam ? `/pagamento?plan=${planParam}` : '/pagamento');
           return;
         }
 
@@ -256,7 +264,9 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/auth/callback?next=/dashboard`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(
+            planParam ? `/pagamento?plan=${planParam}` : '/dashboard'
+          )}`,
         },
       });
 
@@ -308,13 +318,13 @@ export default function LoginPage() {
 
           <CardContent className="space-y-4">
             {contractWarning && (
-              <div className="p-4 rounded-xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-200 text-xs space-y-3 animate-in fade-in slide-in-from-top-2 shadow-lg shadow-amber-500/10">
+              <div className="p-4 rounded-xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200 text-xs space-y-3 animate-fade-in shadow-lg shadow-amber-500/10">
                 <div className="flex items-start gap-2.5">
-                  <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                  <div className="p-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
                     <AlertTriangle className="h-5 w-5" />
                   </div>
                   <div className="space-y-1">
-                    <p className="font-bold text-sm text-amber-300">
+                    <p className="font-bold text-sm text-amber-800 dark:text-amber-300">
                       Você não tem contrato finalizado
                     </p>
                     <p className="text-muted-foreground leading-relaxed text-[11px]">
@@ -324,11 +334,11 @@ export default function LoginPage() {
                 </div>
 
                 <div className="pt-1 flex items-center justify-between gap-2 border-t border-amber-500/20">
-                  <span className="text-[10px] text-amber-400/80 font-medium">
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400/80 font-medium">
                     Ativação imediata no pagamento
                   </span>
                   <Link
-                    href={`/#planos?reason=inactive_account&email=${encodeURIComponent(uncontractedEmail || email)}`}
+                    href={`/?reason=inactive_account&email=${encodeURIComponent(uncontractedEmail || email)}#planos`}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs hover:bg-amber-400 transition-colors shadow-sm"
                   >
                     <span>Finalizar Contrato</span>
@@ -339,7 +349,7 @@ export default function LoginPage() {
             )}
 
             {errorMessage && !contractWarning && (
-              <div className="p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-in fade-in">
+              <div className="p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-destructive text-xs flex items-start gap-2 animate-fade-in">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
               </div>
@@ -443,7 +453,7 @@ export default function LoginPage() {
           <CardFooter className="pt-0 flex justify-center text-xs text-muted-foreground">
             Ainda não possui conta?{' '}
             <Link
-              href="/signup"
+              href={planParam ? `/signup?plan=${encodeURIComponent(planParam)}` : '/signup'}
               className="font-bold text-primary hover:underline ml-1 inline-flex items-center gap-0.5"
             >
               Criar conta gratuita <ArrowRight className="h-3 w-3" />
@@ -472,14 +482,14 @@ export default function LoginPage() {
           <form onSubmit={handleResetPassword} className="space-y-4 py-2">
             {resetNotice && (
               <div
-                className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 animate-in fade-in ${
+                className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 animate-fade-in ${
                   resetNotice.type === 'success'
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                     : 'bg-destructive/15 border-destructive/30 text-destructive'
                 }`}
               >
                 {resetNotice.type === 'success' ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                 ) : (
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 )}

@@ -4,6 +4,7 @@ import React from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { RetentionChart } from '@/components/evolution/retention-chart';
 import { AreaBreakdownCards } from '@/components/evolution/area-breakdown-cards';
+import { ActivityHeatmap } from '@/components/evolution/activity-heatmap';
 import { TrendingUp, Award, Zap } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 
@@ -19,7 +20,7 @@ export default function EvolucaoPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
               Curva de Retenção & Evolução
             </h1>
-            <TrendingUp className="h-6 w-6 text-emerald-400" />
+            <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Visualize a eficiência cognitiva da repetição espaçada na fixação de longo prazo dos assuntos médicos.
@@ -28,6 +29,9 @@ export default function EvolucaoPage() {
 
         {/* Gráfico Principal da Curva de Retenção */}
         <RetentionChart />
+
+        {/* Heatmap Anual de Consistência */}
+        <ActivityHeatmap />
 
         {/* Resumo por Grande Área */}
         <div className="space-y-3">

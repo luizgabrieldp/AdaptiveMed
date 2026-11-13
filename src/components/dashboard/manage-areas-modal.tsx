@@ -203,7 +203,7 @@ export const ManageAreasModal: React.FC<ManageAreasModalProps> = ({
                   return (
                     <div
                       key={item.id}
-                      className="p-3 rounded-xl border border-primary/40 bg-primary/5 space-y-2.5 animate-in fade-in"
+                      className="p-3 rounded-xl border border-primary/40 bg-primary/5 space-y-2.5 animate-fade-in"
                     >
                       <div className="flex gap-2">
                         <Input

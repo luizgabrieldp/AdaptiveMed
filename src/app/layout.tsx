@@ -51,6 +51,13 @@ export default function RootLayout({
       className={`dark ${plusJakartaSans.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('adaptivemed_theme');var p=window.location.pathname;if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.classList.add('light');}else if(t==='dark'){document.documentElement.classList.remove('light');document.documentElement.classList.add('dark');}else if(p==='/'){document.documentElement.classList.remove('light');document.documentElement.classList.add('dark');}else{var sysDark=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',sysDark);document.documentElement.classList.toggle('light',!sysDark);}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <ThemeProvider>
           <DataProvider>{children}</DataProvider>

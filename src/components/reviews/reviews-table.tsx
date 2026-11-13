@@ -376,7 +376,7 @@ export const ReviewsTable: React.FC = () => {
                             setSelectedPlannedTopic(topic);
                             setRecordStudyModalOpen(true);
                           }}
-                          className="h-7 px-2 text-[11px] font-bold gap-1 bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs"
+                          className="h-7 px-2 text-[11px] font-bold gap-1 bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm"
                           title="Registrar estudo e iniciar ciclos espaçados"
                         >
                           <BookOpen className="h-3.5 w-3.5" />

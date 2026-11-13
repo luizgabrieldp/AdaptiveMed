@@ -307,7 +307,7 @@ export const WeeklySchedule: React.FC = () => {
                   onClick={() => handleNavigateToDay(day.dateStr)}
                   className={`flex-1 min-w-[200px] p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[220px] group ${
                     day.isToday
-                      ? 'bg-blue-500/5 border-blue-500/40 shadow-xs'
+                      ? 'bg-blue-500/5 border-blue-500/40 shadow-sm'
                       : 'bg-card border-border hover:border-border/80 hover:bg-muted/30'
                   }`}
                 >
@@ -354,7 +354,7 @@ export const WeeklySchedule: React.FC = () => {
                         >
                           <div className="flex items-center justify-between gap-1">
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border shadow-2xs ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate border ${style.bg} ${style.text} ${style.border}`}
                               title={item.area}
                             >
                               {item.area}

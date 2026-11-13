@@ -11,6 +11,8 @@ import { NewTopicModal } from '@/components/dashboard/new-topic-modal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
+import { exportTopicsAndReviewsToCSV } from '@/lib/export/csv-generator';
+import { downloadICalendar } from '@/lib/export/ical-generator';
 import { getTodayDateString, formatDateBR } from '@/lib/spaced-repetition';
 import {
   Calendar,
@@ -21,6 +23,8 @@ import {
   BookOpen,
   CalendarCheck2,
   Sparkles,
+  Download,
+  CalendarPlus,
 } from 'lucide-react';
 
 type ViewMode = 'dia' | 'semana' | 'mes' | 'tabela';
@@ -76,6 +80,28 @@ export default function DiarioPage() {
 
           {/* Ações Rápidas */}
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={topics.length === 0}
+              onClick={() => exportTopicsAndReviewsToCSV(topics, reviews)}
+              title="Exportar cronograma e histórico para CSV (Excel/Sheets)"
+              className="text-xs gap-1.5 font-semibold"
+            >
+              <Download className="h-3.5 w-3.5" /> CSV
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reviews.length === 0}
+              onClick={() => downloadICalendar(topics, reviews)}
+              title="Exportar revisões pendentes para Google Calendar / Apple Calendar (.ics)"
+              className="text-xs gap-1.5 font-semibold"
+            >
+              <CalendarPlus className="h-3.5 w-3.5" /> Agenda (.ics)
+            </Button>
+
             <Button
               variant="outline"
               size="sm"

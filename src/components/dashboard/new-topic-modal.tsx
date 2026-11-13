@@ -255,7 +255,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     {tags.map(t => (
                       <span
                         key={t}
-                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-primary text-primary-foreground shadow-sm animate-in fade-in"
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-primary text-primary-foreground shadow-sm animate-fade-in"
                       >
                         {t}
                         <button

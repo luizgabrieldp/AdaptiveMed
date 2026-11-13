@@ -14,6 +14,7 @@ import {
   StreakConfig,
   DEFAULT_STREAK_CONFIG,
   FsrsCardState,
+  TopicReview,
 } from '@/types/database';
 
 /**
@@ -352,6 +353,39 @@ export function findNextAvailableDate(
   }
 
   return dateStr;
+}
+
+/**
+ * Redistribui revisões atrasadas (scheduled_date < hoje) para as próximas datas disponíveis
+ * a partir de hoje, respeitando o limite diário (maxDailyLimit) e as revisões já agendadas.
+ */
+export function computeRebalancedSchedule(
+  reviews: TopicReview[],
+  maxDailyLimit = 3,
+  referenceDate?: string
+): Array<{ reviewId: string; newScheduledDate: string }> {
+  const today = referenceDate || getTodayDateString();
+  const overdue = reviews
+    .filter(r => !r.completed_date && r.scheduled_date < today)
+    .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date));
+
+  if (overdue.length === 0) return [];
+
+  const scheduledCounts = new Map<string, number>();
+  reviews.forEach(r => {
+    if (!r.completed_date && r.scheduled_date >= today) {
+      scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
+    }
+  });
+
+  const updates: Array<{ reviewId: string; newScheduledDate: string }> = [];
+  overdue.forEach(rev => {
+    const nextDate = findNextAvailableDate(today, scheduledCounts, maxDailyLimit);
+    scheduledCounts.set(nextDate, (scheduledCounts.get(nextDate) || 0) + 1);
+    updates.push({ reviewId: rev.id, newScheduledDate: nextDate });
+  });
+
+  return updates;
 }
 
 export function calculateNextReviewInterval(percentage: number, reviewNumber: number): number {

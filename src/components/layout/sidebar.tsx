@@ -266,7 +266,7 @@ export const Sidebar: React.FC = () => {
             className="flex items-center space-x-2.5 overflow-hidden group hover:opacity-85 transition-opacity flex-1 min-w-0"
             title="Minha Conta & Assinatura"
           >
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm group-hover:scale-105 transition-transform">
               {profile?.full_name ? profile.full_name.slice(0, 2).toUpperCase() : 'DR'}
             </div>
             {!isCollapsed && (

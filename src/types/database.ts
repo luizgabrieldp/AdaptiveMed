@@ -83,7 +83,7 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
     bg: 'bg-blue-500/15 dark:bg-blue-500/25',
     text: 'text-blue-700 dark:text-blue-300 font-bold',
     border: 'border-blue-500/40 dark:border-blue-500/50',
-    cardBg: 'bg-blue-500/12 dark:bg-blue-500/20',
+    cardBg: 'bg-blue-500/15 dark:bg-blue-500/20',
     cardBorder: 'border-blue-500/30 dark:border-blue-500/40 border-l-4 border-l-blue-500',
     cardHover: 'hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-sm',
   },
@@ -92,7 +92,7 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
     bg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
     text: 'text-emerald-700 dark:text-emerald-300 font-bold',
     border: 'border-emerald-500/40 dark:border-emerald-500/50',
-    cardBg: 'bg-emerald-500/12 dark:bg-emerald-500/20',
+    cardBg: 'bg-emerald-500/15 dark:bg-emerald-500/20',
     cardBorder: 'border-emerald-500/30 dark:border-emerald-500/40 border-l-4 border-l-emerald-500',
     cardHover: 'hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-sm',
   },
@@ -101,7 +101,7 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
     bg: 'bg-amber-500/15 dark:bg-amber-500/25',
     text: 'text-amber-700 dark:text-amber-300 font-bold',
     border: 'border-amber-500/40 dark:border-amber-500/50',
-    cardBg: 'bg-amber-500/12 dark:bg-amber-500/20',
+    cardBg: 'bg-amber-500/15 dark:bg-amber-500/20',
     cardBorder: 'border-amber-500/30 dark:border-amber-500/40 border-l-4 border-l-amber-500',
     cardHover: 'hover:border-amber-500 dark:hover:border-amber-400 hover:shadow-sm',
   },
@@ -110,7 +110,7 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
     bg: 'bg-pink-500/15 dark:bg-pink-500/25',
     text: 'text-pink-700 dark:text-pink-300 font-bold',
     border: 'border-pink-500/40 dark:border-pink-500/50',
-    cardBg: 'bg-pink-500/12 dark:bg-pink-500/20',
+    cardBg: 'bg-pink-500/15 dark:bg-pink-500/20',
     cardBorder: 'border-pink-500/30 dark:border-pink-500/40 border-l-4 border-l-pink-500',
     cardHover: 'hover:border-pink-500 dark:hover:border-pink-400 hover:shadow-sm',
   },
@@ -119,7 +119,7 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
     bg: 'bg-purple-500/15 dark:bg-purple-500/25',
     text: 'text-purple-700 dark:text-purple-300 font-bold',
     border: 'border-purple-500/40 dark:border-purple-500/50',
-    cardBg: 'bg-purple-500/12 dark:bg-purple-500/20',
+    cardBg: 'bg-purple-500/15 dark:bg-purple-500/20',
     cardBorder: 'border-purple-500/30 dark:border-purple-500/40 border-l-4 border-l-purple-500',
     cardHover: 'hover:border-purple-500 dark:hover:border-purple-400 hover:shadow-sm',
   },
@@ -138,8 +138,8 @@ export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []): A
       bg: found.bg || 'bg-primary/10',
       text: found.text || 'text-primary font-bold',
       border: found.border || 'border-primary/20',
-      cardBg: found.bg ? `${found.bg.replace('/10', '/12')} dark:${found.bg.replace('/10', '/20')}` : 'bg-primary/12 dark:bg-primary/20',
-      cardBorder: found.border ? `${found.border.replace('/20', '/35')} border-l-4 border-l-primary` : 'border-primary/30 border-l-4 border-l-primary',
+      cardBg: found.bg ? `${found.bg.replace('/10', '/15')} dark:${found.bg.replace('/10', '/20')}` : 'bg-primary/15 dark:bg-primary/20',
+      cardBorder: found.border ? `${found.border.replace('/20', '/30')} border-l-4 border-l-primary` : 'border-primary/30 border-l-4 border-l-primary',
       cardHover: 'hover:border-primary hover:shadow-sm',
     };
   }
@@ -161,8 +161,8 @@ export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []): A
     bg: c.bg,
     text: c.text,
     border: c.border,
-    cardBg: `${c.bg.replace('/10', '/12')} dark:${c.bg.replace('/10', '/20')}`,
-    cardBorder: `${c.border.replace('/20', '/35')} border-l-4 border-l-primary`,
+    cardBg: `${c.bg.replace('/10', '/15')} dark:${c.bg.replace('/10', '/20')}`,
+    cardBorder: `${c.border.replace('/20', '/30')} border-l-4 border-l-primary`,
     cardHover: 'hover:border-primary hover:shadow-sm',
   };
 }
@@ -331,6 +331,31 @@ export interface InstitutionExam {
   institution_name: string;
   exam_year: string | number;
   score_percentage: number;
+  created_at: string;
+}
+
+export type ErrorLogCause =
+  | 'Lacuna teórica'
+  | 'Interpretação'
+  | 'Pegadinha da banca'
+  | 'Distração';
+
+export const ERROR_LOG_CAUSES: ErrorLogCause[] = [
+  'Lacuna teórica',
+  'Interpretação',
+  'Pegadinha da banca',
+  'Distração',
+];
+
+export interface ErrorLog {
+  id: string;
+  user_id: string;
+  topic_id: string;
+  review_id?: string | null;
+  cause: ErrorLogCause;
+  concept_summary: string;
+  question_ref?: string | null;
+  is_reviewed: boolean;
   created_at: string;
 }
 

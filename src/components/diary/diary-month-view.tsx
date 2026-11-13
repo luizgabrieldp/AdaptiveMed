@@ -587,7 +587,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                         <div
                           key={item.id}
                           onClick={e => handleOpenItem(e, item)}
-                          className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium flex items-center justify-between gap-1 transition-transform hover:scale-[1.02] shadow-2xs group/item ${
+                          className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium flex items-center justify-between gap-1 transition-transform hover:scale-[1.02] group/item ${
                             item.isCompleted
                               ? `${areaStyle.cardBg} ${areaStyle.text} border ${areaStyle.cardBorder} opacity-85`
                               : item.isOverdue

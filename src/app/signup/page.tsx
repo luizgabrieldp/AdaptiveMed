@@ -27,9 +27,11 @@ export default function SignupPage() {
       const params = new URLSearchParams(window.location.search);
       const sId = params.get('session_id');
       const pId = params.get('plan');
+      if (pId === 'monthly' || pId === 'annual') {
+        setPlanId(pId);
+      }
       if (sId) {
         setSessionId(sId);
-        setPlanId(pId);
         fetch(`/api/checkout?session_id=${encodeURIComponent(sId)}`)
           .then(res => res.json())
           .then(data => {
@@ -124,9 +126,10 @@ export default function SignupPage() {
           ? window.location.origin
           : 'https://adaptive-med.vercel.app';
 
+      const nextDest = `/pagamento${planId ? `?plan=${planId}` : ''}`;
       const callbackNext = sessionId
         ? `/auth/callback?next=/onboarding&session_id=${encodeURIComponent(sessionId)}`
-        : `/auth/callback?next=/pagamento${planId ? `?plan=${planId}` : ''}`;
+        : `/auth/callback?next=${encodeURIComponent(nextDest)}`;
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -185,14 +188,24 @@ export default function SignupPage() {
 
           <CardContent className="space-y-4">
             {sessionId && (
-              <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5 animate-in fade-in">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2.5 animate-fade-in">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                 <div>
-                  <p className="font-bold text-emerald-200">Contrato / Cupom Identificado!</p>
-                  <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                  <p className="font-bold text-emerald-800 dark:text-emerald-200">Contrato / Cupom Identificado!</p>
+                  <p className="text-[11px] text-emerald-700/90 dark:text-emerald-300/80 mt-0.5">
                     Defina seus dados para ativar imediatamente seu cronograma adaptativo.
                   </p>
                 </div>
+              </div>
+            )}
+            {!sessionId && planId && (
+              <div className="p-3 rounded-xl bg-primary/10 border border-primary/25 text-primary text-xs flex items-center justify-between gap-2 animate-fade-in">
+                <span className="font-semibold">
+                  Plano escolhido: {planId === 'monthly' ? 'Mensal (R$ 7,99/mês)' : 'Anual (R$ 69,90/ano)'}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/15">
+                  Etapa 1 de 2
+                </span>
               </div>
             )}
             {errorMessage && (
@@ -308,7 +321,7 @@ export default function SignupPage() {
           <CardFooter className="pt-0 flex justify-center text-xs text-muted-foreground">
             Já possui cadastro?{' '}
             <Link
-              href="/login"
+              href={planId ? `/login?plan=${encodeURIComponent(planId)}` : '/login'}
               className="font-bold text-primary hover:underline ml-1 inline-flex items-center gap-0.5"
             >
               Fazer login <ArrowRight className="h-3 w-3" />

@@ -34,6 +34,8 @@ import {
   AlertCircle,
   Edit2,
   MoveRight,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 
 interface DiaryWeekViewProps {
@@ -51,10 +53,13 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     deleteTopic,
     addPlannedTopic,
     distributeWeeklyAutoStudy,
+    rebalanceOverdueReviews,
   } = useData();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [isAutoScheduling, setIsAutoScheduling] = useState(false);
+  const [isRebalancing, setIsRebalancing] = useState(false);
+  const [rebalanceNotice, setRebalanceNotice] = useState<string | null>(null);
 
   // Modais
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
@@ -290,6 +295,27 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
     }
   };
 
+  const handleRebalanceOverdue = async () => {
+    try {
+      setIsRebalancing(true);
+      setRebalanceNotice(null);
+      const movedCount = await rebalanceOverdueReviews();
+      if (movedCount > 0) {
+        setRebalanceNotice(
+          `${movedCount} ${movedCount === 1 ? 'revisão redistribuída' : 'revisões redistribuídas'} respeitando sua cota diária!`
+        );
+        setShowOverdueSection(false);
+      } else {
+        setRebalanceNotice('Nenhuma revisão atrasada precisava de rebalanceamento.');
+      }
+      setTimeout(() => setRebalanceNotice(null), 5000);
+    } catch (err) {
+      console.error('Erro ao rebalancear atrasados:', err);
+    } finally {
+      setIsRebalancing(false);
+    }
+  };
+
   const handleOpenItem = (item: {
     type: 'review' | 'planned_study' | 'initial_study_done';
     topic?: StudyTopic;
@@ -394,7 +420,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   return (
     <div className="space-y-4">
       {/* Barra de Controles da Semana */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3.5 p-4 rounded-2xl bg-card border border-border shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3.5 p-4 rounded-2xl bg-card border border-border shadow-sm">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
             <CalendarDays className="h-5 w-5" />
@@ -450,10 +476,10 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
             size="sm"
             onClick={handleAutoScheduleWeek}
             disabled={isAutoScheduling}
-            className="h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 shadow-xs shrink-0"
+            className="h-8 text-xs font-bold gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 shadow-sm shrink-0"
             title="Distribui os assuntos pendentes de Segunda a Sexta, priorizando alta relevância da banca"
           >
-            <Sparkles className="h-3.5 w-3.5 text-amber-400 fill-amber-400/20" />
+            <Sparkles className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400 fill-amber-400/20" />
             {isAutoScheduling ? 'Distribuindo...' : 'Auto-Estudo'}
           </Button>
 
@@ -487,7 +513,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                     isDragTarget
                       ? 'border-primary bg-primary/10 ring-2 ring-primary/40 shadow-md'
                       : day.isToday
-                      ? 'bg-blue-500/5 border-blue-500/40 shadow-xs'
+                      ? 'bg-blue-500/5 border-blue-500/40 shadow-sm'
                       : 'bg-card border-border hover:border-border/80'
                   }`}
                 >
@@ -561,14 +587,14 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 }
                               }}
                               onClick={() => handleOpenItem(item)}
-                              className={`p-3 rounded-xl border text-xs space-y-2 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md shadow-2xs group/item ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
+                              className={`p-3 rounded-xl border text-xs space-y-2 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md shadow-sm group/item ${style.cardBg} ${style.cardBorder} ${style.cardHover} ${
                                 item.isOverdue ? 'ring-1 ring-rose-500/50' : ''
                               }`}
                             >
                               {/* Linha 1: Topo exclusivo com Grande Área e Ações Rápidas */}
                               <div className="flex items-center justify-between gap-1 w-full">
                                 <span
-                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate max-w-[82%] bg-background/80 ${style.text} ${style.border}`}
+                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border truncate max-w-[82%] bg-background/80 ${style.text} ${style.border}`}
                                   title={item.area}
                                 >
                                   {item.area}
@@ -612,7 +638,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               <div className="flex flex-wrap items-center gap-1.5">
                                 {isItemTrackPaused && (
                                   <span
-                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-2xs"
+                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1"
                                     title="Trilha pausada. Clique para recalcular as revisões."
                                   >
                                     <Clock className="h-2.5 w-2.5" />
@@ -621,7 +647,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 )}
 
                                 <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 shadow-2xs ${
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${
                                     isInitialDone || item.isCompleted
                                       ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/25 border-emerald-500/40'
                                       : item.type === 'planned_study'
@@ -636,7 +662,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                                 </span>
 
                                 {item.isHighPrevalence && (
-                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400 text-[9px] bg-amber-500/15 border border-amber-500/30 px-1 py-0.2 rounded shadow-2xs">
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400 text-[9px] bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded">
                                     <Star className="h-2 w-2 fill-amber-400 text-amber-500" /> Top Banca
                                   </span>
                                 )}
@@ -701,7 +727,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
         <div className="lg:col-span-1 space-y-3">
           {/* Seção / Card de Revisões Atrasadas (Expandível) */}
           <Card
-            className={`p-3.5 transition-all shadow-xs ${
+            className={`p-3.5 transition-all shadow-sm ${
               overdueReviews.length > 0
                 ? 'bg-rose-500/[0.06] dark:bg-rose-950/20 border-rose-500/30'
                 : 'bg-card border-border/80'
@@ -726,7 +752,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <h4 className="text-xs font-bold text-foreground">Revisões Atrasadas</h4>
                     {overdueReviews.length > 0 && (
-                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
                         Urgente
                       </span>
                     )}
@@ -746,7 +772,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   variant={overdueReviews.length > 0 ? 'destructive' : 'secondary'}
                   className={`text-[10px] font-extrabold px-2 py-0.5 ${
                     overdueReviews.length > 0
-                      ? 'bg-rose-500 text-white shadow-xs'
+                      ? 'bg-rose-500 text-white shadow-sm'
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >
@@ -759,6 +785,33 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                 )}
               </div>
             </button>
+
+            {overdueReviews.length > 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-rose-500/20 flex flex-col gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleRebalanceOverdue}
+                  disabled={isRebalancing}
+                  className="w-full h-8 text-xs font-bold gap-1.5 bg-rose-600 hover:bg-rose-500 text-white shadow-sm"
+                  title="Redistribui todas as revisões atrasadas a partir de hoje respeitando sua cota diária"
+                >
+                  {isRebalancing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  <span>{isRebalancing ? 'Rebalanceando...' : 'Rebalancear Atrasados'}</span>
+                </Button>
+              </div>
+            )}
+
+            {rebalanceNotice && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 animate-fade-in">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span>{rebalanceNotice}</span>
+              </div>
+            )}
 
             {/* Conteúdo Expansível ao Clicar ("cresce") */}
             {showOverdueSection && (
@@ -787,7 +840,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               setSelectedReview(rev);
                               setCompletionModalOpen(true);
                             }}
-                            className={`p-3 rounded-xl border text-xs space-y-2 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01] hover:shadow-md shadow-2xs group/overdue ${style.cardBg} ${style.cardBorder} ${style.cardHover}`}
+                            className={`p-3 rounded-xl border text-xs space-y-2 cursor-grab active:cursor-grabbing transition-all hover:scale-[1.01] hover:shadow-md shadow-sm group/overdue ${style.cardBg} ${style.cardBorder} ${style.cardHover}`}
                             title="Arraste para uma coluna de dia para reagendar, ou clique para registrar rendimento"
                           >
                             {/* Linha 1: Topo com Grip, Grande Área e Badge do Ciclo */}
@@ -795,21 +848,21 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               <div className="flex items-center gap-1.5 min-w-0 max-w-[78%]">
                                 <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0 group-hover/overdue:text-primary transition-colors" />
                                 <span
-                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate bg-background/80 ${style.text} ${style.border}`}
+                                  className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border truncate bg-background/80 ${style.text} ${style.border}`}
                                   title={top.area}
                                 >
                                   {top.area}
                                 </span>
                               </div>
 
-                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-primary/20 text-primary border border-primary/40 shrink-0 shadow-2xs">
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-primary/20 text-primary border border-primary/40 shrink-0">
                                 R{rev.review_number}
                               </span>
                             </div>
 
                             {/* Linha 2: Badge de Atraso em Destaque */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 flex items-center gap-1 shadow-2xs">
+                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 flex items-center gap-1">
                                 <AlertCircle className="h-2.5 w-2.5 shrink-0" />
                                 Atrasado há {daysOverdue} {daysOverdue === 1 ? 'dia' : 'dias'} ({formatDateBR(rev.scheduled_date)})
                               </span>
@@ -841,7 +894,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
           </Card>
 
           {/* Card dos Assuntos da Semana */}
-          <Card className="p-4 bg-card border-border shadow-xs">
+          <Card className="p-4 bg-card border-border shadow-sm">
             <div className="flex items-center justify-between pb-3 border-b border-border/60">
               <div className="flex items-center space-x-2">
                 <Target className="h-4 w-4 text-primary" />
@@ -878,7 +931,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       key={topic.id}
                       draggable={true}
                       onDragStart={e => handleDragTopicStart(e, topic.id)}
-                      className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} transition-all cursor-grab active:cursor-grabbing shadow-2xs space-y-2 group`}
+                      className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} transition-all cursor-grab active:cursor-grabbing shadow-sm space-y-2 group`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -907,7 +960,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                           <button
                             type="button"
                             onClick={() => deleteTopic(topic.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-400 transition-opacity"
+                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-opacity"
                             title="Remover assunto"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -922,11 +975,11 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       {/* Indicador de Data / Atraso da semana anterior */}
                       <div className="flex flex-col gap-1 pt-1 border-t border-border/40 text-[10px]">
                         {topic.planned_date && topic.planned_date < (weekDays[0]?.dateStr || '') ? (
-                          <span className="text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 self-start">
+                          <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 self-start">
                             <AlertCircle className="h-2.5 w-2.5 shrink-0" /> Pendente da semana passada
                           </span>
                         ) : topic.planned_date && topic.planned_date < todayStr ? (
-                          <span className="text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 self-start">
+                          <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 self-start">
                             <AlertCircle className="h-2.5 w-2.5 shrink-0" /> Atrasado ({formatDateBR(topic.planned_date)})
                           </span>
                         ) : null}
@@ -963,7 +1016,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   onClick={() => setShowCompletedSection(prev => !prev)}
                   className="flex items-center justify-between w-full py-1.5 px-2 rounded-lg hover:bg-muted/60 text-xs font-bold transition-colors select-none"
                 >
-                  <span className="flex items-center gap-1.5 text-emerald-400">
+                  <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Concluídos nesta semana ({weeklyCompletedTopics.length})
                   </span>
@@ -992,12 +1045,12 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                             setSelectedTopicToEdit(topic);
                             setEditModalOpen(true);
                           }}
-                          className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} space-y-2 shadow-2xs group cursor-pointer transition-all hover:scale-[1.01]`}
+                          className={`p-3 rounded-xl border ${style.cardBg} ${style.cardBorder} ${style.cardHover} space-y-2 shadow-sm group cursor-pointer transition-all hover:scale-[1.01]`}
                         >
                           {/* Linha 1: Topo exclusivo com Grande Área e Ação de Editar */}
                           <div className="flex items-center justify-between gap-1 w-full">
                             <span
-                              className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border shadow-2xs truncate max-w-[80%] bg-background/80 ${style.text} ${style.border}`}
+                              className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md border truncate max-w-[80%] bg-background/80 ${style.text} ${style.border}`}
                               title={topic.area}
                             >
                               {topic.area}
@@ -1020,14 +1073,14 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                           <div className="flex flex-wrap items-center gap-1.5">
                             {isTopicTrackPaused && (
                               <span
-                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-2xs"
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1"
                                 title="Trilha de revisões pausada. Clique para recalcular."
                               >
                                 <Clock className="h-2.5 w-2.5" />
                                 Pausado
                               </span>
                             )}
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-2xs">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                               <CheckCircle2 className="h-2.5 w-2.5" />
                               R0 Feito
                             </span>
@@ -1055,7 +1108,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
 
             <Button
               onClick={() => handleOpenPlanForDate()}
-              className="w-full text-xs font-bold gap-1.5 mt-3 shadow-xs"
+              className="w-full text-xs font-bold gap-1.5 mt-3 shadow-sm"
             >
               <Plus className="h-3.5 w-3.5" /> Adicionar Assunto da Semana
             </Button>
@@ -1063,13 +1116,13 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
 
           {/* Card de Sugestões da Banca */}
           {suggestedPrevalentTopics.length > 0 && (
-            <Card className="p-3.5 bg-gradient-to-br from-card via-card to-amber-950/20 border-amber-500/30 shadow-xs space-y-2.5">
+            <Card className="p-3.5 bg-gradient-to-br from-card via-card to-amber-500/10 dark:to-amber-950/20 border-amber-500/30 shadow-sm space-y-2.5">
               <div className="flex items-center justify-between pb-2 border-b border-border/60">
                 <div className="flex items-center space-x-1.5">
-                  <Sparkles className="h-4 w-4 text-amber-400 fill-amber-400/20" />
+                  <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-400 fill-amber-400/20" />
                   <h4 className="text-xs font-bold text-foreground">Sugestões da Banca</h4>
                 </div>
-                <Badge variant="secondary" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/20">
+                <Badge variant="secondary" className="text-[9px] bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
                   Mais Frequentes
                 </Badge>
               </div>
@@ -1084,7 +1137,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   return (
                     <div
                       key={p.id}
-                      className="p-2.5 rounded-xl border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-amber-500/40 transition-all flex items-center justify-between gap-2 shadow-2xs"
+                      className="p-2.5 rounded-xl border border-border/80 bg-muted/40 hover:bg-muted/70 hover:border-amber-500/40 transition-all flex items-center justify-between gap-2 shadow-sm"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 mb-0.5">
@@ -1114,7 +1167,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                             is_weekly_goal: true,
                           });
                         }}
-                        className="h-6 text-[10px] font-bold px-2 text-amber-400 border-amber-500/30 hover:bg-amber-500/15 shrink-0"
+                        className="h-6 text-[10px] font-bold px-2 text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/15 shrink-0"
                       >
                         + Programar
                       </Button>
