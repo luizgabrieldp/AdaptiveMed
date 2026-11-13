@@ -9,12 +9,14 @@ import {
   TrendingUp,
   GraduationCap,
   Flame,
+  AlertTriangle,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
-  const { stats } = useData();
+  const { stats, errorLogs } = useData();
+  const pendingErrorsCount = errorLogs.filter(e => !e.is_reviewed).length;
 
   const items = [
     {
@@ -27,6 +29,12 @@ export const BottomNav: React.FC = () => {
       label: 'Diário',
       href: '/diario',
       icon: CalendarCheck2,
+    },
+    {
+      label: 'Erros',
+      href: '/erros',
+      icon: AlertTriangle,
+      badge: pendingErrorsCount > 0 ? pendingErrorsCount : undefined,
     },
     {
       label: 'Prevalência',
@@ -46,7 +54,7 @@ export const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-xl border-t border-border px-2 py-1.5 flex items-center justify-around safe-bottom shadow-lg">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/90 backdrop-blur-xl border-t border-border px-1.5 py-1.5 flex items-center justify-around safe-bottom shadow-lg">
       {items.map(item => {
         const isActive =
           pathname === item.href ||
@@ -57,7 +65,7 @@ export const BottomNav: React.FC = () => {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all relative ${
+            className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-xl transition-all relative ${
               isActive
                 ? 'text-primary font-semibold'
                 : 'text-muted-foreground hover:text-foreground'

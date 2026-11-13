@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Sheet,
   SheetContent,
@@ -10,7 +11,14 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { StudyTopic, TopicReview, getAreaStyle, ERROR_LOG_CAUSES, ErrorLogCause } from '@/types/database';
+import {
+  StudyTopic,
+  TopicReview,
+  getAreaStyle,
+  ERROR_LOG_CAUSES,
+  ERROR_LOG_CAUSE_STYLES,
+  ErrorLogCause,
+} from '@/types/database';
 import {
   calculateReviewStatus,
   formatDateBR,
@@ -133,18 +141,7 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
     }
   };
 
-  const getCauseBadgeStyle = (cause: ErrorLogCause) => {
-    switch (cause) {
-      case 'Lacuna teórica':
-        return 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30';
-      case 'Interpretação':
-        return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30';
-      case 'Pegadinha da banca':
-        return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30';
-      case 'Distração':
-        return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30';
-    }
-  };
+  const getCauseBadgeStyle = (cause: ErrorLogCause) => ERROR_LOG_CAUSE_STYLES[cause];
 
   if (!topic) return null;
 
@@ -535,11 +532,19 @@ export const TopicDrawer: React.FC<TopicDrawerProps> = ({
           {/* Caderno de Erros Estruturado */}
           <div className="p-3.5 rounded-xl bg-muted/20 border border-border/70 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Caderno de Erros ({topicErrors.length})
-                </span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Caderno de Erros ({topicErrors.length})
+                  </span>
+                </div>
+                <Link
+                  href="/erros"
+                  className="text-[10px] font-bold text-primary hover:underline"
+                >
+                  Ver tudo →
+                </Link>
               </div>
               {!showErrorForm ? (
                 <Button

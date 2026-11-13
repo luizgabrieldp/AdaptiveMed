@@ -347,6 +347,13 @@ export const ERROR_LOG_CAUSES: ErrorLogCause[] = [
   'Distração',
 ];
 
+export const ERROR_LOG_CAUSE_STYLES: Record<ErrorLogCause, string> = {
+  'Lacuna teórica': 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+  'Interpretação': 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  'Pegadinha da banca': 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
+  'Distração': 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30',
+};
+
 export interface ErrorLog {
   id: string;
   user_id: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,31 @@ export const WeeklySchedule: React.FC = () => {
 
   // Offset da semana atual (0 = semana corrente, -1 = semana anterior, +1 = próxima)
   const [weekOffset, setWeekOffset] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const todayColRef = useRef<HTMLDivElement | null>(null);
+
+  const centerTodayColumn = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const todayEl = todayColRef.current;
+    if (!container || !todayEl) return;
+
+    const targetLeft =
+      todayEl.offsetLeft - container.clientWidth / 2 + todayEl.clientWidth / 2;
+    container.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: 'smooth',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (weekOffset !== 0) return;
+    const raf = requestAnimationFrame(() => centerTodayColumn());
+    const timer = window.setTimeout(() => centerTodayColumn(), 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [weekOffset, centerTodayColumn]);
 
   const todayStr = useMemo(() => getTodayDateString(), []);
 
@@ -265,7 +290,10 @@ export const WeeklySchedule: React.FC = () => {
           <Button
             variant={weekOffset === 0 ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setWeekOffset(0)}
+            onClick={() => {
+              setWeekOffset(0);
+              requestAnimationFrame(() => centerTodayColumn());
+            }}
             className="h-8 text-xs font-semibold px-3"
           >
             Hoje / Esta Semana
@@ -296,7 +324,10 @@ export const WeeklySchedule: React.FC = () => {
       {/* Grid Principal: 7 Dias + Bloco de Metas da Semana */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Coluna 1-3: Agenda de Segunda a Domingo com Colunas Mais Largas e Rolagem Horizontal */}
-        <div className="lg:col-span-3 overflow-x-auto pb-2 scrollbar-thin">
+        <div
+          ref={scrollContainerRef}
+          className="lg:col-span-3 relative overflow-x-auto pb-3 pt-1 px-1 scrollbar-thin"
+        >
           <div className="flex gap-3 min-w-[1050px]">
             {weekDays.map(day => {
               const items = dayScheduleMap.get(day.dateStr) || [];
@@ -304,30 +335,41 @@ export const WeeklySchedule: React.FC = () => {
               return (
                 <div
                   key={day.dateStr}
+                  ref={day.isToday ? todayColRef : undefined}
                   onClick={() => handleNavigateToDay(day.dateStr)}
-                  className={`flex-1 min-w-[200px] p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[220px] group ${
+                  className={`flex-1 min-w-[205px] p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[225px] group ${
                     day.isToday
-                      ? 'bg-blue-500/5 border-blue-500/40 shadow-sm'
+                      ? 'bg-gradient-to-b from-blue-500/15 via-blue-500/5 to-card border-2 border-primary ring-4 ring-blue-500/20 shadow-lg shadow-blue-500/15'
                       : 'bg-card border-border hover:border-border/80 hover:bg-muted/30'
                   }`}
                 >
                 {/* Header do Dia */}
-                <div className="border-b border-border/60 pb-2 mb-2 flex items-center justify-between">
+                <div
+                  className={`border-b pb-2.5 mb-2.5 flex items-center justify-between ${
+                    day.isToday ? 'border-blue-500/30' : 'border-border/60'
+                  }`}
+                >
                   <div>
                     <span
-                      className={`text-xs font-bold block ${
-                        day.isToday ? 'text-primary' : 'text-foreground'
+                      className={`block ${
+                        day.isToday
+                          ? 'text-sm font-black text-primary'
+                          : 'text-xs font-bold text-foreground'
                       }`}
                     >
                       {day.dayName}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span
+                      className={`text-[11px] font-medium ${
+                        day.isToday ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-muted-foreground'
+                      }`}
+                    >
                       {String(day.dayNumber).padStart(2, '0')}/{String(day.monthNumber).padStart(2, '0')}
                     </span>
                   </div>
 
                   {day.isToday && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary text-primary-foreground shadow-sm">
                       Hoje
                     </span>
                   )}
@@ -363,10 +405,10 @@ export const WeeklySchedule: React.FC = () => {
                             <span
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
                                 item.isCompleted
-                                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border-emerald-500/35'
+                                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 border-emerald-500/30'
                                   : item.isOverdue
-                                  ? 'text-rose-700 dark:text-rose-300 bg-rose-500/20 border-rose-500/35'
-                                  : 'text-primary bg-primary/20 border-primary/35'
+                                  ? 'text-rose-700 dark:text-rose-300 bg-rose-500/20 border-rose-500/30'
+                                  : 'text-blue-700 dark:text-blue-300 bg-blue-500/20 border-blue-500/30'
                               }`}
                             >
                               {item.isCompleted && <CheckCircle2 className="h-2.5 w-2.5" />}

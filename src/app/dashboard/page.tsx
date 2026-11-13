@@ -14,10 +14,12 @@ import {
   HeartPulse,
   BookOpen,
   ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { profile, topics, reviews } = useData();
+  const { profile, errorLogs } = useData();
+  const pendingErrorsCount = errorLogs.filter(e => !e.is_reviewed).length;
 
   const todayFormatted = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
@@ -57,6 +59,22 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/erros">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5 font-semibold border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
+                <span>Caderno de Erros</span>
+                {pendingErrorsCount > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold leading-none">
+                    {pendingErrorsCount}
+                  </span>
+                )}
+              </Button>
+            </Link>
+
             <Link href="/diario">
               <Button
                 size="sm"

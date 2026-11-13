@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -78,14 +78,32 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
   const [showOverdueSection, setShowOverdueSection] = useState(false);
   const [showCompletedSection, setShowCompletedSection] = useState(true);
 
-  // Ref para auto-scroll na coluna de hoje
+  // Refs para auto-scroll horizontal centralizando a coluna de hoje sem mover o scroll vertical
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const todayColRef = useRef<HTMLDivElement | null>(null);
 
+  const centerTodayColumn = useCallback(() => {
+    const container = scrollContainerRef.current;
+    const todayEl = todayColRef.current;
+    if (!container || !todayEl) return;
+
+    const targetLeft =
+      todayEl.offsetLeft - container.clientWidth / 2 + todayEl.clientWidth / 2;
+    container.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: 'smooth',
+    });
+  }, []);
+
   useEffect(() => {
-    if (todayColRef.current && weekOffset === 0) {
-      todayColRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }, [weekOffset]);
+    if (weekOffset !== 0) return;
+    const raf = requestAnimationFrame(() => centerTodayColumn());
+    const timer = window.setTimeout(() => centerTodayColumn(), 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [weekOffset, centerTodayColumn]);
 
   // Estado visual de Drop
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
@@ -454,7 +472,10 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
             <Button
               variant={weekOffset === 0 ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setWeekOffset(0)}
+              onClick={() => {
+                setWeekOffset(0);
+                requestAnimationFrame(() => centerTodayColumn());
+              }}
               className="h-7 text-xs font-semibold px-2.5"
             >
               Esta Semana
@@ -496,7 +517,10 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
       {/* Grade Principal: Colunas dos 7 Dias + Coluna Lateral dos Assuntos da Semana */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Painel dos 7 Dias da Semana com Colunas Largas e Rolagem Horizontal Suave */}
-        <div className="lg:col-span-3 overflow-x-auto pb-2 scrollbar-thin">
+        <div
+          ref={scrollContainerRef}
+          className="lg:col-span-3 relative overflow-x-auto pb-3 pt-1 px-1 scrollbar-thin"
+        >
           <div className="flex gap-3 min-w-[1050px]">
             {weekDays.map(day => {
               const items = dayItemsMap.get(day.dateStr) || [];
@@ -509,33 +533,43 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                   onDragOver={e => handleDragOver(e, day.dateStr)}
                   onDragLeave={e => handleDragLeave(e, day.dateStr)}
                   onDrop={e => handleDropOnDay(e, day.dateStr)}
-                  className={`flex-1 min-w-[200px] p-3 rounded-2xl border flex flex-col justify-between transition-all ${
+                  className={`flex-1 min-w-[205px] p-3.5 rounded-2xl border flex flex-col justify-between transition-all ${
                     isDragTarget
-                      ? 'border-primary bg-primary/10 ring-2 ring-primary/40 shadow-md'
+                      ? 'border-primary bg-blue-500/15 ring-2 ring-blue-500/40 shadow-md'
                       : day.isToday
-                      ? 'bg-blue-500/5 border-blue-500/40 shadow-sm'
+                      ? 'bg-gradient-to-b from-blue-500/15 via-blue-500/5 to-card border-2 border-primary ring-4 ring-blue-500/20 shadow-lg shadow-blue-500/15'
                       : 'bg-card border-border hover:border-border/80'
                   }`}
                 >
                   {/* Top Header do Dia */}
                   <div>
-                    <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                    <div
+                      className={`flex items-center justify-between pb-2.5 border-b ${
+                        day.isToday ? 'border-blue-500/30' : 'border-border/60'
+                      }`}
+                    >
                       <div>
                         <span
-                          className={`text-xs font-bold block ${
-                            day.isToday ? 'text-primary font-black' : 'text-foreground'
+                          className={`block ${
+                            day.isToday
+                              ? 'text-sm font-black text-primary'
+                              : 'text-xs font-bold text-foreground'
                           }`}
                         >
                           {day.dayName}
                         </span>
-                        <span className="text-[11px] text-muted-foreground font-medium">
+                        <span
+                          className={`text-[11px] font-medium ${
+                            day.isToday ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-muted-foreground'
+                          }`}
+                        >
                           {String(day.dayNumber).padStart(2, '0')}/{String(day.monthNumber).padStart(2, '0')}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-1">
                         {day.isToday && (
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary text-primary-foreground shadow-sm">
                             Hoje
                           </span>
                         )}

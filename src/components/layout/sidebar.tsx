@@ -16,6 +16,7 @@ import {
   CreditCard,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 import { useTheme } from './theme-provider';
@@ -27,10 +28,11 @@ import { ThemeToggle } from './theme-toggle';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { profile, stats, topics, isDemoMode, signOut } = useData();
+  const { profile, stats, topics, errorLogs, isDemoMode, signOut } = useData();
   const { theme } = useTheme();
   const [manageAreasOpen, setManageAreasOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const pendingErrorsCount = errorLogs.filter(e => !e.is_reviewed).length;
 
   // Lê preferência de sidebar encolhida do localStorage
   useEffect(() => {
@@ -64,6 +66,13 @@ export const Sidebar: React.FC = () => {
       icon: CalendarCheck2,
       badge: topics.length > 0 ? String(topics.length) : undefined,
       badgeVariant: 'secondary' as const,
+    },
+    {
+      label: 'Caderno de Erros',
+      href: '/erros',
+      icon: AlertTriangle,
+      badge: pendingErrorsCount > 0 ? String(pendingErrorsCount) : undefined,
+      badgeVariant: 'hoje' as const,
     },
     {
       label: 'Assuntos Prevalentes',
