@@ -16,6 +16,18 @@ import {
 } from '../src/lib/spaced-repetition';
 import { sanitizeCsvCell } from '../src/lib/export/csv-generator';
 import { escapeICalText, generateICalendarFile } from '../src/lib/export/ical-generator';
+import {
+  calculateFocusOutcome,
+  getTreeGrowthStage,
+  formatSecondsHMS,
+  formatDurationCompact,
+  createDefaultForestGarden,
+  getNurserySlotProgress,
+  getBoostWallet,
+  applyBoostToGarden,
+  STAGE_BLOCK_SECONDS,
+  FULL_TREE_SECONDS,
+} from '../src/lib/focus-timer';
 import type { StudyTopic, TopicReview } from '../src/types/database';
 
 let passed = 0;
@@ -274,6 +286,92 @@ test('computeRebalancedSchedule redistribui atrasados respeitando cota diária e
     computeRebalancedSchedule([mkRev('f', '2026-06-20')], 2, ref),
     []
   );
+});
+
+test('calculateFocusOutcome, getTreeGrowthStage e formatters de foco funcionam corretamente', () => {
+  // Menos de 60s não deve registrar
+  assert.deepEqual(calculateFocusOutcome('pomodoro', 45, 1500), {
+    status: 'withered',
+    treesEarned: 0,
+    shouldRecord: false,
+  });
+
+  // Pomodoro 25 min concluído = 1 árvore
+  assert.deepEqual(calculateFocusOutcome('pomodoro', 1500, 1500), {
+    status: 'completed',
+    treesEarned: 1,
+    shouldRecord: true,
+  });
+
+  // Pomodoro 50 min concluído = 2 árvores
+  assert.deepEqual(calculateFocusOutcome('pomodoro', 3000, 3000), {
+    status: 'completed',
+    treesEarned: 2,
+    shouldRecord: true,
+  });
+
+  // Pomodoro interrompido com >= 60s = galho seco
+  assert.deepEqual(calculateFocusOutcome('pomodoro', 600, 1500), {
+    status: 'withered',
+    treesEarned: 0,
+    shouldRecord: true,
+  });
+
+  // Cronômetro livre 20 min = completa horas sem galho seco (0 árvores)
+  assert.deepEqual(calculateFocusOutcome('stopwatch', 1200, null), {
+    status: 'completed',
+    treesEarned: 0,
+    shouldRecord: true,
+  });
+
+  // Cronômetro livre 55 min = 2 árvores completas (50 min)
+  assert.deepEqual(calculateFocusOutcome('stopwatch', 3300, null), {
+    status: 'completed',
+    treesEarned: 2,
+    shouldRecord: true,
+  });
+
+  assert.equal(getTreeGrowthStage(0.1), 'seed');
+  assert.equal(getTreeGrowthStage(0.4), 'sprout');
+  assert.equal(getTreeGrowthStage(0.6), 'sapling');
+  assert.equal(getTreeGrowthStage(0.85), 'mature');
+
+  assert.equal(formatSecondsHMS(65), '01:05');
+  assert.equal(formatSecondsHMS(3665), '01:01:05');
+  assert.equal(formatDurationCompact(5400), '1h 30min');
+});
+
+test('Viveiro paralelo de 3 plantas (4x25min) e Boosts por Questões funcionam corretamente', () => {
+  let garden = createDefaultForestGarden(['Clínica Médica', 'Cirurgia Geral', 'Pediatria']);
+  assert.equal(garden.slots.length, 3);
+  assert.equal(FULL_TREE_SECONDS, 4 * STAGE_BLOCK_SECONDS);
+
+  // 55 questões = 5 Água (10q), 2 Adubos (25q), 1 Abelha (50q)
+  const wallet = getBoostWallet(55, garden.boostsSpent);
+  assert.deepEqual(wallet.available, { water: 5, fertilizer: 2, bees: 1 });
+
+  // Aplica Adubo (+25 min) no canteiro 0 -> vai para Estágio 2 (1500s)
+  const resFert = applyBoostToGarden(garden, 55, 'fertilizer', 0, '2026-11-13', 1000);
+  assert.equal(resFert.applied, true);
+  assert.equal(resFert.harvestedCount, 0);
+  assert.equal(resFert.nextGarden.slots[0].accumulatedSeconds, 1500);
+  assert.equal(getNurserySlotProgress(resFert.nextGarden.slots[0].accumulatedSeconds).stageNumber, 2);
+
+  // Aplica Enxame de Abelhas (+25 min em TODOS os 3 canteiros!)
+  const resBees = applyBoostToGarden(resFert.nextGarden, 55, 'bees', 0, '2026-11-13', 2000);
+  assert.equal(resBees.applied, true);
+  assert.equal(resBees.nextGarden.slots[0].accumulatedSeconds, 3000); // Estágio 3
+  assert.equal(resBees.nextGarden.slots[1].accumulatedSeconds, 1500); // Estágio 2
+  assert.equal(resBees.nextGarden.slots[2].accumulatedSeconds, 1500); // Estágio 2
+
+  // Mais 2 Adubos no canteiro 0 (3000 + 3000 = 6000s) -> colhe 1 árvore madura para floresta e zera canteiro 0
+  let step = applyBoostToGarden(resBees.nextGarden, 100, 'fertilizer', 0, '2026-11-13', 3000);
+  assert.equal(step.nextGarden.slots[0].accumulatedSeconds, 4500);
+  step = applyBoostToGarden(step.nextGarden, 100, 'fertilizer', 0, '2026-11-13', 4000);
+  assert.equal(step.harvestedCount, 1);
+  assert.equal(step.nextGarden.slots[0].accumulatedSeconds, 0);
+  assert.equal(step.nextGarden.maturedTrees.length, 1);
+  assert.equal(step.nextGarden.maturedTrees[0].area, 'Clínica Médica');
 });
 
 console.log(`\nTodos os ${passed} testes passaram com 100% de sucesso!`);

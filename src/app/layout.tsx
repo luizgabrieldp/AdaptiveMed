@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { DataProvider } from '@/lib/store/data-context';
+import { FocusTimerProvider } from '@/components/focus/focus-timer-context';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -60,7 +61,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <ThemeProvider>
-          <DataProvider>{children}</DataProvider>
+          <DataProvider>
+            <FocusTimerProvider>{children}</FocusTimerProvider>
+          </DataProvider>
         </ThemeProvider>
       </body>
     </html>

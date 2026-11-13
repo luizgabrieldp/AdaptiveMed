@@ -19,7 +19,10 @@ import {
   DEFAULT_WORKLOAD_CONFIG,
   ErrorLog,
   ErrorLogCause,
+  StudySession,
+  ForestGardenState,
 } from '@/types/database';
+import { normalizeForestGarden } from '@/lib/focus-timer';
 import {
   getInitialDemoTopics,
   getInitialDemoReviews,
@@ -27,6 +30,7 @@ import {
   getInitialDemoInstitutionExams,
   getInitialDemoPrevalentTopics,
   getInitialDemoErrorLogs,
+  getInitialDemoStudySessions,
   INITIAL_DEMO_PROFILE,
 } from './demo-data';
 import {
@@ -49,6 +53,7 @@ interface DataContextType {
   institutionExams: InstitutionExam[];
   prevalentTopics: PrevalentTopic[];
   errorLogs: ErrorLog[];
+  studySessions: StudySession[];
   profile: Profile | null;
   areas: StudyArea[];
   allTags: string[];
@@ -58,8 +63,10 @@ interface DataContextType {
   stats: UserStats;
   streakConfig: StreakConfig;
   workloadConfig: WorkloadConfig;
+  forestGarden: ForestGardenState;
   updateStreakConfig: (config: StreakConfig) => Promise<void>;
   updateWorkloadConfig: (config: WorkloadConfig) => Promise<void>;
+  updateForestGarden: (garden: ForestGardenState) => Promise<void>;
   addTopic: (data: {
     area: string;
     subject_name: string;
@@ -147,6 +154,10 @@ interface DataContextType {
   toggleErrorLogReviewed: (id: string, is_reviewed?: boolean) => Promise<void>;
   updateErrorLog: (id: string, data: Partial<ErrorLog>) => Promise<void>;
   deleteErrorLog: (id: string) => Promise<void>;
+  addStudySession: (
+    data: Omit<StudySession, 'id' | 'user_id' | 'created_at'>
+  ) => Promise<void>;
+  deleteStudySession: (id: string) => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   resetToDemo: () => void;
   signInDemo: () => void;
@@ -162,6 +173,7 @@ const LOCAL_STORAGE_KEYS = {
   INST_EXAMS: 'adaptivemed_inst_exams_v1',
   PREVALENT_TOPICS: 'adaptivemed_prevalent_topics_v1',
   ERROR_LOGS: 'adaptivemed_error_logs_v1',
+  STUDY_SESSIONS: 'adaptivemed_study_sessions_v1',
   PROFILE: 'adaptivemed_profile_v1',
   AREAS: 'adaptivemed_areas_v1',
   STREAK_CONFIG: 'adaptivemed_streak_config_v1',
@@ -303,6 +315,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [institutionExams, setInstitutionExams] = useState<InstitutionExam[]>([]);
   const [prevalentTopics, setPrevalentTopics] = useState<PrevalentTopic[]>([]);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+  const [studySessions, setStudySessions] = useState<StudySession[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [areas, setAreas] = useState<StudyArea[]>(DEFAULT_STUDY_AREAS);
   const [streakConfig, setStreakConfig] = useState<StreakConfig>(DEFAULT_STREAK_CONFIG);
@@ -342,6 +355,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setInstitutionExams([]);
       setPrevalentTopics([]);
       setErrorLogs([]);
+      setStudySessions([]);
       setAreas(DEFAULT_STUDY_AREAS);
       setIsDemoMode(false);
       setIsLoading(false);
@@ -361,6 +375,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('institution_exams').select('*').eq('user_id', userId).order('exam_year', { ascending: true }),
         supabase.from('prevalent_topics').select('*').eq('user_id', userId).order('rank_order', { ascending: true }),
         supabase.from('error_logs').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+        supabase.from('study_sessions').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
       ]);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout de carregamento do Supabase')), 10000)
@@ -374,6 +389,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { data: instData },
         prevResult,
         errResult,
+        sessResult,
       ] = await Promise.race([loadPromise, timeoutPromise]);
 
       if (profData) {
@@ -444,6 +460,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             path.startsWith('/simulados') ||
             path.startsWith('/evolucao') ||
             path.startsWith('/prevalencia') ||
+            path.startsWith('/erros') ||
+            path.startsWith('/foco') ||
             path.startsWith('/onboarding') ||
             path.startsWith('/conta')
           ) {
@@ -597,6 +615,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') {
         localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(mergedErrorLogs));
       }
+
+      // 6. Sessões de Foco & Floresta (study_sessions) com merge local seguro
+      let mergedSessions: StudySession[] = (sessResult?.data as StudySession[]) || [];
+      const storedSessionsRaw = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS) : null;
+      if (storedSessionsRaw) {
+        try {
+          const localSessions = JSON.parse(storedSessionsRaw) as StudySession[];
+          const remoteSessIds = new Set(mergedSessions.map(s => s.id));
+          const pendingSessions = localSessions.filter(ls => !remoteSessIds.has(ls.id) && ls.user_id === userId);
+          if (pendingSessions.length > 0) {
+            mergedSessions = [...pendingSessions, ...mergedSessions];
+            pendingSessions.forEach(ps => syncSupabase(supabase.from('study_sessions').insert(ps)));
+          }
+        } catch {}
+      }
+      setStudySessions(mergedSessions);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(mergedSessions));
+      }
     } catch (err) {
       console.warn('Aviso ou timeout no carregamento do Supabase. Carregando dados locais de segurança:', err);
       // Fallback seguro: se falhar a rede/timeout, carrega todos os dados locais do localStorage
@@ -614,6 +651,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (storedPrev) setPrevalentTopics(JSON.parse(storedPrev));
           const storedErrors = localStorage.getItem(LOCAL_STORAGE_KEYS.ERROR_LOGS);
           if (storedErrors) setErrorLogs(JSON.parse(storedErrors));
+          const storedSessions = localStorage.getItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS);
+          if (storedSessions) setStudySessions(JSON.parse(storedSessions));
         } catch (storageErr) {
           console.error('Erro ao restaurar dados do localStorage no fallback:', storageErr);
         }
@@ -628,6 +667,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dInsts = getInitialDemoInstitutionExams();
     const dPrevalent = getInitialDemoPrevalentTopics();
     const dErrors = getInitialDemoErrorLogs();
+    const dSessions = getInitialDemoStudySessions();
     const dProf = INITIAL_DEMO_PROFILE;
 
     setTopics(dTopics);
@@ -636,6 +676,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstitutionExams(dInsts);
     setPrevalentTopics(dPrevalent);
     setErrorLogs(dErrors);
+    setStudySessions(dSessions);
     setProfile(dProf);
     setAreas(DEFAULT_STUDY_AREAS);
     setStreakConfig(DEFAULT_STREAK_CONFIG);
@@ -648,6 +689,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(dInsts));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(dPrevalent));
       localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(dErrors));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(dSessions));
       localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(dProf));
       localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEFAULT_STUDY_AREAS));
       localStorage.setItem(LOCAL_STORAGE_KEYS.STREAK_CONFIG, JSON.stringify(DEFAULT_STREAK_CONFIG));
@@ -678,6 +720,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInstitutionExams([]);
     setPrevalentTopics([]);
     setErrorLogs([]);
+    setStudySessions([]);
     setProfile(null);
     if (typeof window !== 'undefined') {
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
@@ -714,18 +757,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateWorkloadConfig = async (newConfig: WorkloadConfig) => {
-    setWorkloadConfig(newConfig);
+    const merged: WorkloadConfig = {
+      ...newConfig,
+      forestGarden: newConfig.forestGarden ?? workloadConfig.forestGarden,
+    };
+    setWorkloadConfig(merged);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(newConfig));
+        localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(merged));
       } catch {}
     }
-    await updateProfile({ workload_config: newConfig });
+    await updateProfile({ workload_config: merged });
+  };
+
+  const forestGarden = useMemo(
+    () => normalizeForestGarden(workloadConfig?.forestGarden, areas.map(a => a.name)),
+    [workloadConfig?.forestGarden, areas]
+  );
+
+  const updateForestGarden = async (nextGarden: ForestGardenState) => {
+    await updateWorkloadConfig({
+      ...(workloadConfig || DEFAULT_WORKLOAD_CONFIG),
+      forestGarden: nextGarden,
+    });
   };
 
   // Salvar no localStorage de forma contínua
   useEffect(() => {
-    if (typeof window !== 'undefined' && topics.length > 0) {
+    if (typeof window !== 'undefined' && (topics.length > 0 || studySessions.length > 0 || errorLogs.length > 0)) {
       try {
         localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(topics));
         localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
@@ -733,9 +792,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(LOCAL_STORAGE_KEYS.INST_EXAMS, JSON.stringify(institutionExams));
         localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(prevalentTopics));
         localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(errorLogs));
+        localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(studySessions));
       } catch {}
     }
-  }, [topics, reviews, mockExams, institutionExams, prevalentTopics, errorLogs]);
+  }, [topics, reviews, mockExams, institutionExams, prevalentTopics, errorLogs, studySessions]);
 
   // GESTÃO DE GRANDES ÁREAS CUSTOMIZADAS
   const addArea = async (name: string, colorHex: string) => {
@@ -2103,6 +2163,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // AÇÃO 8: Sessões de Estudo Cronometradas & Floresta (study_sessions)
+  const addStudySession = async (
+    data: Omit<StudySession, 'id' | 'user_id' | 'created_at'>
+  ) => {
+    const newSession: StudySession = {
+      id: isDemoMode ? `sess-${Date.now()}` : crypto.randomUUID(),
+      user_id: user?.id || 'demo-user-id',
+      topic_id: data.topic_id || null,
+      area: data.area,
+      subject_name: data.subject_name || null,
+      mode: data.mode,
+      status: data.status,
+      duration_seconds: Math.max(0, Math.round(data.duration_seconds)),
+      planned_seconds: data.planned_seconds ?? null,
+      trees_earned: Math.max(0, Math.round(data.trees_earned)),
+      session_date: data.session_date,
+      started_at: data.started_at,
+      ended_at: data.ended_at,
+      created_at: new Date().toISOString(),
+    };
+
+    setStudySessions(prev => {
+      const updated = [newSession, ...prev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('study_sessions').insert(newSession));
+    }
+  };
+
+  const deleteStudySession = async (id: string) => {
+    setStudySessions(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    if (!isDemoMode && user) {
+      const supabase = createClient();
+      syncSupabase(supabase.from('study_sessions').delete().eq('id', id));
+    }
+  };
+
   // Estatísticas Dinâmicas Computadas
   const stats = useMemo<UserStats>(() => {
     const today = getTodayDateString();
@@ -2239,6 +2349,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         institutionExams,
         prevalentTopics,
         errorLogs,
+        studySessions,
         profile,
         areas,
         allTags,
@@ -2248,8 +2359,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         stats,
         streakConfig,
         workloadConfig,
+        forestGarden,
         updateStreakConfig,
         updateWorkloadConfig,
+        updateForestGarden,
         addTopic,
         updateTopic,
         updateTopicR0,
@@ -2282,6 +2395,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleErrorLogReviewed,
         updateErrorLog,
         deleteErrorLog,
+        addStudySession,
+        deleteStudySession,
         updateProfile,
         resetToDemo,
         signInDemo,

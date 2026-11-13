@@ -17,8 +17,11 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  Trees,
 } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
+import { useFocusTimer } from '@/components/focus/focus-timer-context';
+import { formatSecondsHMS } from '@/lib/focus-timer';
 import { useTheme } from './theme-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +32,7 @@ import { ThemeToggle } from './theme-toggle';
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { profile, stats, topics, errorLogs, isDemoMode, signOut } = useData();
+  const { status: timerStatus, displaySeconds } = useFocusTimer();
   const { theme } = useTheme();
   const [manageAreasOpen, setManageAreasOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -72,6 +76,13 @@ export const Sidebar: React.FC = () => {
       href: '/erros',
       icon: AlertTriangle,
       badge: pendingErrorsCount > 0 ? String(pendingErrorsCount) : undefined,
+      badgeVariant: 'hoje' as const,
+    },
+    {
+      label: 'Foco & Floresta',
+      href: '/foco',
+      icon: Trees,
+      badge: timerStatus === 'running' ? formatSecondsHMS(displaySeconds) : undefined,
       badgeVariant: 'hoje' as const,
     },
     {

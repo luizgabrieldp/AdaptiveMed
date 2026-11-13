@@ -19,6 +19,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/diario') ||
     path.startsWith('/revisoes') ||
     path.startsWith('/erros') ||
+    path.startsWith('/foco') ||
     path.startsWith('/evolucao') ||
     path.startsWith('/simulados') ||
     path.startsWith('/prevalencia') ||

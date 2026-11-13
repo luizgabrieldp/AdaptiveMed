@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
+import { FloatingFocusTimer } from '@/components/focus/floating-focus-timer';
 import { useData } from '@/lib/store/data-context';
 import { Loader2 } from 'lucide-react';
 
@@ -58,6 +59,9 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
       {/* Bottom Navigation Mobile */}
       <BottomNav />
+
+      {/* Relógio Pomodoro / Cronômetro Flutuante Sempre Acessível */}
+      <FloatingFocusTimer />
     </div>
   );
 };

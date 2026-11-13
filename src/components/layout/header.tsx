@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Stethoscope, Sparkles } from 'lucide-react';
+import { Stethoscope, Sparkles, Trees } from 'lucide-react';
 import { useData } from '@/lib/store/data-context';
 import { NotificationManager } from '@/components/notifications/notification-manager';
 import { ThemeToggle } from './theme-toggle';
@@ -27,6 +27,13 @@ export const Header: React.FC = () => {
             <Sparkles className="h-3 w-3" /> Demo
           </span>
         )}
+        <Link
+          href="/foco"
+          title="Foco & Floresta"
+          className="h-8 w-8 rounded-lg border border-border bg-muted/40 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center transition-colors"
+        >
+          <Trees className="h-4 w-4" />
+        </Link>
         <NotificationManager />
         <ThemeToggle />
       </div>

@@ -187,6 +187,7 @@ export interface WorkloadConfig {
   maxDailyReviews: number;      // Padrão: 3 revisões/dia
   maxDailyOverdue: number;      // Padrão: 2 atrasados puxados para a fila de hoje
   maxDailyNewTopics: number;    // Padrão: 1 novo assunto por dia
+  forestGarden?: ForestGardenState; // Viveiro paralelo de 3 canteiros + boosts (sync em profiles.workload_config JSONB)
 }
 
 export const DEFAULT_WORKLOAD_CONFIG: WorkloadConfig = {
@@ -363,6 +364,57 @@ export interface ErrorLog {
   concept_summary: string;
   question_ref?: string | null;
   is_reviewed: boolean;
+  created_at: string;
+}
+
+export type FocusMode = 'pomodoro' | 'stopwatch';
+export type FocusSessionStatus = 'completed' | 'withered';
+export type ForestBoostType = 'water' | 'fertilizer' | 'bees';
+
+export interface NurserySlotState {
+  slotIndex: 0 | 1 | 2;
+  area: string;
+  topicId?: string | null;
+  subjectName?: string | null;
+  accumulatedSeconds: number; // Progresso no ciclo atual (0 até 6000s = 4 estágios de 25 min)
+  boostedSeconds: number;     // Quanto deste ciclo veio de Água / Adubo / Abelhas
+  beesActiveUntilMs?: number; // Timestamp até quando as abelhas polinizam visualmente este canteiro
+  lastBoostAtMs?: number;     // Timestamp do último boost para efeito visual imediato na cena 3D
+}
+
+export interface MaturedGardenTree {
+  id: string;
+  area: string;
+  subjectName?: string | null;
+  completedAtIso: string;
+  sessionDate: string; // YYYY-MM-DD
+}
+
+export interface ForestGardenState {
+  activeSlotIndex: 0 | 1 | 2;
+  slots: [NurserySlotState, NurserySlotState, NurserySlotState];
+  boostsSpent: {
+    water: number;
+    fertilizer: number;
+    bees: number;
+  };
+  maturedTrees: MaturedGardenTree[];
+}
+
+export interface StudySession {
+  id: string;
+  user_id: string;
+  topic_id?: string | null;
+  area: string;
+  subject_name?: string | null;
+  mode: FocusMode;
+  status: FocusSessionStatus;
+  duration_seconds: number;
+  planned_seconds?: number | null;
+  trees_earned: number;
+  session_date: string; // YYYY-MM-DD
+  started_at: string;
+  ended_at: string;
   created_at: string;
 }
 

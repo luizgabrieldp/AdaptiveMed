@@ -15,6 +15,7 @@ import {
   BookOpen,
   ArrowRight,
   AlertTriangle,
+  Trees,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -59,6 +60,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link href="/foco">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5 font-semibold border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+              >
+                <Trees className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Foco & Floresta</span>
+              </Button>
+            </Link>
+
             <Link href="/erros">
               <Button
                 variant="outline"
