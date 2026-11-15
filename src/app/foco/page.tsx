@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,12 @@ import {
   BOOST_CONFIG,
   FULL_TREE_SECONDS,
   STAGE_BLOCK_SECONDS,
+  STOPWATCH_CHIME_OPTIONS,
   TREE_BLOCK_SECONDS,
   formatDurationCompact,
   formatSecondsHMS,
   getNurserySlotProgress,
+  getTopicCurrentMomentLabel,
   getTreeStageLabel,
 } from '@/lib/focus-timer';
 import { getTodayDateString, addDaysToDate, formatDateBR } from '@/lib/spaced-repetition';
@@ -39,18 +42,21 @@ import {
   Droplets,
   Flower2,
   Sparkles,
+  Bell,
+  ArrowUpRight,
 } from 'lucide-react';
 
 type ForestPeriodFilter = 'today' | 'week' | 'month' | 'all';
 
 export default function FocoFlorestaPage() {
-  const { areas, topics, stats, studySessions, deleteStudySession } = useData();
+  const { areas, topics, reviews, stats, studySessions, deleteStudySession } = useData();
   const {
     mode,
     phase,
     status,
     focusMinutes,
     breakMinutes,
+    stopwatchChimeMinutes,
     displaySeconds,
     elapsedSeconds,
     progressRatio,
@@ -69,6 +75,7 @@ export default function FocoFlorestaPage() {
     clearNotice,
     setMode,
     setPomodoroDurations,
+    setStopwatchChimeMinutes,
     setSelectedArea,
     setSlotArea,
     setSelectedTopicId,
@@ -100,6 +107,22 @@ export default function FocoFlorestaPage() {
     () => topics.filter(t => t.area === selectedArea),
     [topics, selectedArea]
   );
+
+  const topicMomentById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const topic of filteredTopics) {
+      map.set(topic.id, getTopicCurrentMomentLabel(topic, reviews));
+    }
+    return map;
+  }, [filteredTopics, reviews]);
+
+  const selectedTopic = useMemo(
+    () => (selectedTopicId ? topics.find(t => t.id === selectedTopicId) : undefined),
+    [topics, selectedTopicId]
+  );
+  const selectedTopicMoment = selectedTopic
+    ? getTopicCurrentMomentLabel(selectedTopic, reviews)
+    : null;
 
   // Estatísticas globais (Hoje / Semana / Mês / Total)
   const kpis = useMemo(() => {
@@ -225,9 +248,17 @@ export default function FocoFlorestaPage() {
                 : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{lastNotice.message}</span>
+              {lastNotice.type === 'success' && (
+                <Link
+                  href="/diario"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-500 transition-colors"
+                >
+                  Validar no Diário <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              )}
             </div>
             <button type="button" onClick={clearNotice} className="hover:opacity-75" aria-label="Fechar">
               <X className="h-4 w-4" />
@@ -411,6 +442,39 @@ export default function FocoFlorestaPage() {
                 </div>
               )}
 
+              {/* Sinal Sonoro Periódico para Cronômetro Livre */}
+              {mode === 'stopwatch' && (
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Bell className="h-3.5 w-3.5 text-primary" />
+                      Aviso sonoro periódico (sem pausar)
+                    </span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      {stopwatchChimeMinutes === 0
+                        ? 'Desativado'
+                        : `Toca a cada ${stopwatchChimeMinutes} min`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {STOPWATCH_CHIME_OPTIONS.map(mins => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setStopwatchChimeMinutes(mins)}
+                        className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                          stopwatchChimeMinutes === mins
+                            ? 'bg-primary/15 text-primary border-primary/40 shadow-sm'
+                            : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                        }`}
+                      >
+                        {mins === 0 ? 'Off' : `${mins}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Display Central do Relógio */}
               <div className="p-5 rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-card text-center space-y-3">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border text-[11px] font-bold">
@@ -472,10 +536,20 @@ export default function FocoFlorestaPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Assunto Relacionado (opcional)
-                  </label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Assunto Relacionado (opcional)
+                    </label>
+                    {selectedTopic && selectedTopicMoment && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-extrabold bg-primary/15 text-primary border-primary/30"
+                      >
+                        Momento atual: {selectedTopicMoment}
+                      </Badge>
+                    )}
+                  </div>
                   <select
                     value={selectedTopicId || ''}
                     onChange={e => setSelectedTopicId(e.target.value || null)}
@@ -484,7 +558,7 @@ export default function FocoFlorestaPage() {
                     <option value="">Estudo geral da área (sem assunto fixo)</option>
                     {filteredTopics.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.subject_name}
+                        {t.subject_name} ({topicMomentById.get(t.id) || 'R0'})
                       </option>
                     ))}
                   </select>

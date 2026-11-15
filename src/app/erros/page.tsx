@@ -52,9 +52,12 @@ export default function CadernoErrosPage() {
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'drafts' | 'reviewed'>('all');
   const [causeFilter, setCauseFilter] = useState<'all' | ErrorLogCause>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
+
+  const isDraftToComplete = (err: ErrorLog) =>
+    !err.is_reviewed && err.concept_summary.trim().length < 60;
 
   // Edição inline
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,6 +83,7 @@ export default function CadernoErrosPage() {
   const metrics = useMemo(() => {
     const total = errorLogs.length;
     const pending = errorLogs.filter(e => !e.is_reviewed).length;
+    const drafts = errorLogs.filter(e => !e.is_reviewed && e.concept_summary.trim().length < 60).length;
     const reviewed = total - pending;
 
     const byCause: Record<ErrorLogCause, number> = {
@@ -99,13 +103,14 @@ export default function CadernoErrosPage() {
       }
     }
 
-    return { total, pending, reviewed, byCause, topCause };
+    return { total, pending, drafts, reviewed, byCause, topCause };
   }, [errorLogs]);
 
   const filteredErrors = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return errorLogs.filter(err => {
       if (statusFilter === 'pending' && err.is_reviewed) return false;
+      if (statusFilter === 'drafts' && (err.is_reviewed || err.concept_summary.trim().length >= 60)) return false;
       if (statusFilter === 'reviewed' && !err.is_reviewed) return false;
       if (causeFilter !== 'all' && err.cause !== causeFilter) return false;
 
@@ -412,16 +417,17 @@ export default function CadernoErrosPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/60">
+                <div className="flex items-center flex-wrap gap-1 bg-muted/50 p-1 rounded-xl border border-border/60">
                   {[
                     { id: 'all', label: 'Todos' },
                     { id: 'pending', label: `A revisar (${metrics.pending})` },
+                    { id: 'drafts', label: `Para complementar (${metrics.drafts})` },
                     { id: 'reviewed', label: `Revisados (${metrics.reviewed})` },
                   ].map(tab => (
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => setStatusFilter(tab.id as 'all' | 'pending' | 'reviewed')}
+                      onClick={() => setStatusFilter(tab.id as 'all' | 'pending' | 'drafts' | 'reviewed')}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                         statusFilter === tab.id
                           ? 'bg-primary text-primary-foreground shadow-sm'
@@ -562,6 +568,16 @@ export default function CadernoErrosPage() {
                               {err.question_ref}
                             </span>
                           )}
+                          {isDraftToComplete(err) && !isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => startEditing(err)}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25 transition-colors"
+                              title="Pré-registro rápido — clique para detalhar"
+                            >
+                              Pré-registro • Complementar
+                            </button>
+                          )}
                         </div>
                         <h3 className="text-sm font-bold text-foreground truncate">
                           {topic?.subject_name || 'Assunto removido'}
@@ -652,18 +668,30 @@ export default function CadernoErrosPage() {
                         <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
                           <span>Registrado em {formatDateBR(err.created_at.slice(0, 10))}</span>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleErrorLogReviewed(err.id)}
-                            className={`px-2.5 py-1 rounded-lg border font-bold transition-all flex items-center gap-1.5 ${
-                              err.is_reviewed
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                                : 'bg-muted/60 text-foreground border-border hover:border-blue-500/50 hover:bg-blue-500/10'
-                            }`}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>{err.is_reviewed ? 'Revisado' : 'Marcar como Revisado'}</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {isDraftToComplete(err) && (
+                              <button
+                                type="button"
+                                onClick={() => startEditing(err)}
+                                className="px-2.5 py-1 rounded-lg border font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25 transition-all flex items-center gap-1"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                <span>Complementar</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleErrorLogReviewed(err.id)}
+                              className={`px-2.5 py-1 rounded-lg border font-bold transition-all flex items-center gap-1.5 ${
+                                err.is_reviewed
+                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                                  : 'bg-muted/60 text-foreground border-border hover:border-blue-500/50 hover:bg-blue-500/10'
+                              }`}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>{err.is_reviewed ? 'Revisado' : 'Marcar como Revisado'}</span>
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}

@@ -18,7 +18,14 @@ import {
   addDaysToDate,
   formatDateBR,
 } from '@/lib/spaced-repetition';
-import { Edit3, Check, Tag, Trash2, AlertTriangle, BrainCircuit, Sparkles, Clock, RefreshCw } from 'lucide-react';
+import {
+  QuickErrorLogState,
+  collectFinalErrorDrafts,
+  createInitialQuickErrorState,
+  getLastStudiedMinutesForTopic,
+} from '@/lib/focus-timer';
+import { QuickErrorLogPrefill } from '@/components/reviews/quick-error-log-prefill';
+import { Edit3, Check, Tag, Trash2, AlertTriangle, BrainCircuit, Sparkles, Clock, RefreshCw, Timer } from 'lucide-react';
 
 interface EditPlannedTopicModalProps {
   open: boolean;
@@ -31,7 +38,16 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   onOpenChange,
   topic,
 }) => {
-  const { areas, updateTopic, updateTopicR0, deleteTopic, reviews, recalculateTopicReviews } = useData();
+  const {
+    areas,
+    updateTopic,
+    updateTopicR0,
+    deleteTopic,
+    reviews,
+    recalculateTopicReviews,
+    studySessions,
+    addErrorLog,
+  } = useData();
 
   const [area, setArea] = useState('');
   const [subjectName, setSubjectName] = useState('');
@@ -45,11 +61,16 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   const [questionsDone, setQuestionsDone] = useState('25');
   const [questionsCorrect, setQuestionsCorrect] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
+  const [pulledTimerMinutes, setPulledTimerMinutes] = useState<number | null>(null);
+  const [quickErrorState, setQuickErrorState] = useState<QuickErrorLogState>(() =>
+    createInitialQuickErrorState()
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const seededTopicIdRef = React.useRef<string>('');
 
   const isCompleted = Boolean(
     topic &&
@@ -58,31 +79,49 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
   );
 
   useEffect(() => {
-    if (topic && open) {
-      setArea(topic.area || areas[0]?.name || 'Clínica Médica');
-      setSubjectName(topic.subject_name || '');
-      const hasDate = Boolean(topic.planned_date);
-      setHasSpecificDate(hasDate);
-      setPlannedDate(topic.planned_date || getTodayDateString());
-      setTagInput(topic.tags ? topic.tags.join(', ') : '');
-      setNotes(topic.notes || '');
-
-      setStudyDate(topic.initial_date || topic.planned_date || getTodayDateString());
-      setQuestionsDone(
-        topic.initial_questions != null ? String(topic.initial_questions) : '25'
-      );
-      setQuestionsCorrect(
-        topic.initial_correct != null ? String(topic.initial_correct) : ''
-      );
-      setDurationMinutes(
-        topic.initial_duration_minutes != null
-          ? String(topic.initial_duration_minutes)
-          : ''
-      );
-
-      setShowDeleteConfirm(false);
+    if (!topic || !open) {
+      seededTopicIdRef.current = '';
+      return;
     }
-  }, [topic, open, areas]);
+    if (seededTopicIdRef.current === topic.id) return;
+    seededTopicIdRef.current = topic.id;
+
+    setArea(topic.area || areas[0]?.name || 'Clínica Médica');
+    setSubjectName(topic.subject_name || '');
+    const hasDate = Boolean(topic.planned_date);
+    setHasSpecificDate(hasDate);
+    setPlannedDate(topic.planned_date || getTodayDateString());
+    setTagInput(topic.tags ? topic.tags.join(', ') : '');
+    setNotes(topic.notes || '');
+    setQuickErrorState(createInitialQuickErrorState());
+
+    setStudyDate(topic.initial_date || topic.planned_date || getTodayDateString());
+    setQuestionsDone(
+      topic.initial_questions != null ? String(topic.initial_questions) : '25'
+    );
+    setQuestionsCorrect(
+      topic.initial_correct != null ? String(topic.initial_correct) : ''
+    );
+    if (topic.initial_duration_minutes != null) {
+      setDurationMinutes(String(topic.initial_duration_minutes));
+      setPulledTimerMinutes(null);
+    } else {
+      const lastTimer = getLastStudiedMinutesForTopic(
+        studySessions,
+        topic.id,
+        topic.area
+      );
+      if (lastTimer) {
+        setDurationMinutes(String(lastTimer.minutes));
+        setPulledTimerMinutes(lastTimer.minutes);
+      } else {
+        setDurationMinutes('');
+        setPulledTimerMinutes(null);
+      }
+    }
+
+    setShowDeleteConfirm(false);
+  }, [topic, open, areas, studySessions]);
 
   if (!topic) return null;
 
@@ -181,6 +220,17 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
         await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum, topicChanges);
       } else {
         await updateTopic(topic.id, topicChanges);
+      }
+
+      // Salva eventuais pré-registros no Caderno de Erros
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: topic.id,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
       }
 
       onOpenChange(false);
@@ -380,9 +430,14 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
 
                 {/* Duração / Tempo de Estudo */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                       Tempo de Estudo (opcional)
+                      {pulledTimerMinutes !== null && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                          <Timer className="h-2.5 w-2.5" /> Puxado do relógio ({pulledTimerMinutes} min)
+                        </span>
+                      )}
                     </label>
                     <span className="text-[10px] text-muted-foreground">Em minutos</span>
                   </div>
@@ -515,6 +570,12 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                 className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
               />
             </div>
+
+            {/* Pré-registro rápido no Caderno de Erros */}
+            <QuickErrorLogPrefill
+              value={quickErrorState}
+              onChange={setQuickErrorState}
+            />
 
             {/* Rodapé Otimizado em Linha Única */}
             <div className="flex items-center justify-between gap-2 pt-3 border-t border-border mt-3 w-full">

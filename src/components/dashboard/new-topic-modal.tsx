@@ -19,6 +19,13 @@ import {
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { useData } from '@/lib/store/data-context';
+import {
+  QuickErrorLogState,
+  collectFinalErrorDrafts,
+  createInitialQuickErrorState,
+  getLastStudiedMinutesForTopic,
+} from '@/lib/focus-timer';
+import { QuickErrorLogPrefill } from '@/components/reviews/quick-error-log-prefill';
 import { ManageAreasModal } from './manage-areas-modal';
 import {
   PlusCircle,
@@ -31,6 +38,7 @@ import {
   AlertTriangle,
   Info,
   BrainCircuit,
+  Timer,
 } from 'lucide-react';
 
 interface NewTopicModalProps {
@@ -39,28 +47,50 @@ interface NewTopicModalProps {
 }
 
 export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange }) => {
-  const { addTopic, areas, allTags } = useData();
+  const { addTopic, areas, allTags, studySessions, addErrorLog } = useData();
   const [area, setArea] = useState<string>('');
   const [subjectName, setSubjectName] = useState('');
   const [initialDate, setInitialDate] = useState(getTodayDateString());
   const [initialQuestions, setInitialQuestions] = useState('25');
   const [initialCorrect, setInitialCorrect] = useState('');
   const [initialDurationMinutes, setInitialDurationMinutes] = useState('');
+  const [pulledTimerMinutes, setPulledTimerMinutes] = useState<number | null>(null);
+  const [notes, setNotes] = useState('');
+  const [quickErrorState, setQuickErrorState] = useState<QuickErrorLogState>(() =>
+    createInitialQuickErrorState()
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tags / Subáreas
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isManageAreasOpen, setIsManageAreasOpen] = useState(false);
+  const seededOpenRef = React.useRef(false);
 
-  // Reset ao abrir modal
+  // Reset ao abrir modal e pré-preenche última sessão finalizada do cronômetro para a área
   useEffect(() => {
-    if (open) {
-      setInitialCorrect('');
-      setInitialDurationMinutes('');
-      setErrorMessage(null);
+    if (!open) {
+      seededOpenRef.current = false;
+      return;
     }
-  }, [open]);
+    if (seededOpenRef.current) return;
+    seededOpenRef.current = true;
+
+    setInitialCorrect('');
+    setNotes('');
+    setQuickErrorState(createInitialQuickErrorState());
+    setErrorMessage(null);
+
+    const activeArea = area || areas[0]?.name || '';
+    const lastTimer = getLastStudiedMinutesForTopic(studySessions, null, activeArea);
+    if (lastTimer) {
+      setInitialDurationMinutes(String(lastTimer.minutes));
+      setPulledTimerMinutes(lastTimer.minutes);
+    } else {
+      setInitialDurationMinutes('');
+      setPulledTimerMinutes(null);
+    }
+  }, [open, area, areas, studySessions]);
 
   // Inicializa com a primeira área disponível
   useEffect(() => {
@@ -125,7 +155,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
     try {
       setIsSubmitting(true);
-      await addTopic({
+      const newTopicId = await addTopic({
         area: area || (areas[0]?.name ?? 'Geral'),
         subject_name: subjectName.trim(),
         tags: finalTags,
@@ -133,7 +163,18 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
         initial_questions: questionsNum,
         initial_correct: correctNum,
         initial_duration_minutes: durNum,
+        notes: notes.trim() || undefined,
       });
+
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: newTopicId,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
+      }
 
       setIsSubmitting(false);
       onOpenChange(false);
@@ -144,6 +185,9 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
       setInitialQuestions('25');
       setInitialCorrect('');
       setInitialDurationMinutes('');
+      setPulledTimerMinutes(null);
+      setNotes('');
+      setQuickErrorState(createInitialQuickErrorState());
       setInitialDate(getTodayDateString());
     } catch (err: unknown) {
       console.error(err);
@@ -374,9 +418,14 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
               {/* Campo Opcional de Duração / Tempo de Estudo */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-muted-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     Tempo de Estudo (opcional)
+                    {pulledTimerMinutes !== null && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                        <Timer className="h-2.5 w-2.5" /> Puxado do relógio ({pulledTimerMinutes} min)
+                      </span>
+                    )}
                   </label>
                   <span className="text-[10px] text-muted-foreground">Em minutos</span>
                 </div>
@@ -400,6 +449,26 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                   )}
                 </div>
               </div>
+
+              {/* Anotações / Foco do Estudo */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Anotações / Foco do Estudo (opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Dúvidas, mnemônicos ou detalhes que precisa revisar..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                />
+              </div>
+
+              {/* Pré-registro rápido no Caderno de Erros */}
+              <QuickErrorLogPrefill
+                value={quickErrorState}
+                onChange={setQuickErrorState}
+              />
 
               {/* Alerta de Acertos maior que Questões */}
               {initialCorrect !== '' && correctNum > questionsNum && (

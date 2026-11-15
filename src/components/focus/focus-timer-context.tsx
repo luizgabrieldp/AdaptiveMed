@@ -16,6 +16,7 @@ import {
   BOOST_CONFIG,
   FULL_TREE_SECONDS,
   STAGE_BLOCK_SECONDS,
+  STOPWATCH_CHIME_OPTIONS,
   TreeGrowthStage,
   advanceNurserySlot,
   applyBoostToGarden,
@@ -40,6 +41,7 @@ interface PersistedTimerState {
   sessionStartIso: string | null;
   selectedArea: string;
   selectedTopicId: string | null;
+  stopwatchChimeMinutes: number;
   soundEnabled: boolean;
   isFloatingExpanded: boolean;
 }
@@ -63,6 +65,7 @@ interface FocusTimerContextType {
   pendingTreesPreview: number;
   selectedArea: string;
   selectedTopicId: string | null;
+  stopwatchChimeMinutes: number;
   forestGarden: ForestGardenState;
   activeSlotIndex: 0 | 1 | 2;
   activeSlot: NurserySlotState;
@@ -73,6 +76,7 @@ interface FocusTimerContextType {
   clearNotice: () => void;
   setMode: (mode: FocusMode) => void;
   setPomodoroDurations: (focusMins: number, breakMins: number) => void;
+  setStopwatchChimeMinutes: (minutes: number) => void;
   setSelectedArea: (area: string) => void;
   setSlotArea: (slotIndex: 0 | 1 | 2, area: string) => void;
   setSelectedTopicId: (topicId: string | null) => void;
@@ -106,6 +110,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     sessionStartIso: null,
     selectedArea: defaultArea,
     selectedTopicId: null,
+    stopwatchChimeMinutes: 25,
     soundEnabled: true,
     isFloatingExpanded: false,
   });
@@ -117,6 +122,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   } | null>(null);
   const hasHydratedRef = useRef(false);
   const completionLockRef = useRef(false);
+  const lastStopwatchChimeMilestoneRef = useRef(0);
 
   // Hidrata estado salvo do localStorage
   useEffect(() => {
@@ -125,11 +131,18 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PersistedTimerState>;
+        const parsedChime = Number(parsed.stopwatchChimeMinutes);
+        const validChime = STOPWATCH_CHIME_OPTIONS.includes(
+          parsedChime as (typeof STOPWATCH_CHIME_OPTIONS)[number]
+        )
+          ? parsedChime
+          : 25;
         setState(prev => ({
           ...prev,
           ...parsed,
           focusMinutes: Math.max(1, Math.min(180, Number(parsed.focusMinutes) || 25)),
           breakMinutes: Math.max(1, Math.min(60, Number(parsed.breakMinutes) || 5)),
+          stopwatchChimeMinutes: validChime,
           selectedArea: parsed.selectedArea || defaultArea,
         }));
       }
@@ -492,6 +505,53 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [activeSlotIndex, forestGarden, stats.totalQuestions, updateForestGarden, state.soundEnabled]
   );
 
+  const setStopwatchChimeMinutes = useCallback(
+    (minutes: number) => {
+      const sanitized = STOPWATCH_CHIME_OPTIONS.includes(
+        minutes as (typeof STOPWATCH_CHIME_OPTIONS)[number]
+      )
+        ? minutes
+        : 25;
+      lastStopwatchChimeMilestoneRef.current =
+        sanitized > 0 ? Math.floor(elapsedSeconds / (sanitized * 60)) : 0;
+      setState(prev => ({ ...prev, stopwatchChimeMinutes: sanitized }));
+    },
+    [elapsedSeconds]
+  );
+
+  // Sinal sonoro periódico no Cronômetro Livre sem interromper a contagem
+  useEffect(() => {
+    if (state.status === 'idle' || elapsedSeconds === 0) {
+      lastStopwatchChimeMilestoneRef.current = 0;
+      return;
+    }
+    if (
+      state.mode !== 'stopwatch' ||
+      state.status !== 'running' ||
+      state.stopwatchChimeMinutes <= 0
+    ) {
+      return;
+    }
+    const intervalSec = state.stopwatchChimeMinutes * 60;
+    const milestone = Math.floor(elapsedSeconds / intervalSec);
+    if (milestone >= 1 && milestone > lastStopwatchChimeMilestoneRef.current) {
+      lastStopwatchChimeMilestoneRef.current = milestone;
+      if (state.soundEnabled) {
+        playGentleChime();
+      }
+      setLastNotice({
+        type: 'info',
+        message: `Aviso do Cronômetro: ${milestone * state.stopwatchChimeMinutes} min atingidos — contagem continua!`,
+      });
+    }
+  }, [
+    state.mode,
+    state.status,
+    state.stopwatchChimeMinutes,
+    state.soundEnabled,
+    elapsedSeconds,
+  ]);
+
   const toggleSound = useCallback(() => {
     setState(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }));
   }, []);
@@ -530,6 +590,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const currentElapsed = elapsedSeconds;
     const currentMode = state.mode;
     const planned = currentMode === 'pomodoro' ? state.focusMinutes * 60 : null;
+    lastStopwatchChimeMilestoneRef.current = 0;
 
     setState(prev => ({
       ...prev,
@@ -589,6 +650,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const currentElapsed = elapsedSeconds;
     const wasFocusPomodoro = state.mode === 'pomodoro' && state.phase === 'focus';
     const planned = state.focusMinutes * 60;
+    lastStopwatchChimeMilestoneRef.current = 0;
 
     setState(prev => ({
       ...prev,
@@ -644,6 +706,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         pendingTreesPreview,
         selectedArea: effectiveArea,
         selectedTopicId: effectiveTopicId,
+        stopwatchChimeMinutes: state.stopwatchChimeMinutes,
         forestGarden,
         activeSlotIndex,
         activeSlot,
@@ -654,6 +717,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         clearNotice,
         setMode,
         setPomodoroDurations,
+        setStopwatchChimeMinutes,
         setSelectedArea,
         setSlotArea,
         setSelectedTopicId,

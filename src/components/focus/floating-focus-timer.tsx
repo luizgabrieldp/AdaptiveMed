@@ -6,7 +6,12 @@ import { usePathname } from 'next/navigation';
 import { useFocusTimer } from './focus-timer-context';
 import { useData } from '@/lib/store/data-context';
 import { Button } from '@/components/ui/button';
-import { formatSecondsHMS, getTreeStageLabel } from '@/lib/focus-timer';
+import {
+  STOPWATCH_CHIME_OPTIONS,
+  formatSecondsHMS,
+  getTopicCurrentMomentLabel,
+  getTreeStageLabel,
+} from '@/lib/focus-timer';
 import { getAreaStyle } from '@/types/database';
 import {
   Play,
@@ -22,17 +27,19 @@ import {
   SkipForward,
   CheckCircle2,
   X,
+  Bell,
 } from 'lucide-react';
 
 export const FloatingFocusTimer: React.FC = () => {
   const pathname = usePathname();
-  const { areas, topics } = useData();
+  const { areas, topics, reviews } = useData();
   const {
     mode,
     phase,
     status,
     focusMinutes,
     breakMinutes,
+    stopwatchChimeMinutes,
     displaySeconds,
     elapsedSeconds,
     progressRatio,
@@ -49,6 +56,7 @@ export const FloatingFocusTimer: React.FC = () => {
     clearNotice,
     setMode,
     setPomodoroDurations,
+    setStopwatchChimeMinutes,
     setSelectedArea,
     setSelectedTopicId,
     selectNurserySlot,
@@ -68,6 +76,22 @@ export const FloatingFocusTimer: React.FC = () => {
     [topics, selectedArea]
   );
 
+  const topicMomentById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const topic of filteredTopics) {
+      map.set(topic.id, getTopicCurrentMomentLabel(topic, reviews));
+    }
+    return map;
+  }, [filteredTopics, reviews]);
+
+  const selectedTopic = useMemo(
+    () => (selectedTopicId ? topics.find(t => t.id === selectedTopicId) : undefined),
+    [topics, selectedTopicId]
+  );
+  const selectedTopicMoment = selectedTopic
+    ? getTopicCurrentMomentLabel(selectedTopic, reviews)
+    : null;
+
   // Na própria página /foco o console completo já está em destaque no topo
   if (pathname === '/foco') {
     return null;
@@ -81,9 +105,20 @@ export const FloatingFocusTimer: React.FC = () => {
     return (
       <div className="fixed bottom-20 right-3 lg:bottom-6 lg:right-6 z-40 flex flex-col items-end gap-2">
         {lastNotice && (
-          <div className="max-w-[280px] p-2.5 rounded-xl bg-card/95 backdrop-blur-xl border border-emerald-500/40 shadow-xl text-[11px] font-medium text-foreground flex items-start gap-2 animate-fade-in">
+          <div className="max-w-[290px] p-2.5 rounded-xl bg-card/95 backdrop-blur-xl border border-emerald-500/40 shadow-xl text-[11px] font-medium text-foreground flex items-start gap-2 animate-fade-in">
             <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-            <span className="flex-1 leading-snug">{lastNotice.message}</span>
+            <div className="flex-1 space-y-1.5">
+              <span className="block leading-snug">{lastNotice.message}</span>
+              {lastNotice.type === 'success' && (
+                <Link
+                  href="/diario"
+                  onClick={clearNotice}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
+                >
+                  Validar no Diário <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
             <button
               type="button"
               onClick={clearNotice}
@@ -212,7 +247,21 @@ export const FloatingFocusTimer: React.FC = () => {
         {lastNotice && (
           <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-            <span className="flex-1">{lastNotice.message}</span>
+            <div className="flex-1 space-y-1">
+              <span className="block leading-snug">{lastNotice.message}</span>
+              {lastNotice.type === 'success' && (
+                <Link
+                  href="/diario"
+                  onClick={() => {
+                    clearNotice();
+                    setFloatingExpanded(false);
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
+                >
+                  Validar no Diário <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
             <button type="button" onClick={clearNotice} aria-label="Fechar">
               <X className="h-3 w-3" />
             </button>
@@ -288,6 +337,32 @@ export const FloatingFocusTimer: React.FC = () => {
                 title="Minutos customizados"
               />
               <span className="text-[10px] text-muted-foreground">min</span>
+            </div>
+          </div>
+        )}
+
+        {/* Seletor de aviso sonoro periódico para Cronômetro Livre */}
+        {mode === 'stopwatch' && (
+          <div className="flex items-center justify-between gap-1.5 rounded-xl bg-muted/30 border border-border/60 px-2.5 py-1.5">
+            <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
+              <Bell className="h-3 w-3 text-primary" />
+              Sinal a cada:
+            </span>
+            <div className="flex items-center gap-1 flex-wrap justify-end">
+              {STOPWATCH_CHIME_OPTIONS.map(mins => (
+                <button
+                  key={mins}
+                  type="button"
+                  onClick={() => setStopwatchChimeMinutes(mins)}
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all ${
+                    stopwatchChimeMinutes === mins
+                      ? 'bg-primary/15 text-primary border-primary/40'
+                      : 'bg-background text-muted-foreground border-border/70 hover:text-foreground'
+                  }`}
+                >
+                  {mins === 0 ? 'Off' : `${mins}m`}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -383,19 +458,31 @@ export const FloatingFocusTimer: React.FC = () => {
           </select>
 
           {filteredTopics.length > 0 && (
-            <select
-              value={selectedTopicId || ''}
-              onChange={e => setSelectedTopicId(e.target.value || null)}
-              aria-label="Assunto opcional"
-              className="h-8 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"
-            >
-              <option value="">Assunto específico (opcional)</option>
-              {filteredTopics.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.subject_name}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1.5">
+              <select
+                value={selectedTopicId || ''}
+                onChange={e => setSelectedTopicId(e.target.value || null)}
+                aria-label="Assunto opcional"
+                className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-[11px] text-foreground"
+              >
+                <option value="">Assunto específico (opcional)</option>
+                {filteredTopics.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.subject_name} ({topicMomentById.get(t.id) || 'R0'})
+                  </option>
+                ))}
+              </select>
+              {selectedTopic && selectedTopicMoment && (
+                <div className="flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-primary/10 border border-primary/25 text-[10px]">
+                  <span className="truncate font-semibold text-foreground">
+                    {selectedTopic.subject_name}
+                  </span>
+                  <span className="shrink-0 font-extrabold text-primary bg-background/80 px-1.5 py-0.5 rounded border border-primary/30">
+                    {selectedTopicMoment}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

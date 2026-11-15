@@ -1,11 +1,18 @@
 import {
+  ErrorLogCause,
   FocusMode,
   FocusSessionStatus,
   ForestBoostType,
   ForestGardenState,
   MaturedGardenTree,
   NurserySlotState,
+  StudySession,
+  StudyTopic,
+  TopicReview,
 } from '@/types/database';
+import { getTodayDateString } from './spaced-repetition';
+
+export const STOPWATCH_CHIME_OPTIONS = [0, 15, 20, 25, 30] as const;
 
 export type TreeGrowthStage = 'seed' | 'sprout' | 'sapling' | 'mature';
 
@@ -405,4 +412,117 @@ export function playGentleChime(): void {
   } catch {
     // Ignora silenciosamente se o navegador bloquear autoplay de áudio
   }
+}
+
+/**
+ * Identifica o momento atual de estudo de um assunto (R0, R1, R2... ou Concluído).
+ */
+export function getTopicCurrentMomentLabel(
+  topic: Pick<StudyTopic, 'id' | 'is_planned'>,
+  reviews: Array<Pick<TopicReview, 'topic_id' | 'review_number' | 'completed_date'>>
+): string {
+  if (topic.is_planned) {
+    return 'R0';
+  }
+  const topicRevs = reviews.filter(r => r.topic_id === topic.id);
+  const pending = topicRevs
+    .filter(r => !r.completed_date)
+    .sort((a, b) => a.review_number - b.review_number);
+
+  if (pending.length > 0) {
+    return `R${pending[0].review_number}`;
+  }
+  if (topicRevs.some(r => Boolean(r.completed_date))) {
+    return 'Concluído (R8)';
+  }
+  return 'R1';
+}
+
+/**
+ * Busca a última sessão cronometrada (>= 60s) de hoje para pré-preencher o campo
+ * de tempo de estudo ao validar R0 ou R1..R8 (mantendo editável pelo aluno).
+ * Prioriza match exato por topic_id; se não houver, faz fallback para sessão geral da mesma área hoje.
+ */
+export function getLastStudiedMinutesForTopic(
+  studySessions: StudySession[],
+  topicId?: string | null,
+  area?: string | null,
+  referenceDateStr?: string
+): { minutes: number; session: StudySession } | null {
+  if (!studySessions || studySessions.length === 0) return null;
+  const today = referenceDateStr || getTodayDateString();
+
+  const todayValid = studySessions
+    .filter(s => s.session_date === today && s.duration_seconds >= 60)
+    .sort((a, b) => {
+      const ta = new Date(a.ended_at || a.created_at).getTime();
+      const tb = new Date(b.ended_at || b.created_at).getTime();
+      return tb - ta;
+    });
+
+  if (todayValid.length === 0) return null;
+
+  let matched: StudySession | undefined;
+  if (topicId) {
+    matched = todayValid.find(s => s.topic_id === topicId);
+  }
+  if (!matched && area) {
+    matched = todayValid.find(s => !s.topic_id && s.area === area);
+  }
+  if (!matched) return null;
+
+  return {
+    minutes: Math.max(1, Math.round(matched.duration_seconds / 60)),
+    session: matched,
+  };
+}
+
+export interface DraftErrorLogItem {
+  localId: string;
+  cause: ErrorLogCause;
+  concept_summary: string;
+  question_ref: string;
+}
+
+export interface QuickErrorLogState {
+  drafts: DraftErrorLogItem[];
+  pendingCause: ErrorLogCause;
+  pendingSummary: string;
+  pendingRef: string;
+}
+
+/**
+ * Cria o estado inicial do bloco de pré-preenchimento do Caderno de Erros nos modais.
+ */
+export function createInitialQuickErrorState(): QuickErrorLogState {
+  return {
+    drafts: [],
+    pendingCause: 'Lacuna teórica',
+    pendingSummary: '',
+    pendingRef: '',
+  };
+}
+
+/**
+ * Consolida os rascunhos adicionados e qualquer linha em digitação para salvar em error_logs.
+ */
+export function collectFinalErrorDrafts(
+  state: QuickErrorLogState
+): Array<Omit<DraftErrorLogItem, 'localId'>> {
+  const result = state.drafts.map(({ cause, concept_summary, question_ref }) => ({
+    cause,
+    concept_summary: concept_summary.trim(),
+    question_ref: question_ref.trim(),
+  }));
+
+  const pendingTrimmed = state.pendingSummary.trim();
+  if (pendingTrimmed) {
+    result.push({
+      cause: state.pendingCause,
+      concept_summary: pendingTrimmed,
+      question_ref: state.pendingRef.trim(),
+    });
+  }
+
+  return result.filter(item => item.concept_summary.length > 0);
 }

@@ -75,7 +75,8 @@ interface DataContextType {
     initial_questions: number;
     initial_correct: number;
     initial_duration_minutes?: number;
-  }) => Promise<void>;
+    notes?: string;
+  }) => Promise<string>;
   updateTopic: (topicId: string, data: Partial<StudyTopic>) => Promise<void>;
   updateTopicR0: (
     topicId: string,
@@ -100,6 +101,7 @@ interface DataContextType {
       questions_done: number;
       questions_correct: number;
       duration_minutes?: number;
+      notes?: string;
     }
   ) => Promise<{ nextReviewDate?: string }>;
   updateTopicWeeklyGoal: (topicId: string, is_weekly_goal: boolean) => Promise<void>;
@@ -962,7 +964,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initial_questions: number;
     initial_correct: number;
     initial_duration_minutes?: number;
-  }) => {
+    notes?: string;
+  }): Promise<string> => {
     const percentage =
       data.initial_questions > 0
         ? Math.round((data.initial_correct / data.initial_questions) * 1000) / 10
@@ -982,6 +985,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initial_correct: data.initial_correct,
       initial_percentage: percentage,
       initial_duration_minutes: data.initial_duration_minutes || null,
+      notes: data.notes?.trim() || undefined,
       base_questions_count: data.initial_questions,
       created_at: new Date().toISOString(),
     };
@@ -1046,6 +1050,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })()
       );
     }
+
+    return topicId;
   };
 
 
@@ -1101,6 +1107,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_done: number;
       questions_correct: number;
       duration_minutes?: number;
+      notes?: string;
     }
   ): Promise<{ nextReviewDate?: string }> => {
     const percentage =
@@ -1138,6 +1145,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
           initial_duration_minutes: data.duration_minutes || null,
+          notes: data.notes !== undefined ? data.notes.trim() : targetTopic.notes,
           base_questions_count: data.questions_done,
           is_planned: false,
         }
@@ -1151,6 +1159,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
           initial_duration_minutes: data.duration_minutes || null,
+          notes: data.notes !== undefined ? data.notes.trim() : undefined,
           base_questions_count: data.questions_done,
           is_planned: false,
           created_at: new Date().toISOString(),

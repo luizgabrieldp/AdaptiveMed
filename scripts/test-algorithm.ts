@@ -18,6 +18,10 @@ import { sanitizeCsvCell } from '../src/lib/export/csv-generator';
 import { escapeICalText, generateICalendarFile } from '../src/lib/export/ical-generator';
 import {
   calculateFocusOutcome,
+  collectFinalErrorDrafts,
+  createInitialQuickErrorState,
+  getLastStudiedMinutesForTopic,
+  getTopicCurrentMomentLabel,
   getTreeGrowthStage,
   formatSecondsHMS,
   formatDurationCompact,
@@ -28,7 +32,7 @@ import {
   STAGE_BLOCK_SECONDS,
   FULL_TREE_SECONDS,
 } from '../src/lib/focus-timer';
-import type { StudyTopic, TopicReview } from '../src/types/database';
+import type { StudySession, StudyTopic, TopicReview } from '../src/types/database';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -372,6 +376,119 @@ test('Viveiro paralelo de 3 plantas (4x25min) e Boosts por Questões funcionam c
   assert.equal(step.nextGarden.slots[0].accumulatedSeconds, 0);
   assert.equal(step.nextGarden.maturedTrees.length, 1);
   assert.equal(step.nextGarden.maturedTrees[0].area, 'Clínica Médica');
+});
+
+test('getTopicCurrentMomentLabel retorna R0 para planejado, menor revisão pendente ou Concluído (R8)', () => {
+  assert.equal(getTopicCurrentMomentLabel({ id: 't1', is_planned: true }, []), 'R0');
+
+  const reviewsMixed: Array<Pick<TopicReview, 'topic_id' | 'review_number' | 'completed_date'>> = [
+    { topic_id: 't2', review_number: 1, completed_date: '2026-11-10' },
+    { topic_id: 't2', review_number: 3, completed_date: null },
+    { topic_id: 't2', review_number: 2, completed_date: null },
+  ];
+  assert.equal(getTopicCurrentMomentLabel({ id: 't2', is_planned: false }, reviewsMixed), 'R2');
+
+  const reviewsAllDone: Array<Pick<TopicReview, 'topic_id' | 'review_number' | 'completed_date'>> = [
+    { topic_id: 't3', review_number: 1, completed_date: '2026-11-10' },
+    { topic_id: 't3', review_number: 2, completed_date: '2026-11-14' },
+  ];
+  assert.equal(
+    getTopicCurrentMomentLabel({ id: 't3', is_planned: false }, reviewsAllDone),
+    'Concluído (R8)'
+  );
+});
+
+test('getLastStudiedMinutesForTopic puxa última sessão finalizada (>=60s) hoje e prioriza topic_id', () => {
+  const baseSession = (
+    id: string,
+    overrides: Partial<StudySession>
+  ): StudySession => ({
+    id,
+    user_id: 'u1',
+    area: 'Medicina Preventiva',
+    mode: 'stopwatch',
+    duration_seconds: 1500,
+    started_at: '2026-11-15T10:00:00Z',
+    ended_at: '2026-11-15T10:25:00Z',
+    session_date: '2026-11-15',
+    status: 'completed',
+    trees_earned: 1,
+    created_at: '2026-11-15T10:25:00Z',
+    ...overrides,
+  });
+
+  const sessions: StudySession[] = [
+    // Ontem: deve ser ignorada
+    baseSession('old', {
+      topic_id: 'ofidismo',
+      duration_seconds: 3600,
+      session_date: '2026-11-14',
+      ended_at: '2026-11-14T18:00:00Z',
+    }),
+    // Menor que 60s hoje: deve ser ignorada
+    baseSession('tiny', {
+      topic_id: 'ofidismo',
+      duration_seconds: 45,
+      ended_at: '2026-11-15T15:00:00Z',
+    }),
+    // Sessão mais antiga de hoje para o assunto (20 min)
+    baseSession('s1', {
+      topic_id: 'ofidismo',
+      duration_seconds: 1200,
+      ended_at: '2026-11-15T11:00:00Z',
+    }),
+    // Sessão mais recente de hoje para o assunto (32 min) -> deve vencer!
+    baseSession('s2', {
+      topic_id: 'ofidismo',
+      duration_seconds: 1920,
+      ended_at: '2026-11-15T14:00:00Z',
+    }),
+    // Sessão geral da mesma área sem assunto fixo (40 min) -> usada só quando topicId não casa
+    baseSession('area-only', {
+      topic_id: undefined,
+      duration_seconds: 2400,
+      ended_at: '2026-11-15T14:30:00Z',
+    }),
+  ];
+
+  const byTopic = getLastStudiedMinutesForTopic(sessions, 'ofidismo', 'Medicina Preventiva', '2026-11-15');
+  assert.equal(byTopic?.minutes, 32);
+  assert.equal(byTopic?.session.id, 's2');
+
+  const byAreaFallback = getLastStudiedMinutesForTopic(sessions, 'outro-assunto', 'Medicina Preventiva', '2026-11-15');
+  assert.equal(byAreaFallback?.minutes, 40);
+  assert.equal(byAreaFallback?.session.id, 'area-only');
+
+  const noMatch = getLastStudiedMinutesForTopic(sessions, 'outro-assunto', 'Pediatria', '2026-11-15');
+  assert.equal(noMatch, null);
+});
+
+test('collectFinalErrorDrafts preserva rascunhos adicionados e linha pendente sem perder dados', () => {
+  const state = createInitialQuickErrorState();
+  state.drafts = [
+    {
+      localId: '1',
+      cause: 'Pegadinha da banca',
+      concept_summary: '  Crotálico causa rabdomiólise e IRA  ',
+      question_ref: ' Q10 ',
+    },
+  ];
+  state.pendingCause = 'Lacuna teórica';
+  state.pendingSummary = '  Botrópico consome fibrinogênio e causa incoagulabilidade ';
+  state.pendingRef = 'ENARE 2024';
+
+  const collected = collectFinalErrorDrafts(state);
+  assert.equal(collected.length, 2);
+  assert.deepEqual(collected[0], {
+    cause: 'Pegadinha da banca',
+    concept_summary: 'Crotálico causa rabdomiólise e IRA',
+    question_ref: 'Q10',
+  });
+  assert.deepEqual(collected[1], {
+    cause: 'Lacuna teórica',
+    concept_summary: 'Botrópico consome fibrinogênio e causa incoagulabilidade',
+    question_ref: 'ENARE 2024',
+  });
 });
 
 console.log(`\nTodos os ${passed} testes passaram com 100% de sucesso!`);

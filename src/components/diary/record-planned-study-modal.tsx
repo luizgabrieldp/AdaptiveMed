@@ -21,7 +21,14 @@ import {
   addDaysToDate,
   formatDateBR,
 } from '@/lib/spaced-repetition';
-import { CheckCircle2, Sparkles, BrainCircuit, ArrowRight, AlertTriangle, Info } from 'lucide-react';
+import {
+  QuickErrorLogState,
+  collectFinalErrorDrafts,
+  createInitialQuickErrorState,
+  getLastStudiedMinutesForTopic,
+} from '@/lib/focus-timer';
+import { QuickErrorLogPrefill } from '@/components/reviews/quick-error-log-prefill';
+import { CheckCircle2, Sparkles, BrainCircuit, ArrowRight, AlertTriangle, Info, Timer } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface RecordPlannedStudyModalProps {
@@ -35,24 +42,45 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   onOpenChange,
   topic,
 }) => {
-  const { recordPlannedTopicStudy, areas } = useData();
+  const { recordPlannedTopicStudy, areas, studySessions, addErrorLog } = useData();
 
   const [studyDate, setStudyDate] = useState(getTodayDateString());
   const [questionsDone, setQuestionsDone] = useState<string>('25');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('');
   const [durationMinutes, setDurationMinutes] = useState<string>('');
+  const [pulledTimerMinutes, setPulledTimerMinutes] = useState<number | null>(null);
+  const [notes, setNotes] = useState<string>('');
+  const [quickErrorState, setQuickErrorState] = useState<QuickErrorLogState>(() =>
+    createInitialQuickErrorState()
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultDate, setResultDate] = useState<string | null>(null);
+  const seededTopicIdRef = React.useRef<string>('');
 
   useEffect(() => {
-    if (open) {
-      setStudyDate(getTodayDateString());
-      setQuestionsDone('25');
-      setQuestionsCorrect('');
-      setDurationMinutes('');
-      setResultDate(null);
+    if (!open || !topic) {
+      seededTopicIdRef.current = '';
+      return;
     }
-  }, [open, topic]);
+    if (seededTopicIdRef.current === topic.id) return;
+    seededTopicIdRef.current = topic.id;
+
+    setStudyDate(getTodayDateString());
+    setQuestionsDone('25');
+    setQuestionsCorrect('');
+    setNotes(topic.notes || '');
+    setQuickErrorState(createInitialQuickErrorState());
+    setResultDate(null);
+
+    const lastTimer = getLastStudiedMinutesForTopic(studySessions, topic.id, topic.area);
+    if (lastTimer) {
+      setDurationMinutes(String(lastTimer.minutes));
+      setPulledTimerMinutes(lastTimer.minutes);
+    } else {
+      setDurationMinutes('');
+      setPulledTimerMinutes(null);
+    }
+  }, [open, topic, studySessions]);
 
   if (!topic) return null;
 
@@ -85,7 +113,19 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
         questions_done: qDone,
         questions_correct: qCorrect,
         duration_minutes: durNum,
+        notes: notes.trim(),
       });
+
+      // Salva pré-registros rápidos direto no Caderno de Erros
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: topic.id,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
+      }
 
       // Efeito festivo de confete ao consolidar 1º contato
       try {
@@ -201,9 +241,14 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
             {/* Campo Opcional de Duração / Tempo de Estudo */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-muted-foreground">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                   Tempo de Estudo (opcional)
+                  {pulledTimerMinutes !== null && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                      <Timer className="h-2.5 w-2.5" /> Puxado do relógio ({pulledTimerMinutes} min)
+                    </span>
+                  )}
                 </label>
                 <span className="text-[10px] text-muted-foreground">Em minutos</span>
               </div>
@@ -227,6 +272,26 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                 )}
               </div>
             </div>
+
+            {/* Anotações / Foco do Estudo */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">
+                Anotações / Foco do Estudo (opcional)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Ex: Pontos-chave, dúvidas ou macetes da aula..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+              />
+            </div>
+
+            {/* Pré-registro rápido no Caderno de Erros */}
+            <QuickErrorLogPrefill
+              value={quickErrorState}
+              onChange={setQuickErrorState}
+            />
 
             {/* Alerta de Acertos maior que Questões */}
             {isCorrectFilled && qCorrect > qDone && (

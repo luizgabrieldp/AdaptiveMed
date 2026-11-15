@@ -22,7 +22,14 @@ import {
   formatDateBR,
 } from '@/lib/spaced-repetition';
 import { useData } from '@/lib/store/data-context';
-import { CheckCircle2, Sparkles, BrainCircuit, Target, Trash2, AlertTriangle, Clock, RefreshCw } from 'lucide-react';
+import {
+  QuickErrorLogState,
+  collectFinalErrorDrafts,
+  createInitialQuickErrorState,
+  getLastStudiedMinutesForTopic,
+} from '@/lib/focus-timer';
+import { QuickErrorLogPrefill } from '@/components/reviews/quick-error-log-prefill';
+import { CheckCircle2, Sparkles, BrainCircuit, Target, Trash2, AlertTriangle, Clock, RefreshCw, Timer } from 'lucide-react';
 
 interface ReviewCompletionModalProps {
   open: boolean;
@@ -39,7 +46,18 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   topic,
   mode,
 }) => {
-  const { completeReview, updateCompletedReview, deleteReviewsFromCycle, recalculateTopicReviews, reviews, topics, areas, updateTopic } = useData();
+  const {
+    completeReview,
+    updateCompletedReview,
+    deleteReviewsFromCycle,
+    recalculateTopicReviews,
+    reviews,
+    topics,
+    areas,
+    updateTopic,
+    studySessions,
+    addErrorLog,
+  } = useData();
   const [area, setArea] = useState<string>('');
   const [subjectName, setSubjectName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -47,40 +65,64 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   const [questionsDone, setQuestionsDone] = useState<string>('20');
   const [questionsCorrect, setQuestionsCorrect] = useState<string>('16');
   const [durationMinutes, setDurationMinutes] = useState<string>('');
+  const [pulledTimerMinutes, setPulledTimerMinutes] = useState<number | null>(null);
+  const [quickErrorState, setQuickErrorState] = useState<QuickErrorLogState>(() =>
+    createInitialQuickErrorState()
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const seededOpenKeyRef = React.useRef<string>('');
 
   const isEdit = mode === 'edit' || (mode !== 'complete' && Boolean(review?.completed_date));
 
   React.useEffect(() => {
-    if (review && open) {
-      const currentTopic = topic || topics.find(t => t.id === review.topic_id);
-      if (currentTopic) {
-        setArea(currentTopic.area || areas[0]?.name || 'Clínica Médica');
-        setSubjectName(currentTopic.subject_name || '');
-        setNotes(currentTopic.notes || '');
-      } else {
-        setArea(areas[0]?.name || 'Clínica Médica');
-        setSubjectName('');
-        setNotes('');
-      }
-
-      if (isEdit || review.completed_date) {
-        setQuestionsDone(review.questions_done != null ? String(review.questions_done) : '20');
-        setQuestionsCorrect(review.questions_correct != null ? String(review.questions_correct) : '16');
-        setDurationMinutes(review.duration_minutes != null ? String(review.duration_minutes) : '');
-        setCompletedDate(review.completed_date || getTodayDateString());
-      } else {
-        const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
-        setQuestionsDone(suggested);
-        setQuestionsCorrect('');
-        setDurationMinutes('');
-        setCompletedDate(getTodayDateString());
-      }
+    if (!open || !review) {
+      seededOpenKeyRef.current = '';
+      return;
     }
-  }, [review, open, isEdit, topic, topics, areas]);
+    const openKey = `${review.id}:${isEdit ? 'edit' : 'complete'}`;
+    if (seededOpenKeyRef.current === openKey) return;
+    seededOpenKeyRef.current = openKey;
+
+    const currentTopic = topic || topics.find(t => t.id === review.topic_id);
+    if (currentTopic) {
+      setArea(currentTopic.area || areas[0]?.name || 'Clínica Médica');
+      setSubjectName(currentTopic.subject_name || '');
+      setNotes(currentTopic.notes || '');
+    } else {
+      setArea(areas[0]?.name || 'Clínica Médica');
+      setSubjectName('');
+      setNotes('');
+    }
+    setQuickErrorState(createInitialQuickErrorState());
+
+    if (isEdit || review.completed_date) {
+      setQuestionsDone(review.questions_done != null ? String(review.questions_done) : '20');
+      setQuestionsCorrect(review.questions_correct != null ? String(review.questions_correct) : '16');
+      setDurationMinutes(review.duration_minutes != null ? String(review.duration_minutes) : '');
+      setPulledTimerMinutes(null);
+      setCompletedDate(review.completed_date || getTodayDateString());
+    } else {
+      const suggested = review.recommended_questions ? String(review.recommended_questions) : '20';
+      setQuestionsDone(suggested);
+      setQuestionsCorrect('');
+      const lastTimer = getLastStudiedMinutesForTopic(
+        studySessions,
+        review.topic_id,
+        currentTopic?.area
+      );
+      if (lastTimer) {
+        setDurationMinutes(String(lastTimer.minutes));
+        setPulledTimerMinutes(lastTimer.minutes);
+      } else {
+        setDurationMinutes('');
+        setPulledTimerMinutes(null);
+      }
+      setCompletedDate(getTodayDateString());
+    }
+  }, [review, open, isEdit, topic, topics, areas, studySessions]);
 
   if (!review) return null;
 
@@ -191,6 +233,18 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         } catch {
           // Fallback silencioso se canvas-confetti não estiver disponível
         }
+      }
+
+      // Salva eventuais pré-registros no Caderno de Erros vinculados ao assunto e revisão
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: review.topic_id,
+          review_id: review.id,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
       }
 
       // Conclusão/Edição: fecha o modal diretamente
@@ -379,9 +433,14 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
               {/* Campo Opcional de Duração / Tempo de Estudo */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-muted-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     Tempo de Estudo (opcional)
+                    {pulledTimerMinutes !== null && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                        <Timer className="h-2.5 w-2.5" /> Puxado do relógio ({pulledTimerMinutes} min)
+                      </span>
+                    )}
                   </label>
                   <span className="text-[10px] text-muted-foreground">Em minutos</span>
                 </div>
@@ -419,6 +478,12 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   className="w-full rounded-lg border border-border bg-card p-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
+
+              {/* Pré-registro rápido no Caderno de Erros */}
+              <QuickErrorLogPrefill
+                value={quickErrorState}
+                onChange={setQuickErrorState}
+              />
 
               {/* Alerta de Acertos maior que Questões */}
               {isCorrectFilled && correctNum > doneNum && (
