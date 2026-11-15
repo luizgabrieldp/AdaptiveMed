@@ -2,13 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
 import { useFocusTimer } from '@/components/focus/focus-timer-context';
-import { Forest3DScene } from '@/components/focus/forest-3d-scene';
 import {
   BOOST_CONFIG,
   FULL_TREE_SECONDS,
@@ -17,6 +17,7 @@ import {
   TREE_BLOCK_SECONDS,
   formatDurationCompact,
   formatSecondsHMS,
+  getExtraMaturedGardenTrees,
   getNurserySlotProgress,
   getTopicCurrentMomentLabel,
   getTreeStageLabel,
@@ -47,6 +48,26 @@ import {
 } from 'lucide-react';
 
 type ForestPeriodFilter = 'today' | 'week' | 'month' | 'all';
+
+const Forest3DScene = dynamic(
+  () => import('@/components/focus/forest-3d-scene').then(mod => mod.Forest3DScene),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[380px] sm:h-[440px] rounded-2xl border border-border bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-card flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <div className="p-3.5 rounded-2xl bg-emerald-500/15 text-emerald-500 animate-pulse">
+          <Trees className="h-7 w-7" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-bold text-foreground">Cultivando ambiente 3D da Floresta...</p>
+          <p className="text-[11px] text-muted-foreground">
+            Preparando iluminação PBR, lago interativo e partículas
+          </p>
+        </div>
+      </div>
+    ),
+  }
+);
 
 export default function FocoFlorestaPage() {
   const { areas, topics, reviews, stats, studySessions, deleteStudySession } = useData();
@@ -129,7 +150,11 @@ export default function FocoFlorestaPage() {
     let todaySec = 0;
     let weekSec = 0;
     let monthSec = 0;
-    let totalTrees = forestGarden.maturedTrees.length;
+    const extraBoostTrees = getExtraMaturedGardenTrees(
+      studySessions,
+      forestGarden.maturedTrees
+    );
+    let totalTrees = extraBoostTrees.length;
 
     for (const s of studySessions) {
       if (s.session_date === todayStr) todaySec += s.duration_seconds;
@@ -139,7 +164,7 @@ export default function FocoFlorestaPage() {
     }
 
     return { todaySec, weekSec, monthSec, totalTrees };
-  }, [studySessions, forestGarden.maturedTrees.length, todayStr, weekStartStr, monthPrefix]);
+  }, [studySessions, forestGarden.maturedTrees, todayStr, weekStartStr, monthPrefix]);
 
   // Sessões e árvores de boost filtradas para a Floresta 3D e distribuição por Área
   const periodSessions = useMemo(() => {
@@ -172,7 +197,8 @@ export default function FocoFlorestaPage() {
       map.set(s.area, curr);
     }
 
-    for (const m of periodMaturedFromGarden) {
+    const extraMatured = getExtraMaturedGardenTrees(periodSessions, periodMaturedFromGarden);
+    for (const m of extraMatured) {
       const curr = map.get(m.area) || { seconds: 0, trees: 0 };
       curr.trees += 1;
       map.set(m.area, curr);

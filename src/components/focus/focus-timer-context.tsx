@@ -10,7 +10,7 @@ import React, {
   useState,
 } from 'react';
 import { useData } from '@/lib/store/data-context';
-import { FocusMode, ForestBoostType, ForestGardenState, NurserySlotState } from '@/types/database';
+import { FocusMode, ForestBoostType, ForestGardenState, MaturedGardenTree, NurserySlotState } from '@/types/database';
 import { getTodayDateString } from '@/lib/spaced-repetition';
 import {
   BOOST_CONFIG,
@@ -239,44 +239,69 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
 
       const topic = effectiveTopicId ? topics.find(t => t.id === effectiveTopicId) : undefined;
-      const nowIso = new Date().toISOString();
+      const nowMsValue = Date.now();
+      const nowIso = new Date(nowMsValue).toISOString();
       const startedIso =
-        state.sessionStartIso || new Date(Date.now() - durationSec * 1000).toISOString();
+        state.sessionStartIso || new Date(nowMsValue - durationSec * 1000).toISOString();
       const today = getTodayDateString();
+      const resolvedArea = topic?.area || effectiveArea || defaultArea;
+      const resolvedSubject = topic?.subject_name || activeSlot.subjectName || null;
+      const roundedDuration = Math.round(durationSec);
 
       let harvestedCount = 0;
+      let updatedSlotResult: NurserySlotState | null = null;
+      let harvestedTreesResult: MaturedGardenTree[] = [];
+
       if (outcome.status === 'completed') {
         const { updatedSlot, harvestedTrees } = advanceNurserySlot(
           activeSlot,
-          Math.round(durationSec),
+          roundedDuration,
           false,
-          today
+          today,
+          nowMsValue,
+          {
+            source: 'session',
+            durationSeconds: roundedDuration,
+            areaOverride: resolvedArea,
+            subjectNameOverride: resolvedSubject,
+          }
         );
         harvestedCount = harvestedTrees.length;
-
-        const nextSlots = forestGarden.slots.map((s, idx) =>
-          idx === activeSlotIndex ? updatedSlot : s
-        ) as [NurserySlotState, NurserySlotState, NurserySlotState];
-
-        await updateForestGarden({
-          ...forestGarden,
-          slots: nextSlots,
-        });
+        updatedSlotResult = updatedSlot;
+        harvestedTreesResult = harvestedTrees;
       }
 
-      await addStudySession({
+      const savedSession = await addStudySession({
         topic_id: topic?.id || null,
-        area: topic?.area || effectiveArea || defaultArea,
-        subject_name: topic?.subject_name || activeSlot.subjectName || null,
+        area: resolvedArea,
+        subject_name: resolvedSubject,
         mode,
         status: outcome.status,
-        duration_seconds: Math.round(durationSec),
+        duration_seconds: roundedDuration,
         planned_seconds: plannedSec ?? null,
         trees_earned: outcome.status === 'completed' ? harvestedCount : 0,
         session_date: today,
         started_at: startedIso,
         ended_at: nowIso,
       });
+
+      if (outcome.status === 'completed' && updatedSlotResult) {
+        const enrichedHarvested: MaturedGardenTree[] = harvestedTreesResult.map(tree => ({
+          ...tree,
+          completedAtIso: nowIso,
+          sessionId: savedSession.id,
+        }));
+
+        const nextSlots = forestGarden.slots.map((s, idx) =>
+          idx === activeSlotIndex ? updatedSlotResult! : s
+        ) as [NurserySlotState, NurserySlotState, NurserySlotState];
+
+        await updateForestGarden({
+          ...forestGarden,
+          slots: nextSlots,
+          maturedTrees: [...(forestGarden.maturedTrees || []), ...enrichedHarvested].slice(-120),
+        });
+      }
 
       return { ...outcome, treesEarned: harvestedCount, harvestedCount };
     },

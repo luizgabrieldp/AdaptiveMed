@@ -26,6 +26,8 @@ import {
   formatSecondsHMS,
   formatDurationCompact,
   createDefaultForestGarden,
+  advanceNurserySlot,
+  getExtraMaturedGardenTrees,
   getNurserySlotProgress,
   getBoostWallet,
   applyBoostToGarden,
@@ -376,6 +378,69 @@ test('Viveiro paralelo de 3 plantas (4x25min) e Boosts por Questões funcionam c
   assert.equal(step.nextGarden.slots[0].accumulatedSeconds, 0);
   assert.equal(step.nextGarden.maturedTrees.length, 1);
   assert.equal(step.nextGarden.maturedTrees[0].area, 'Clínica Médica');
+  assert.equal(step.nextGarden.maturedTrees[0].source, 'boost');
+  assert.equal(step.nextGarden.maturedTrees[0].durationSeconds, FULL_TREE_SECONDS);
+});
+
+test('advanceNurserySlot e getExtraMaturedGardenTrees preservam metadados de colheita sem duplicar sessões', () => {
+  const garden = createDefaultForestGarden(['Clínica Médica', 'Cirurgia Geral', 'Pediatria']);
+  const slotWithTopic = {
+    ...garden.slots[0],
+    subjectName: 'Insuficiência Cardíaca',
+    accumulatedSeconds: 5100, // 85 min
+  };
+
+  // Mais 25 min (1500s) -> completa 100 min (6600s) e colhe 1 árvore com metadados ricos
+  const { updatedSlot, harvestedTrees } = advanceNurserySlot(
+    slotWithTopic,
+    1500,
+    false,
+    '2026-11-15',
+    1700000000000,
+    {
+      source: 'session',
+      durationSeconds: 1500,
+      areaOverride: 'Clínica Médica',
+      subjectNameOverride: 'Insuficiência Cardíaca',
+      sessionId: 'sess-ic-1',
+    }
+  );
+
+  assert.equal(updatedSlot.accumulatedSeconds, 600);
+  assert.equal(harvestedTrees.length, 1);
+  assert.equal(harvestedTrees[0].source, 'session');
+  assert.equal(harvestedTrees[0].sessionId, 'sess-ic-1');
+  assert.equal(harvestedTrees[0].durationSeconds, 1500);
+  assert.equal(harvestedTrees[0].subjectName, 'Insuficiência Cardíaca');
+
+  const sessions: Array<Pick<StudySession, 'id'>> = [{ id: 'sess-ic-1' }];
+  const maturedList = [
+    harvestedTrees[0],
+    {
+      id: 'boost-tree-1',
+      area: 'Pediatria',
+      subjectName: null,
+      completedAtIso: '2026-11-15T12:00:00Z',
+      sessionDate: '2026-11-15',
+      durationSeconds: FULL_TREE_SECONDS,
+      source: 'boost' as const,
+    },
+    {
+      id: 'legacy-boost-tree',
+      area: 'Cirurgia Geral',
+      completedAtIso: '2026-11-14T12:00:00Z',
+      sessionDate: '2026-11-14',
+    },
+  ];
+
+  // Árvore já representada em `sessions` ('sess-ic-1') deve ser deduplicada; boosts e legados permanecem
+  const extra = getExtraMaturedGardenTrees(sessions, maturedList);
+  assert.equal(extra.length, 2);
+  assert.deepEqual(
+    extra.map(t => t.id),
+    ['boost-tree-1', 'legacy-boost-tree']
+  );
+  assert.deepEqual(getExtraMaturedGardenTrees([], []), []);
 });
 
 test('getTopicCurrentMomentLabel retorna R0 para planejado, menor revisão pendente ou Concluído (R8)', () => {

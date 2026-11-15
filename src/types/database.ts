@@ -389,6 +389,9 @@ export interface MaturedGardenTree {
   subjectName?: string | null;
   completedAtIso: string;
   sessionDate: string; // YYYY-MM-DD
+  durationSeconds?: number;
+  source?: 'session' | 'boost';
+  sessionId?: string;
 }
 
 export interface ForestGardenState {

@@ -158,7 +158,7 @@ interface DataContextType {
   deleteErrorLog: (id: string) => Promise<void>;
   addStudySession: (
     data: Omit<StudySession, 'id' | 'user_id' | 'created_at'>
-  ) => Promise<void>;
+  ) => Promise<StudySession>;
   deleteStudySession: (id: string) => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   resetToDemo: () => void;
@@ -2205,6 +2205,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const supabase = createClient();
       syncSupabase(supabase.from('study_sessions').insert(newSession));
     }
+
+    return newSession;
   };
 
   const deleteStudySession = async (id: string) => {
@@ -2215,6 +2217,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return updated;
     });
+
+    if (forestGarden.maturedTrees.some(t => t.sessionId === id)) {
+      await updateForestGarden({
+        ...forestGarden,
+        maturedTrees: forestGarden.maturedTrees.filter(t => t.sessionId !== id),
+      });
+    }
 
     if (!isDemoMode && user) {
       const supabase = createClient();

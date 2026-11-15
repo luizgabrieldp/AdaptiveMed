@@ -255,21 +255,38 @@ export function advanceNurserySlot(
   isBoost: boolean,
   todayDate: string,
   nowMs = Date.now(),
-  extraFlags?: { activateBees?: boolean }
+  extraFlags?: {
+    activateBees?: boolean;
+    source?: 'session' | 'boost';
+    durationSeconds?: number;
+    areaOverride?: string;
+    subjectNameOverride?: string | null;
+    sessionId?: string;
+  }
 ): { updatedSlot: NurserySlotState; harvestedTrees: MaturedGardenTree[] } {
   const safeAdd = Math.max(0, Math.floor(addSeconds));
   const rawTotal = Math.max(0, Math.floor(slot.accumulatedSeconds)) + safeAdd;
   const maturedCount = Math.floor(rawTotal / FULL_TREE_SECONDS);
   const remainderSeconds = rawTotal % FULL_TREE_SECONDS;
 
+  const resolvedArea = extraFlags?.areaOverride || slot.area;
+  const resolvedSubject =
+    extraFlags?.subjectNameOverride !== undefined
+      ? extraFlags.subjectNameOverride
+      : slot.subjectName || null;
+  const resolvedSource = extraFlags?.source || (isBoost ? 'boost' : 'session');
+
   const harvestedTrees: MaturedGardenTree[] = [];
   for (let i = 0; i < maturedCount; i++) {
     harvestedTrees.push({
       id: `mature-${slot.slotIndex}-${nowMs}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-      area: slot.area,
-      subjectName: slot.subjectName || null,
+      area: resolvedArea,
+      subjectName: resolvedSubject,
       completedAtIso: new Date(nowMs).toISOString(),
       sessionDate: todayDate,
+      durationSeconds: extraFlags?.durationSeconds ?? FULL_TREE_SECONDS,
+      source: resolvedSource,
+      ...(extraFlags?.sessionId ? { sessionId: extraFlags.sessionId } : {}),
     });
   }
 
@@ -321,7 +338,11 @@ export function applyBoostToGarden(
       true,
       todayDate,
       nowMs,
-      { activateBees: boostType === 'bees' }
+      {
+        activateBees: boostType === 'bees',
+        source: 'boost',
+        durationSeconds: FULL_TREE_SECONDS,
+      }
     );
     allHarvested.push(...harvestedTrees);
     return updatedSlot;
@@ -342,6 +363,33 @@ export function applyBoostToGarden(
     harvestedCount: allHarvested.length,
     applied: true,
   };
+}
+
+/**
+ * Filtra árvores de `forestGarden.maturedTrees` evitando duplicação com árvores já contabilizadas
+ * em `study_sessions` (`trees_earned > 0`).
+ * - Árvores com `source === 'boost'` (ou legado sem `source`/`sessionId`) são sempre mantidas.
+ * - Árvores com `source === 'session'` que já correspondem a uma sessão presente em `sessions`
+ *   (por `sessionId`) não são duplicadas na contagem nem na renderização.
+ */
+export function getExtraMaturedGardenTrees(
+  sessions: Array<Pick<StudySession, 'id'>>,
+  maturedTrees: MaturedGardenTree[]
+): MaturedGardenTree[] {
+  if (!maturedTrees || maturedTrees.length === 0) return [];
+  const sessionIds = new Set(sessions.map(s => s.id));
+  return maturedTrees.filter(tree => {
+    if (tree.source === 'session') {
+      if (tree.sessionId && sessionIds.has(tree.sessionId)) {
+        return false;
+      }
+      // Se veio de sessão mas o id não está em `sessions` (ex: filtro/histórico antigo sem id), evita duplicar se não houver sessionId
+      if (!tree.sessionId) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 /**
