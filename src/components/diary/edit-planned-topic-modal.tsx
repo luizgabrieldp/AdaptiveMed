@@ -46,6 +46,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
     reviews,
     recalculateTopicReviews,
     studySessions,
+    errorLogs,
     addErrorLog,
   } = useData();
 
@@ -144,10 +145,18 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
       ? 1
       : completedReviews[completedReviews.length - 1].review_number + 1;
 
+  const pendingTopicCauses = errorLogs
+    .filter(e => e.topic_id === topic.id && !e.is_reviewed)
+    .map(e => e.cause);
+  const errorDraftsPreview = collectFinalErrorDrafts(quickErrorState);
+  const draftCauses = errorDraftsPreview.map(d => d.cause);
+  const combinedErrorCauses = [...pendingTopicCauses, ...draftCauses];
+
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: percentage ?? 80,
     baseQuestionsCount: qDone || 25,
+    errorCauses: combinedErrorCauses,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
   const estimatedR1Date = addDaysToDate(studyDate || getTodayDateString(), r1Interval);
@@ -216,14 +225,22 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
         notes: notes.trim(),
       };
 
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       if (isCompleted) {
-        await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum, topicChanges);
+        await updateTopicR0(
+          topic.id,
+          qDone,
+          qCorrect,
+          studyDate,
+          durNum,
+          topicChanges,
+          errorDrafts.map(d => d.cause)
+        );
       } else {
         await updateTopic(topic.id, topicChanges);
       }
 
       // Salva eventuais pré-registros no Caderno de Erros
-      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       for (const draft of errorDrafts) {
         await addErrorLog({
           topic_id: topic.id,
@@ -464,7 +481,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
 
                 {/* Alerta de Acertos maior que Questões */}
                 {isCorrectFilled && qCorrect > qDone && (
-                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] flex items-center gap-2">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     <span>O número de acertos ({qCorrect}) não pode ser maior que o total de questões ({qDone}).</span>
                   </div>
@@ -492,6 +509,20 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                       {percentage !== null ? reviewCalc.diagnosisBadge : '—'}
                     </span>
                   </div>
+
+                  {reviewCalc.errorWeightApplied && reviewCalc.errorWeightApplied.activeCount > 0 && (
+                    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px]">
+                      <span className="font-semibold text-amber-800 dark:text-amber-300">
+                        Peso do Erro ({reviewCalc.errorWeightApplied.dominantCause}):
+                      </span>
+                      <span className="font-bold text-foreground font-mono tabular-nums">
+                        intervalo ×{reviewCalc.errorWeightApplied.intervalMultiplier}
+                        {reviewCalc.errorWeightApplied.bonusQuestions > 0
+                          ? ` • +${reviewCalc.errorWeightApplied.bonusQuestions}q`
+                          : ''}
+                      </span>
+                    </div>
+                  )}
 
                   {isTrackPaused ? (
                     <div className="pt-2 border-t border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-amber-500/10 -mx-3 -mb-3 p-3 rounded-b-xl mt-1">

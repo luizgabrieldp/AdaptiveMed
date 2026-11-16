@@ -80,7 +80,7 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
       <DialogContent className="max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400 mb-1">
+            <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
               <GraduationCap className="h-4 w-4" />
               <span>Simulado Geral</span>
             </div>
@@ -151,13 +151,13 @@ export const NewMockModal: React.FC<NewMockModalProps> = ({ open, onOpenChange }
                     const val = e.target.value.replace(/\D/g, '');
                     setCorrectAnswers(val);
                   }}
-                  className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
+                  className="font-bold text-base text-emerald-600 dark:text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                 />
               </div>
             </div>
 
             {correctAnswers !== '' && correctNum > totalNum && (
-              <p className="text-xs text-rose-400 font-medium">
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
                 O número de acertos ({correctNum}) não pode ser maior que o total ({totalNum}).
               </p>
             )}

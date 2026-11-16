@@ -39,6 +39,28 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      setSelectedReason('');
+      setCustomFeedback('');
+      setErrorMessage(null);
+      setIsSuccess(false);
+    }
+  }, [open]);
+
+  React.useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const formattedDate = currentPeriodEnd
     ? new Date(currentPeriodEnd).toLocaleDateString('pt-BR')
@@ -70,10 +92,11 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
       }
 
       setIsSuccess(true);
-      setTimeout(() => {
+      onSuccess(data.periodEnd || formattedDate);
+      closeTimeoutRef.current = setTimeout(() => {
+        closeTimeoutRef.current = null;
         setIsSuccess(false);
         onOpenChange(false);
-        onSuccess(data.periodEnd || formattedDate);
       }, 2000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Não foi possível cancelar no momento. Tente novamente.');
@@ -87,7 +110,7 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
       <DialogContent className="sm:max-w-md">
         {isSuccess ? (
           <div className="py-8 text-center space-y-3">
-            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <h3 className="text-lg font-bold text-foreground">Cancelamento Confirmado</h3>
@@ -99,7 +122,7 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
         ) : (
           <>
             <DialogHeader className="space-y-1">
-              <div className="flex items-center gap-2 text-rose-400 mb-1">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 mb-1">
                 <AlertTriangle className="h-5 w-5" />
                 <span className="text-xs font-bold uppercase tracking-wider">Cancelamento de Assinatura</span>
               </div>
@@ -115,13 +138,13 @@ export const CancelSubscriptionModal: React.FC<CancelSubscriptionModalProps> = (
               {/* Box explicativo de garantia de acesso */}
               <div className="p-3.5 rounded-xl bg-card border border-border space-y-2 text-xs">
                 <div className="flex items-start gap-2.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <p className="text-muted-foreground leading-relaxed">
                     <strong className="text-foreground">Cobranças futuras interrompidas:</strong> Nenhuma nova cobrança será feita no seu cartão de crédito.
                   </p>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <HeartHandshake className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                  <HeartHandshake className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                   <p className="text-muted-foreground leading-relaxed">
                     <strong className="text-foreground">Acesso garantido até {formattedDate}:</strong> Você poderá continuar estudando e usando todas as funções normalmente até essa data.
                   </p>

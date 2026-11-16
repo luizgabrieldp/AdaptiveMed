@@ -42,7 +42,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
   onOpenChange,
   topic,
 }) => {
-  const { recordPlannedTopicStudy, areas, studySessions, addErrorLog } = useData();
+  const { recordPlannedTopicStudy, areas, studySessions, errorLogs, addErrorLog } = useData();
 
   const [studyDate, setStudyDate] = useState(getTodayDateString());
   const [questionsDone, setQuestionsDone] = useState<string>('25');
@@ -91,10 +91,18 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
     qDone > 0 && isCorrectFilled && qCorrect <= qDone
       ? Math.round((qCorrect / qDone) * 1000) / 10
       : null;
+  const pendingTopicCauses = errorLogs
+    .filter(e => e.topic_id === topic.id && !e.is_reviewed)
+    .map(e => e.cause);
+  const errorDraftsPreview = collectFinalErrorDrafts(quickErrorState);
+  const draftCauses = errorDraftsPreview.map(d => d.cause);
+  const combinedErrorCauses = [...pendingTopicCauses, ...draftCauses];
+
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: percentage ?? 80,
     baseQuestionsCount: qDone || 25,
+    errorCauses: combinedErrorCauses,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
   const estimatedR1Date = addDaysToDate(studyDate || getTodayDateString(), r1Interval);
@@ -108,16 +116,17 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
     try {
       setIsSubmitting(true);
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       await recordPlannedTopicStudy(topic.id, {
         study_date: studyDate,
         questions_done: qDone,
         questions_correct: qCorrect,
         duration_minutes: durNum,
         notes: notes.trim(),
+        errorCauses: errorDrafts.map(d => d.cause),
       });
 
       // Salva pré-registros rápidos direto no Caderno de Erros
-      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       for (const draft of errorDrafts) {
         await addErrorLog({
           topic_id: topic.id,
@@ -234,7 +243,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                     const val = e.target.value.replace(/\D/g, '');
                     setQuestionsCorrect(val);
                   }}
-                  className="text-sm font-semibold text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
+                  className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                 />
               </div>
             </div>
@@ -295,7 +304,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
             {/* Alerta de Acertos maior que Questões */}
             {isCorrectFilled && qCorrect > qDone && (
-              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] flex items-center gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 <span>O número de acertos ({qCorrect}) não pode ser maior que o total de questões ({qDone}).</span>
               </div>
@@ -303,8 +312,8 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
             {/* Alerta de Amostragem Baixa */}
             {qDone > 0 && qDone < 10 && (
-              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span>Amostragem baixa (&lt; 10 questões) para cálculo preciso de retenção. Sugerimos mais questões para maior precisão diagnóstica.</span>
               </div>
             )}
@@ -352,10 +361,24 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
                 <span>Meta Sugerida para R1:</span>
-                <span className="font-bold text-amber-400 font-mono tabular-nums">
+                <span className="font-bold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
                   {reviewCalc.recommendedQuestions} questões
                 </span>
               </div>
+
+              {reviewCalc.errorWeightApplied && reviewCalc.errorWeightApplied.activeCount > 0 && (
+                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px]">
+                  <span className="font-semibold text-amber-800 dark:text-amber-300">
+                    Peso do Erro ({reviewCalc.errorWeightApplied.dominantCause}):
+                  </span>
+                  <span className="font-bold text-foreground font-mono tabular-nums">
+                    intervalo ×{reviewCalc.errorWeightApplied.intervalMultiplier}
+                    {reviewCalc.errorWeightApplied.bonusQuestions > 0
+                      ? ` • +${reviewCalc.errorWeightApplied.bonusQuestions}q`
+                      : ''}
+                  </span>
+                </div>
+              )}
             </div>
 
             <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">

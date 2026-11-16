@@ -74,7 +74,7 @@ export const InstitutionExamsSection: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-emerald-400" />
+            <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Provas na Íntegra por Instituição & Banca
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -94,7 +94,7 @@ export const InstitutionExamsSection: React.FC = () => {
       {/* Estado Vazio Elegante quando não há provas de banca cadastradas */}
       {institutionExams.length === 0 ? (
         <Card className="p-12 text-center border-dashed border-border space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             <Building2 className="h-7 w-7" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
@@ -166,20 +166,20 @@ export const InstitutionExamsSection: React.FC = () => {
           <div className="h-[260px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 15, right: 20, left: -20, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis
                   dataKey="year"
                   stroke="#64748B"
                   fontSize={12}
                   tickLine={false}
-                  axisLine={{ stroke: '#334155' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
-                  domain={[50, 100]}
+                  domain={[0, 100]}
                   stroke="#64748B"
                   fontSize={11}
                   tickLine={false}
-                  axisLine={{ stroke: '#334155' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                   tickFormatter={val => `${val}%`}
                 />
                 <Tooltip
@@ -191,7 +191,7 @@ export const InstitutionExamsSection: React.FC = () => {
                           <p className="font-bold text-foreground">
                             {selectedInst} - Prova {data.year}
                           </p>
-                          <p className="text-emerald-400 font-extrabold text-sm">
+                          <p className="text-emerald-600 dark:text-emerald-400 font-extrabold text-sm">
                             Nota: {data.score}%
                           </p>
                         </div>
@@ -217,7 +217,7 @@ export const InstitutionExamsSection: React.FC = () => {
                   name="Nota (%)"
                   stroke="#3B82F6"
                   strokeWidth={3}
-                  dot={{ r: 5, fill: '#3B82F6', strokeWidth: 2, stroke: '#0B0F17' }}
+                  dot={{ r: 5, fill: '#3B82F6', strokeWidth: 2, stroke: 'var(--card)' }}
                   activeDot={{ r: 7 }}
                 />
               </LineChart>
@@ -262,6 +262,8 @@ export const InstitutionExamsSection: React.FC = () => {
                     size="icon"
                     onClick={() => deleteInstitutionExam(i.id)}
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    title="Excluir registro"
+                    aria-label="Excluir registro"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

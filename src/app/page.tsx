@@ -26,6 +26,8 @@ import {
   Layers,
   CreditCard,
   HelpCircle,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const HeroNeuralCanvas = dynamic(
@@ -69,8 +71,13 @@ export default function LandingPage() {
   const { user, profile, signOut } = useData();
   const [redirectNotice, setRedirectNotice] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const hasPaid = Boolean(profile?.is_subscribed || profile?.subscription_status === 'active');
+  const hasPaid = Boolean(
+    profile?.is_subscribed ||
+      profile?.subscription_status === 'active' ||
+      profile?.subscription_status === 'trial'
+  );
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -99,15 +106,15 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/25 selection:text-primary overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground flex flex-col selection:bg-primary/25 selection:text-primary overflow-x-clip">
       {/* NAVBAR FIXO */}
       <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/85 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <Stethoscope className="h-5 w-5 text-white stroke-[2.2]" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0 min-w-0">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Stethoscope className="h-4 w-4 sm:h-5 sm:w-5 text-white stroke-[2.2]" />
             </div>
-            <span className="text-lg sm:text-xl font-black tracking-tight">AdaptiveMed</span>
+            <span className="text-[15px] sm:text-xl font-black tracking-tight truncate">AdaptiveMed</span>
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-muted-foreground">
@@ -128,8 +135,8 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            <ThemeToggle />
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <ThemeToggle className="hidden sm:flex" />
 
             {user ? (
               hasPaid ? (
@@ -137,7 +144,7 @@ export default function LandingPage() {
                   <Button
                     onClick={() => router.push('/dashboard')}
                     size="sm"
-                    className="gap-1.5 font-bold text-xs shadow-md shadow-primary/20"
+                    className="gap-1.5 font-bold text-[11px] sm:text-xs px-2.5 sm:px-3 shadow-md shadow-primary/20"
                   >
                     Meu Painel <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
@@ -145,7 +152,7 @@ export default function LandingPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => signOut()}
-                    className="text-xs text-muted-foreground hover:text-foreground px-2.5"
+                    className="hidden sm:inline-flex text-xs text-muted-foreground hover:text-foreground px-2.5"
                   >
                     Sair
                   </Button>
@@ -155,15 +162,17 @@ export default function LandingPage() {
                   <Button
                     onClick={() => router.push('/pagamento')}
                     size="sm"
-                    className="gap-1.5 font-black text-xs shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950"
+                    className="gap-1.5 font-black text-[11px] sm:text-xs px-2.5 sm:px-3 shadow-md bg-amber-500 hover:bg-amber-600 text-slate-950"
                   >
-                    Finalizar Assinatura <ArrowRight className="h-3.5 w-3.5" />
+                    <span className="sm:hidden">Assinar</span>
+                    <span className="hidden sm:inline">Finalizar Assinatura</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => signOut()}
-                    className="text-xs text-muted-foreground hover:text-foreground px-2.5"
+                    className="hidden sm:inline-flex text-xs text-muted-foreground hover:text-foreground px-2.5"
                   >
                     Sair
                   </Button>
@@ -175,21 +184,134 @@ export default function LandingPage() {
                   variant="ghost"
                   size="sm"
                   asChild
-                  className="font-bold text-xs text-muted-foreground hover:text-foreground"
+                  className="hidden sm:inline-flex font-bold text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Link href="/login">Área do Aluno</Link>
                 </Button>
                 <Button
                   size="sm"
                   asChild
-                  className="gap-1.5 font-bold text-xs shadow-md shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="gap-1.5 font-bold text-[11px] sm:text-xs px-2.5 sm:px-3 shadow-md shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   <a href="#planos">Começar Agora</a>
                 </Button>
               </>
             )}
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(prev => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-landing-nav"
+              aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+              className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/80 text-foreground hover:bg-muted transition-colors shrink-0"
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
         </div>
+
+        {/* MENU MOBILE COLAPSÁVEL */}
+        {mobileMenuOpen && (
+          <div
+            id="mobile-landing-nav"
+            className="lg:hidden border-t border-border/80 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-3 animate-fade-in"
+          >
+            <nav className="flex flex-col space-y-1 text-sm font-semibold text-muted-foreground">
+              <a
+                href="#simulador"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2 rounded-xl hover:bg-muted/70 hover:text-foreground transition-colors"
+              >
+                Simulador FSRS-6
+              </a>
+              <a
+                href="#vitrine"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2 rounded-xl hover:bg-muted/70 hover:text-foreground transition-colors"
+              >
+                Demo ao Vivo
+              </a>
+              <a
+                href="#arquitetura"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2 rounded-xl hover:bg-muted/70 hover:text-foreground transition-colors"
+              >
+                Como Funciona
+              </a>
+              <a
+                href="#planos"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2 rounded-xl hover:bg-muted/70 hover:text-foreground transition-colors"
+              >
+                Planos & Preços
+              </a>
+              <a
+                href="#faq"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2 rounded-xl hover:bg-muted/70 hover:text-foreground transition-colors"
+              >
+                Dúvidas
+              </a>
+            </nav>
+
+            <div className="pt-3 border-t border-border/70 space-y-3 sm:hidden">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold text-muted-foreground">Aparência</span>
+                <ThemeToggle showLabel />
+              </div>
+
+              {user ? (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      router.push(hasPaid ? '/dashboard' : '/pagamento');
+                    }}
+                    className={`w-full justify-center font-bold text-xs gap-1.5 ${
+                      hasPaid ? '' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black'
+                    }`}
+                  >
+                    {hasPaid ? 'Meu Painel' : 'Finalizar Assinatura'}
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      signOut();
+                    }}
+                    className="w-full text-xs"
+                  >
+                    Sair
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full font-bold text-xs"
+                  >
+                    <Link href="/login">Área do Aluno</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    asChild
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+                  >
+                    <a href="#planos">Começar Agora</a>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* BANNER DE AVISO DE CONTA / REDIRECIONAMENTO */}
@@ -242,7 +364,7 @@ export default function LandingPage() {
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-foreground">
               Transforme seu estudo em{' '}
-              <span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-emerald-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 dark:from-blue-500 dark:via-indigo-400 dark:to-emerald-400 bg-clip-text text-transparent">
                 memória de longo prazo
               </span>{' '}
               sem acumular revisões.
@@ -268,7 +390,7 @@ export default function LandingPage() {
                 size="lg"
                 variant="outline"
                 asChild
-                className="w-full sm:w-auto h-12 px-6 text-sm font-bold gap-2 bg-card/75 backdrop-blur-md border-border hover:bg-muted/80"
+                className="w-full sm:w-auto h-12 px-6 text-sm font-bold gap-2 bg-card/95 text-foreground border border-border hover:bg-muted shadow-sm backdrop-blur-md"
               >
                 <a href="#vitrine">
                   <Play className="h-4 w-4 text-emerald-500 fill-emerald-500/20" />
@@ -440,7 +562,7 @@ export default function LandingPage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-extrabold">Plano Anual</CardTitle>
                     <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
-                      Equivale a R$ 5,83/mês
+                      Equivale a R$ 5,82/mês
                     </Badge>
                   </div>
                   <CardDescription className="text-xs">

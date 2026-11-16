@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import confetti from 'canvas-confetti';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useData } from '@/lib/store/data-context';
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   Stethoscope,
   Target,
@@ -156,18 +158,87 @@ export default function OnboardingPage() {
 
   // Proteção: apenas usuários com plano ativo podem acessar o onboarding
   useEffect(() => {
-    if (!isLoading) {
+    if (isLoading) return;
+
+    const hasActivePlan = Boolean(
+      profile?.is_subscribed ||
+        profile?.subscription_status === 'active' ||
+        profile?.subscription_status === 'trial'
+    );
+
+    if (user && hasActivePlan) {
+      try {
+        sessionStorage.removeItem('adaptivemed_onboarding_sync_retry');
+      } catch {}
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
       if (!user) {
         router.replace('/login');
-        return;
-      }
-      const hasActivePlan = Boolean(
-        profile?.is_subscribed || profile?.subscription_status === 'active'
-      );
-      if (!hasActivePlan) {
+      } else if (!hasActivePlan) {
         router.replace('/pagamento');
       }
+      return;
     }
+
+    let cancelled = false;
+    const supabase = createClient();
+
+    (async () => {
+      try {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (!authUser) {
+          router.replace('/login');
+          return;
+        }
+
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('is_subscribed, subscription_status')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        const dbHasActivePlan = Boolean(
+          prof?.is_subscribed ||
+            prof?.subscription_status === 'active' ||
+            prof?.subscription_status === 'trial'
+        );
+
+        if (!dbHasActivePlan) {
+          router.replace('/pagamento');
+          return;
+        }
+
+        let alreadyRetried = false;
+        try {
+          alreadyRetried = sessionStorage.getItem('adaptivemed_onboarding_sync_retry') === '1';
+          if (!alreadyRetried) {
+            sessionStorage.setItem('adaptivemed_onboarding_sync_retry', '1');
+          }
+        } catch {}
+
+        if (!alreadyRetried) {
+          window.location.replace('/onboarding');
+        }
+      } catch {
+        if (!cancelled) {
+          if (!user) router.replace('/login');
+          else router.replace('/pagamento');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, profile, isLoading, router]);
 
   // Passo 1: Boas-vindas & Apresentação (Nome e Tratamento Dr./Dra.)
@@ -333,7 +404,9 @@ export default function OnboardingPage() {
   if (
     isLoading ||
     !user ||
-    (!profile?.is_subscribed && profile?.subscription_status !== 'active')
+    (!profile?.is_subscribed &&
+      profile?.subscription_status !== 'active' &&
+      profile?.subscription_status !== 'trial')
   ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -349,6 +422,17 @@ export default function OnboardingPage() {
     <div className="min-h-screen w-full flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 py-8 sm:py-12 bg-background relative overflow-y-auto">
 
       <div className="w-full max-w-2xl space-y-6 relative z-10">
+        {profile?.onboarding_completed && (
+          <div className="flex justify-start">
+            <Button variant="outline" size="sm" asChild className="gap-1.5 text-xs font-semibold">
+              <Link href="/conta">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Voltar para Minha Conta
+              </Link>
+            </Button>
+          </div>
+        )}
+
         {/* Topo / Logo */}
         <div className="text-center space-y-2">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-emerald-500 shadow-xl shadow-blue-500/25 mb-1">
@@ -364,51 +448,40 @@ export default function OnboardingPage() {
 
         {/* Indicador de Passos */}
         <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold overflow-x-auto pb-1">
-          <div
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
-              step === 1
-                ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
-                : step > 1
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <span>1. Boas-vindas</span>
-          </div>
-          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
-          <div
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
-              step === 2
-                ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
-                : step > 2
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <span>2. Especialidades</span>
-          </div>
-          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
-          <div
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
-              step === 3
-                ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
-                : step > 3
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <span>3. Bancas</span>
-          </div>
-          <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />
-          <div
-            className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all ${
-              step === 4
-                ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <span>4. Metas</span>
-          </div>
+          {[
+            { num: 1 as const, label: '1. Boas-vindas' },
+            { num: 2 as const, label: '2. Especialidades' },
+            { num: 3 as const, label: '3. Bancas' },
+            { num: 4 as const, label: '4. Metas' },
+          ].map((item, idx) => {
+            const canJump =
+              item.num === 1 ||
+              item.num <= step ||
+              Boolean(profile?.onboarding_completed || cleanName);
+            return (
+              <React.Fragment key={item.num}>
+                {idx > 0 && <div className="w-2 sm:w-3 h-0.5 bg-border shrink-0" />}
+                <button
+                  type="button"
+                  disabled={!canJump}
+                  onClick={() => {
+                    if (canJump) setStep(item.num);
+                  }}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-full border transition-all whitespace-nowrap ${
+                    !canJump ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  } ${
+                    step === item.num
+                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-sm'
+                      : step > item.num
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:border-emerald-500/50'
+                      : 'border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
+                  }`}
+                >
+                  <span>{item.label}</span>
+                </button>
+              </React.Fragment>
+            );
+          })}
         </div>
 
         <Card className="border-border shadow-2xl">
@@ -417,10 +490,10 @@ export default function OnboardingPage() {
             <>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                     <User className="h-4 w-4" /> Passo 1 de 4
                   </div>
-                  <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-400">
+                  <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
                     Acesso Ativado
                   </Badge>
                 </div>
@@ -503,7 +576,7 @@ export default function OnboardingPage() {
                   </span>
                   <div className="flex items-center gap-2 text-foreground font-black text-lg">
                     <span>Olá, {greetingPreview}!</span>
-                    <Sparkles className="h-4 w-4 text-amber-400" />
+                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     É assim que o sistema dará as boas-vindas todos os dias para você cumprir suas revisões.
@@ -529,10 +602,10 @@ export default function OnboardingPage() {
             <>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                     <Target className="h-4 w-4" /> Passo 2 de 4
                   </div>
-                  <Badge variant="outline" className="text-[11px] font-medium border-blue-500/30 text-blue-400">
+                  <Badge variant="outline" className="text-[11px] font-medium border-blue-500/30 text-blue-600 dark:text-blue-400">
                     Seleção Múltipla Permitida
                   </Badge>
                 </div>
@@ -548,7 +621,7 @@ export default function OnboardingPage() {
                   <label className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
                     <span>Especialidades escolhidas ({selectedSpecialties.length}):</span>
                     {selectedSpecialties.length > 1 && (
-                      <span className="text-[11px] text-amber-400">
+                      <span className="text-[11px] text-amber-600 dark:text-amber-400">
                         Indeciso(a) entre {selectedSpecialties.length} opções
                       </span>
                     )}
@@ -692,10 +765,10 @@ export default function OnboardingPage() {
             <>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                     <GraduationCap className="h-4 w-4" /> Passo 3 de 4
                   </div>
-                  <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-400">
+                  <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
                     Nordeste & Sudeste
                   </Badge>
                 </div>
@@ -710,7 +783,7 @@ export default function OnboardingPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
                     <span>Bancas Selecionadas ({selectedExams.length}):</span>
-                    <span className="text-[11px] text-emerald-400 font-medium">
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                       Multi-seleção ativa
                     </span>
                   </label>
@@ -795,14 +868,14 @@ export default function OnboardingPage() {
                             onClick={() => toggleExam(exam.code)}
                             className={`text-left p-2 rounded-lg border text-xs transition-all flex flex-col justify-between ${
                               isSelected
-                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 font-bold shadow-sm'
+                                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold shadow-sm'
                                 : 'border-border bg-card hover:bg-muted text-foreground'
                             }`}
                           >
                             <div className="flex items-center justify-between w-full">
                               <span className="font-bold">{exam.code}</span>
                               {isSelected ? (
-                                <span className="text-emerald-400 font-black">✓</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-black">✓</span>
                               ) : exam.state ? (
                                 <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">
                                   {exam.state}
@@ -864,7 +937,7 @@ export default function OnboardingPage() {
           {step === 4 && (
             <>
               <CardHeader>
-                <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400">
+                <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                   <Percent className="h-4 w-4" /> Passo 4 de 4
                 </div>
                 <CardTitle className="text-xl">Qual é o ano da sua prova e meta de nota?</CardTitle>
@@ -966,7 +1039,7 @@ export default function OnboardingPage() {
                     <label className="text-xs font-semibold text-muted-foreground">
                       Meta de Aproveitamento Desejada
                     </label>
-                    <span className="text-3xl font-black text-emerald-400">
+                    <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
                       {cutoffPercentage}%
                     </span>
                   </div>
@@ -983,8 +1056,8 @@ export default function OnboardingPage() {
 
                   <div className="flex justify-between text-[11px] text-muted-foreground">
                     <span>60% (Básico)</span>
-                    <span className="text-blue-400 font-semibold">80% (Corte Geral Competitivo)</span>
-                    <span className="text-emerald-400 font-semibold">90%+ (Top Concorridas)</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold">80% (Corte Geral Competitivo)</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">90%+ (Top Concorridas)</span>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-card border border-border text-xs space-y-1">

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -49,8 +50,13 @@ export const SheetContent = React.forwardRef<
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, children, ...props }, ref) => {
   const { onOpenChange } = React.useContext(SheetContext);
+  const [mounted, setMounted] = React.useState(false);
 
-  return (
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const sheetElement = (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
@@ -64,7 +70,7 @@ export const SheetContent = React.forwardRef<
           role="dialog"
           aria-modal="true"
           className={cn(
-            'w-screen max-w-md transform border-l border-border bg-card p-6 shadow-2xl transition-transform duration-300 ease-in-out sm:max-w-lg overflow-y-auto',
+            'relative w-screen max-w-md transform border-l border-border bg-card p-6 shadow-2xl transition-transform duration-300 ease-in-out sm:max-w-lg overflow-y-auto',
             className
           )}
           onClick={e => e.stopPropagation()}
@@ -83,6 +89,10 @@ export const SheetContent = React.forwardRef<
       </div>
     </div>
   );
+
+  if (!mounted || typeof document === 'undefined') return null;
+
+  return createPortal(sheetElement, document.body);
 });
 SheetContent.displayName = 'SheetContent';
 

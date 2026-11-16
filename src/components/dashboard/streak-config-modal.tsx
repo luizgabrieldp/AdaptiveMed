@@ -184,7 +184,7 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
           <div className="space-y-2">
             <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
               <span>Critério de Pontuação</span>
-              <span className="text-amber-500 font-medium lowercase">1 por dia</span>
+              <span className="text-amber-600 dark:text-amber-500 font-medium lowercase">1 por dia</span>
             </label>
             <div className="grid grid-cols-1 gap-2">
               {STREAK_RULES.map((rule) => {
@@ -202,14 +202,14 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
                   >
                     <div className="space-y-0.5 pr-2">
                       <div className="flex items-center gap-1.5">
-                        <span className={`font-semibold ${isSelected ? 'text-amber-400 font-bold' : 'text-foreground'}`}>
+                        <span className={`font-semibold ${isSelected ? 'text-amber-700 dark:text-amber-400 font-bold' : 'text-foreground'}`}>
                           {rule.label}
                         </span>
                         {rule.badge && (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                             rule.badge === 'Padrão'
-                              ? 'bg-blue-500/20 text-blue-300'
-                              : 'bg-purple-500/20 text-purple-300'
+                              ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                              : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
                           }`}>
                             {rule.badge}
                           </span>
@@ -241,7 +241,7 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
                 <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   Meta Mínima de Questões
                 </label>
-                <span className="text-xs font-bold text-amber-400">
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
                   {minDailyQuestions || 0} questões/dia
                 </span>
               </div>
@@ -284,7 +284,7 @@ export const StreakConfigModal: React.FC<StreakConfigModalProps> = ({
           }`}>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                 Prévia do seu dia hoje:
               </span>
               <Badge

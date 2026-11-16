@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+function redirectWithCookies(url: URL, baseResponse: NextResponse): NextResponse {
+  const redirectRes = NextResponse.redirect(url);
+  baseResponse.cookies.getAll().forEach(cookie => {
+    redirectRes.cookies.set(cookie);
+  });
+  return redirectRes;
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -35,6 +43,9 @@ export async function middleware(request: NextRequest) {
     supabaseUrl.includes('placeholder') ||
     supabaseKey.includes('placeholder')
   ) {
+    if (isRestrictedAppPage) {
+      return redirectWithCookies(new URL('/login', request.url), response);
+    }
     return response;
   }
 
@@ -65,7 +76,7 @@ export async function middleware(request: NextRequest) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = '/login';
       loginUrl.searchParams.set('redirectedFrom', path);
-      return NextResponse.redirect(loginUrl);
+      return redirectWithCookies(loginUrl, response);
     }
 
     // 2. Se tentar acessar a tela de pagamento sem estar autenticado
@@ -73,7 +84,7 @@ export async function middleware(request: NextRequest) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = '/login';
       loginUrl.searchParams.set('redirectedFrom', '/pagamento');
-      return NextResponse.redirect(loginUrl);
+      return redirectWithCookies(loginUrl, response);
     }
 
     // 3. Se usuário autenticado tentar acessar páginas do app ou de pagamento
@@ -85,36 +96,59 @@ export async function middleware(request: NextRequest) {
         .single();
 
       const hasActiveSubscription = Boolean(
-        profile?.is_subscribed || profile?.subscription_status === 'active'
+        profile?.is_subscribed ||
+          profile?.subscription_status === 'active' ||
+          profile?.subscription_status === 'trial'
       );
 
-      // Se NÃO pagou e está tentando entrar no app
-      if (isRestrictedAppPage && !hasActiveSubscription) {
+      const isContaResetAccess =
+        path.startsWith('/conta') && request.nextUrl.searchParams.get('reset') === 'true';
+
+      // Se NÃO pagou e está tentando entrar no app (exceto /conta?reset=true)
+      if (isRestrictedAppPage && !hasActiveSubscription && !isContaResetAccess) {
         const paymentUrl = request.nextUrl.clone();
         paymentUrl.pathname = '/pagamento';
-        return NextResponse.redirect(paymentUrl);
+        paymentUrl.search = '';
+        return redirectWithCookies(paymentUrl, response);
+      }
+
+      // Se possui assinatura ativa mas não concluiu o onboarding obrigatório
+      if (
+        hasActiveSubscription &&
+        profile &&
+        !profile.onboarding_completed &&
+        isRestrictedAppPage &&
+        !path.startsWith('/onboarding') &&
+        !path.startsWith('/conta')
+      ) {
+        const onboardingUrl = request.nextUrl.clone();
+        onboardingUrl.pathname = '/onboarding';
+        onboardingUrl.search = '';
+        return redirectWithCookies(onboardingUrl, response);
       }
 
       // Se JÁ pagou e está tentando acessar /pagamento
       if (isPaymentPage && !isPaymentSuccessPage && hasActiveSubscription) {
         const redirectUrl = request.nextUrl.clone();
+        redirectUrl.search = '';
         if (profile?.onboarding_completed) {
           redirectUrl.pathname = '/dashboard';
         } else {
           redirectUrl.pathname = '/onboarding';
         }
-        return NextResponse.redirect(redirectUrl);
+        return redirectWithCookies(redirectUrl, response);
       }
 
       // Se está em /login ou /signup já autenticado
       if (isAuthPage) {
         const redirectUrl = request.nextUrl.clone();
+        redirectUrl.search = '';
         if (hasActiveSubscription) {
           redirectUrl.pathname = profile?.onboarding_completed ? '/dashboard' : '/onboarding';
         } else {
           redirectUrl.pathname = '/pagamento';
         }
-        return NextResponse.redirect(redirectUrl);
+        return redirectWithCookies(redirectUrl, response);
       }
     }
   } catch (error) {
@@ -124,7 +158,7 @@ export async function middleware(request: NextRequest) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = '/login';
       loginUrl.searchParams.set('redirectedFrom', path);
-      return NextResponse.redirect(loginUrl);
+      return redirectWithCookies(loginUrl, response);
     }
     return response;
   }

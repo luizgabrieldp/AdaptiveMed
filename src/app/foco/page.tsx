@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -37,6 +37,8 @@ import {
   Flame,
   Trash2,
   CheckCircle2,
+  AlertTriangle,
+  Info,
   X,
   BarChart3,
   Sprout,
@@ -113,6 +115,11 @@ export default function FocoFlorestaPage() {
   const [periodFilter, setPeriodFilter] = useState<ForestPeriodFilter>('week');
   const [customFocusInput, setCustomFocusInput] = useState(String(focusMinutes));
   const [customBreakInput, setCustomBreakInput] = useState(String(breakMinutes));
+
+  useEffect(() => {
+    setCustomFocusInput(String(focusMinutes));
+    setCustomBreakInput(String(breakMinutes));
+  }, [focusMinutes, breakMinutes]);
 
   const todayStr = useMemo(() => getTodayDateString(), []);
   const weekStartStr = useMemo(() => {
@@ -222,8 +229,13 @@ export default function FocoFlorestaPage() {
     setCustomBreakInput(breakVal);
     const f = parseInt(focusVal, 10);
     const b = parseInt(breakVal, 10);
-    if (!isNaN(f) && f >= 5 && f <= 180) {
-      setPomodoroDurations(f, !isNaN(b) && b >= 1 && b <= 60 ? b : breakMinutes);
+    const hasValidFocus = !isNaN(f) && f >= 5 && f <= 180;
+    const hasValidBreak = !isNaN(b) && b >= 1 && b <= 60;
+    if (hasValidFocus || hasValidBreak) {
+      setPomodoroDurations(
+        hasValidFocus ? f : focusMinutes,
+        hasValidBreak ? b : breakMinutes
+      );
     }
   };
 
@@ -271,11 +283,19 @@ export default function FocoFlorestaPage() {
             className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs font-semibold animate-fade-in ${
               lastNotice.type === 'withered'
                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
+                : lastNotice.type === 'info'
+                ? 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300'
                 : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
             }`}
           >
             <div className="flex items-center gap-2 flex-wrap">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              {lastNotice.type === 'withered' ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              ) : lastNotice.type === 'info' ? (
+                <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              )}
               <span>{lastNotice.message}</span>
               {lastNotice.type === 'success' && (
                 <Link
@@ -450,6 +470,7 @@ export default function FocoFlorestaPage() {
                       max={180}
                       value={customFocusInput}
                       onChange={e => applyCustomDurations(e.target.value, customBreakInput)}
+                      onBlur={() => setCustomFocusInput(String(focusMinutes))}
                       className="w-14 h-7 rounded-lg border border-border bg-background px-2 text-center font-mono font-bold text-foreground"
                       aria-label="Minutos de foco"
                     />
@@ -460,6 +481,7 @@ export default function FocoFlorestaPage() {
                       max={60}
                       value={customBreakInput}
                       onChange={e => applyCustomDurations(customFocusInput, e.target.value)}
+                      onBlur={() => setCustomBreakInput(String(breakMinutes))}
                       className="w-12 h-7 rounded-lg border border-border bg-background px-2 text-center font-mono font-bold text-foreground"
                       aria-label="Minutos de pausa"
                     />

@@ -302,7 +302,7 @@ export default function PrevalenciaPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
                 Assuntos Prevalentes da Banca
               </h1>
-              <div className="p-1.5 rounded-xl bg-amber-500/15 text-amber-400">
+              <div className="p-1.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                 <Flame className="h-6 w-6 fill-amber-500 stroke-[2.2]" />
               </div>
             </div>
@@ -342,7 +342,7 @@ export default function PrevalenciaPage() {
               Alta Prevalência
             </p>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-amber-400">
+              <span className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">
                 {highCount}
               </span>
               <Badge variant="hoje" className="text-[10px] gap-1">
@@ -356,7 +356,7 @@ export default function PrevalenciaPage() {
               Presentes no Diário
             </p>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-emerald-400">
+              <span className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
                 {inDiaryCount}
               </span>
               <Badge variant="concluido" className="text-[10px]">
@@ -413,7 +413,7 @@ export default function PrevalenciaPage() {
                 className="h-7 text-[11px] font-semibold gap-1 text-muted-foreground hover:text-foreground ml-1"
                 title="Reorganiza a lista: Alta incidência no topo, Média no meio e Baixa no fim"
               >
-                <Sparkles className="h-3 w-3 text-amber-400" />
+                <Sparkles className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                 Auto-Hierarquia
               </Button>
             </div>
@@ -460,7 +460,7 @@ export default function PrevalenciaPage() {
           {availableBancas.length > 0 && (
             <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-border/60 scrollbar-none">
               <span className="text-[11px] text-muted-foreground font-semibold shrink-0 mr-1 flex items-center gap-1">
-                <GraduationCap className="h-3.5 w-3.5 text-blue-400" /> Banca:
+                <GraduationCap className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /> Banca:
               </span>
               <button
                 type="button"
@@ -533,7 +533,7 @@ export default function PrevalenciaPage() {
                           #{item.rank_order}
                         </span>
                         {item.rank_order <= 3 && (
-                          <Flame className="h-3 w-3 text-amber-400 fill-amber-400 mt-0.5" />
+                          <Flame className="h-3 w-3 text-amber-500 fill-amber-500 dark:text-amber-400 dark:fill-amber-400 mt-0.5" />
                         )}
                       </div>
 
@@ -666,7 +666,7 @@ export default function PrevalenciaPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                 <Flame className="h-5 w-5 fill-amber-500" />
               </div>
               <div>

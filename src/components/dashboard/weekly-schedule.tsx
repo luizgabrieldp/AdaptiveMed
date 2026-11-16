@@ -421,8 +421,8 @@ export const WeeklySchedule: React.FC = () => {
                           </p>
 
                           {item.isHighPrevalence && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-400">
-                              <Star className="h-2.5 w-2.5 fill-amber-400" /> Top Banca
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                              <Star className="h-2.5 w-2.5 fill-amber-500 dark:fill-amber-400" /> Top Banca
                             </span>
                           )}
                         </div>
@@ -436,7 +436,7 @@ export const WeeklySchedule: React.FC = () => {
                   <span>
                     {items.length} {items.length === 1 ? 'item' : 'itens'}
                   </span>
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-primary font-semibold flex items-center gap-0.5">
+                  <span className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-primary font-semibold flex items-center gap-0.5">
                     Ver <ArrowRight className="h-2.5 w-2.5" />
                   </span>
                 </div>
@@ -452,7 +452,7 @@ export const WeeklySchedule: React.FC = () => {
             <CardHeader className="p-4 pb-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                     <Target className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-bold">Meta da Semana</CardTitle>
@@ -471,7 +471,7 @@ export const WeeklySchedule: React.FC = () => {
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs font-semibold">
                   <span className="text-muted-foreground">Progresso</span>
-                  <span className="text-emerald-400">{weeklyGoals.progress}%</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{weeklyGoals.progress}%</span>
                 </div>
                 <Progress value={weeklyGoals.progress} className="h-2 bg-muted" />
               </div>
@@ -503,16 +503,16 @@ export const WeeklySchedule: React.FC = () => {
                       >
                         <div className="flex items-center justify-between">
                           <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                           >
                             {t.area}
                           </span>
                           {isDone ? (
-                            <span className="flex items-center gap-0.5 text-[10px] text-emerald-400 font-bold">
+                            <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
                               <CheckCircle2 className="h-3 w-3" /> Concluído
                             </span>
                           ) : (
-                            <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-0.5">
                               <Clock className="h-3 w-3" /> A Estudar
                             </span>
                           )}

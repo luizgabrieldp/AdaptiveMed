@@ -35,14 +35,44 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
+type AsChildElementProps = {
+  className?: string;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  [key: string]: unknown;
+};
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, children, ...props }, ref) => {
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<AsChildElementProps>;
+      const { onClick: buttonOnClick, ...restProps } = props;
+      const childOnClick = child.props.onClick;
+      const mergedOnClick: React.MouseEventHandler<HTMLElement> | undefined =
+        childOnClick || buttonOnClick
+          ? e => {
+              childOnClick?.(e);
+              buttonOnClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+            }
+          : undefined;
+
+      const clonedProps: Partial<AsChildElementProps> & React.Attributes = {
+        ...restProps,
+        ...(ref ? { ref } : {}),
+        ...(mergedOnClick ? { onClick: mergedOnClick } : {}),
+        className: cn(buttonVariants({ variant, size, className }), child.props.className),
+      };
+
+      return React.cloneElement(child, clonedProps);
+    }
+
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
-      />
+      >
+        {children}
+      </button>
     );
   }
 );

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,21 +46,33 @@ import {
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export const InteractiveDemoShowcase: React.FC = () => {
-  const todayStr = useMemo(() => getTodayDateString(), []);
+  const [mounted, setMounted] = useState(false);
+  const [todayStr, setTodayStr] = useState<string>('2026-11-16');
 
-  const [topics, setTopics] = useState<StudyTopic[]>(() => getInitialDemoTopics());
-  const [reviews, setReviews] = useState<TopicReview[]>(() => getInitialDemoReviews());
-  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>(() => getInitialDemoErrorLogs());
+  const [topics, setTopics] = useState<StudyTopic[]>([]);
+  const [reviews, setReviews] = useState<TopicReview[]>([]);
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+  const [mockExams, setMockExams] = useState<ReturnType<typeof getInitialDemoMockExams>>([]);
+  const [institutionExams, setInstitutionExams] = useState<ReturnType<typeof getInitialDemoInstitutionExams>>([]);
+  const [prevalentTopics, setPrevalentTopics] = useState<ReturnType<typeof getInitialDemoPrevalentTopics>>([]);
   const [selectedErrorCause, setSelectedErrorCause] = useState<ErrorLogCause | 'TODAS'>('TODAS');
   const [selectedBanca, setSelectedBanca] = useState<string>('TODAS');
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
-  const mockExams = useMemo(() => getInitialDemoMockExams(), []);
-  const institutionExams = useMemo(() => getInitialDemoInstitutionExams(), []);
-  const prevalentTopics = useMemo(() => getInitialDemoPrevalentTopics(), []);
+  useEffect(() => {
+    setTodayStr(getTodayDateString());
+    setTopics(getInitialDemoTopics());
+    setReviews(getInitialDemoReviews());
+    setErrorLogs(getInitialDemoErrorLogs());
+    setMockExams(getInitialDemoMockExams());
+    setInstitutionExams(getInitialDemoInstitutionExams());
+    setPrevalentTopics(getInitialDemoPrevalentTopics());
+    setMounted(true);
+  }, []);
 
   const showcaseDays = useMemo(() => {
+    if (!mounted) return [];
     return Array.from({ length: 5 }, (_, idx) => {
       const dateStr = addDaysToDate(todayStr, idx);
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -72,7 +84,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
         isToday: idx === 0,
       };
     });
-  }, [todayStr]);
+  }, [todayStr, mounted]);
 
   const overdueReviews = useMemo(
     () => reviews.filter(r => !r.completed_date && r.scheduled_date < todayStr),
@@ -86,9 +98,13 @@ export const InteractiveDemoShowcase: React.FC = () => {
   }, [topics]);
 
   const handleResetDemo = () => {
+    setTodayStr(getTodayDateString());
     setTopics(getInitialDemoTopics());
     setReviews(getInitialDemoReviews());
     setErrorLogs(getInitialDemoErrorLogs());
+    setMockExams(getInitialDemoMockExams());
+    setInstitutionExams(getInitialDemoInstitutionExams());
+    setPrevalentTopics(getInitialDemoPrevalentTopics());
     setDemoNotice('Dados da demonstração restaurados.');
     setTimeout(() => setDemoNotice(null), 3000);
   };
@@ -221,6 +237,11 @@ export const InteractiveDemoShowcase: React.FC = () => {
           </div>
         )}
 
+        {!mounted ? (
+          <div className="min-h-[380px] rounded-2xl border border-border/60 bg-background/40 flex items-center justify-center p-6 text-xs text-muted-foreground">
+            Carregando demonstração interativa...
+          </div>
+        ) : (
         <Tabs defaultValue="grade" className="w-full">
           <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
             <TabsTrigger value="grade" className="text-xs py-2 gap-1.5">
@@ -601,6 +622,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
             </div>
           </TabsContent>
         </Tabs>
+        )}
       </CardContent>
     </Card>
   );

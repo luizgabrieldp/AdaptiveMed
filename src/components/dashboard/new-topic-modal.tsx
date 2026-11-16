@@ -66,21 +66,54 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
   const [tagInput, setTagInput] = useState('');
   const [isManageAreasOpen, setIsManageAreasOpen] = useState(false);
   const seededOpenRef = React.useRef(false);
+  const isDurationManuallyEditedRef = React.useRef(false);
 
-  // Reset ao abrir modal e pré-preenche última sessão finalizada do cronômetro para a área
+  // Reset ao fechar/abrir modal e pré-preenche última sessão finalizada do cronômetro para a área
   useEffect(() => {
     if (!open) {
       seededOpenRef.current = false;
+      isDurationManuallyEditedRef.current = false;
+      setSubjectName('');
+      setTags([]);
+      setTagInput('');
+      setInitialDate(getTodayDateString());
+      setInitialQuestions('25');
+      setInitialCorrect('');
+      setInitialDurationMinutes('');
+      setPulledTimerMinutes(null);
+      setNotes('');
+      setQuickErrorState(createInitialQuickErrorState());
+      setErrorMessage(null);
       return;
     }
     if (seededOpenRef.current) return;
     seededOpenRef.current = true;
+    isDurationManuallyEditedRef.current = false;
 
+    setSubjectName('');
+    setTags([]);
+    setTagInput('');
+    setInitialDate(getTodayDateString());
+    setInitialQuestions('25');
     setInitialCorrect('');
     setNotes('');
     setQuickErrorState(createInitialQuickErrorState());
     setErrorMessage(null);
 
+    const activeArea = area || areas[0]?.name || '';
+    const lastTimer = getLastStudiedMinutesForTopic(studySessions, null, activeArea);
+    if (lastTimer) {
+      setInitialDurationMinutes(String(lastTimer.minutes));
+      setPulledTimerMinutes(lastTimer.minutes);
+    } else {
+      setInitialDurationMinutes('');
+      setPulledTimerMinutes(null);
+    }
+  }, [open, area, areas, studySessions]);
+
+  // Recalcula tempo puxado do relógio ao trocar de Grande Área caso o usuário ainda não tenha editado manualmente
+  useEffect(() => {
+    if (!open || !seededOpenRef.current || isDurationManuallyEditedRef.current) return;
     const activeArea = area || areas[0]?.name || '';
     const lastTimer = getLastStudiedMinutesForTopic(studySessions, null, activeArea);
     if (lastTimer) {
@@ -106,10 +139,14 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
       ? Math.min(100, Math.round((correctNum / questionsNum) * 1000) / 10)
       : null;
 
+  const errorDraftsPreview = collectFinalErrorDrafts(quickErrorState);
+  const draftCauses = errorDraftsPreview.map(d => d.cause);
+
   const reviewCalc = calculateNextReview({
     currentCycle: 0,
     accuracy: calculatedPct ?? 80,
     baseQuestionsCount: questionsNum || 25,
+    errorCauses: draftCauses,
   });
   const r1Interval = reviewCalc.nextIntervalDays;
   const r1EstimatedDate = addDaysToDate(initialDate, r1Interval);
@@ -155,6 +192,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
     try {
       setIsSubmitting(true);
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       const newTopicId = await addTopic({
         area: area || (areas[0]?.name ?? 'Geral'),
         subject_name: subjectName.trim(),
@@ -164,9 +202,9 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
         initial_correct: correctNum,
         initial_duration_minutes: durNum,
         notes: notes.trim() || undefined,
+        errorCauses: errorDrafts.map(d => d.cause),
       });
 
-      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       for (const draft of errorDrafts) {
         await addErrorLog({
           topic_id: newTopicId,
@@ -203,7 +241,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400 mb-1">
+              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
                 <PlusCircle className="h-4 w-4" />
                 <span>Novo Assunto Estudado</span>
               </div>
@@ -214,7 +252,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
             </DialogHeader>
 
             {errorMessage && (
-              <div className="p-3 my-2 text-xs rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 font-medium">
+              <div className="p-3 my-2 text-xs rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-medium">
                 {errorMessage}
               </div>
             )}
@@ -370,8 +408,8 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
               {/* Callout de Recomendação Científica */}
               <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-start gap-2.5">
-                <Info className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-200/90 leading-relaxed">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-blue-900 dark:text-blue-200/90 leading-relaxed">
                   <strong>Recomendação AdaptiveMed:</strong> Resolva de <strong>25 a 30 questões</strong> no primeiro contato para calibrar a escala da sua curva de retenção e garantir máxima precisão diagnóstica.
                 </p>
               </div>
@@ -411,7 +449,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                       const val = e.target.value.replace(/\D/g, '');
                       setInitialCorrect(val);
                     }}
-                    className="text-sm font-semibold text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
+                    className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                   />
                 </div>
               </div>
@@ -437,6 +475,8 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
                     value={initialDurationMinutes}
                     onChange={e => {
                       const val = e.target.value.replace(/\D/g, '');
+                      isDurationManuallyEditedRef.current = true;
+                      setPulledTimerMinutes(null);
                       setInitialDurationMinutes(val);
                     }}
                     placeholder="Ex: 45 min"
@@ -472,7 +512,7 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
               {/* Alerta de Acertos maior que Questões */}
               {initialCorrect !== '' && correctNum > questionsNum && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] flex items-center gap-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   <span>O número de acertos ({correctNum}) não pode ser maior que o total de questões ({questionsNum}).</span>
                 </div>
@@ -480,8 +520,8 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
               {/* Alerta de Amostragem Baixa */}
               {questionsNum > 0 && questionsNum < 10 && (
-                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>Amostragem baixa (&lt; 10 questões) para cálculo preciso de retenção. Sugerimos resolver mais questões.</span>
                 </div>
               )}
@@ -507,16 +547,30 @@ export const NewTopicModal: React.FC<NewTopicModalProps> = ({ open, onOpenChange
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50">
                   <span className="text-muted-foreground flex items-center gap-1">
-                    <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Agendamento de R1:
+                    <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /> Agendamento de R1:
                   </span>
                   <span className="font-bold text-foreground font-mono tabular-nums">
                     +{r1Interval} dias ({formatDateBR(r1EstimatedDate)})
                   </span>
                 </div>
 
+                {reviewCalc.errorWeightApplied && reviewCalc.errorWeightApplied.activeCount > 0 && (
+                  <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px]">
+                    <span className="font-semibold text-amber-800 dark:text-amber-300">
+                      Peso do Erro ({reviewCalc.errorWeightApplied.dominantCause}):
+                    </span>
+                    <span className="font-bold text-foreground font-mono tabular-nums">
+                      intervalo ×{reviewCalc.errorWeightApplied.intervalMultiplier}
+                      {reviewCalc.errorWeightApplied.bonusQuestions > 0
+                        ? ` • +${reviewCalc.errorWeightApplied.bonusQuestions}q`
+                        : ''}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
                   <span className="text-muted-foreground">Meta Sugerida para R1:</span>
-                  <span className="font-bold text-amber-400 font-mono tabular-nums">
+                  <span className="font-bold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
                     {reviewCalc.recommendedQuestions} questões
                   </span>
                 </div>

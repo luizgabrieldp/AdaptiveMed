@@ -9,6 +9,16 @@ const stripe = stripeSecretKey
     })
   : null;
 
+function extractPeriodEndIso(sub: Stripe.Subscription | null | undefined): string | null {
+  if (!sub) return null;
+  const periodEndSec =
+    (sub as { current_period_end?: number | null }).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  return typeof periodEndSec === 'number' && periodEndSec > 0
+    ? new Date(periodEndSec * 1000).toISOString()
+    : null;
+}
+
 export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -51,15 +61,40 @@ export async function POST(req: NextRequest) {
           session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
 
         if (userId && isPaid) {
+          let currentPeriodEnd: string | null = null;
+          let cancelAtPeriodEnd = false;
+          let mappedStatus: 'active' | 'trial' = 'active';
+
+          if (subscriptionId) {
+            try {
+              const sub = await stripe.subscriptions.retrieve(subscriptionId);
+              currentPeriodEnd = extractPeriodEndIso(sub);
+              cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
+              if (sub.status === 'trialing') {
+                mappedStatus = 'trial';
+              }
+            } catch (subErr) {
+              console.warn(
+                'Aviso ao consultar subscription no checkout.session.completed:',
+                subErr
+              );
+            }
+          }
+
+          const updatePayload: Record<string, unknown> = {
+            is_subscribed: true,
+            subscription_status: mappedStatus,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscriptionId,
+            cancel_at_period_end: cancelAtPeriodEnd,
+          };
+          if (currentPeriodEnd) {
+            updatePayload.current_period_end = currentPeriodEnd;
+          }
+
           const { error: updateError } = await admin
             .from('profiles')
-            .update({
-              is_subscribed: true,
-              subscription_status: 'active',
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subscriptionId,
-              cancel_at_period_end: false,
-            })
+            .update(updatePayload)
             .eq('id', userId);
           if (updateError) {
             throw new Error(`Erro ao ativar assinatura no Supabase: ${updateError.message}`);
@@ -74,11 +109,9 @@ export async function POST(req: NextRequest) {
         const customerId =
           typeof subscription.customer === 'string'
             ? subscription.customer
-            : subscription.customer?.id;
-        const periodEndSec = (subscription as any).current_period_end;
-        const currentPeriodEnd = periodEndSec
-          ? new Date(periodEndSec * 1000).toISOString()
-          : null;
+            : subscription.customer?.id || null;
+        const fallbackUserId = subscription.metadata?.userId;
+        const currentPeriodEnd = extractPeriodEndIso(subscription);
 
         const isActive =
           subscription.status === 'active' || subscription.status === 'trialing';
@@ -91,19 +124,120 @@ export async function POST(req: NextRequest) {
             ? 'canceled'
             : 'inactive';
 
+        const subUpdatePayload = {
+          is_subscribed: isActive,
+          subscription_status: mappedStatus,
+          stripe_subscription_id: subscription.id,
+          cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+          current_period_end: currentPeriodEnd,
+        };
+
+        let updatedRows: Array<{ id: string }> | null = null;
         if (customerId) {
-          const { error: updateError } = await admin
+          const { data, error: updateError } = await admin
             .from('profiles')
-            .update({
-              is_subscribed: isActive,
-              subscription_status: mappedStatus,
-              stripe_subscription_id: subscription.id,
-              cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
-              current_period_end: currentPeriodEnd,
-            })
-            .eq('stripe_customer_id', customerId);
+            .update(subUpdatePayload)
+            .eq('stripe_customer_id', customerId)
+            .select('id');
           if (updateError) {
             throw new Error(`Erro ao atualizar assinatura no Supabase: ${updateError.message}`);
+          }
+          updatedRows = data;
+        }
+
+        if ((!updatedRows || updatedRows.length === 0) && fallbackUserId) {
+          const { error: fallbackError } = await admin
+            .from('profiles')
+            .update({
+              ...subUpdatePayload,
+              ...(customerId ? { stripe_customer_id: customerId } : {}),
+            })
+            .eq('id', fallbackUserId);
+          if (fallbackError) {
+            throw new Error(
+              `Erro no fallback ao atualizar assinatura no Supabase: ${fallbackError.message}`
+            );
+          }
+        }
+        break;
+      }
+
+      case 'invoice.paid':
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId =
+          typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id || null;
+        const rawSubscription =
+          (invoice as { subscription?: string | Stripe.Subscription | null }).subscription ??
+          invoice.parent?.subscription_details?.subscription ??
+          null;
+        const subscriptionId =
+          typeof rawSubscription === 'string' ? rawSubscription : rawSubscription?.id || null;
+
+        if (
+          subscriptionId &&
+          customerId &&
+          invoice.billing_reason !== 'subscription_create'
+        ) {
+          let isActive = true;
+          let mappedStatus: 'active' | 'trial' = 'active';
+          let currentPeriodEnd: string | null = null;
+          let cancelAtPeriodEnd: boolean | undefined;
+          let fallbackUserId: string | undefined =
+            invoice.parent?.subscription_details?.metadata?.userId;
+
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            isActive = sub.status === 'active' || sub.status === 'trialing';
+            mappedStatus = sub.status === 'trialing' ? 'trial' : 'active';
+            currentPeriodEnd = extractPeriodEndIso(sub);
+            cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
+            fallbackUserId = sub.metadata?.userId || fallbackUserId;
+          } catch (subErr) {
+            console.warn('Aviso ao consultar assinatura em invoice.paid:', subErr);
+          }
+
+          if (isActive) {
+            const invoiceUpdatePayload: Record<string, unknown> = {
+              is_subscribed: true,
+              subscription_status: mappedStatus,
+              stripe_subscription_id: subscriptionId,
+            };
+            if (cancelAtPeriodEnd !== undefined) {
+              invoiceUpdatePayload.cancel_at_period_end = cancelAtPeriodEnd;
+            }
+            if (currentPeriodEnd) {
+              invoiceUpdatePayload.current_period_end = currentPeriodEnd;
+            }
+
+            const { data: updatedRows, error: updateError } = await admin
+              .from('profiles')
+              .update(invoiceUpdatePayload)
+              .eq('stripe_customer_id', customerId)
+              .select('id');
+
+            if (updateError) {
+              throw new Error(
+                `Erro ao registrar fatura paga no Supabase: ${updateError.message}`
+              );
+            }
+
+            if ((!updatedRows || updatedRows.length === 0) && fallbackUserId) {
+              const { error: fallbackError } = await admin
+                .from('profiles')
+                .update({
+                  ...invoiceUpdatePayload,
+                  stripe_customer_id: customerId,
+                })
+                .eq('id', fallbackUserId);
+              if (fallbackError) {
+                throw new Error(
+                  `Erro no fallback de fatura paga no Supabase: ${fallbackError.message}`
+                );
+              }
+            }
           }
         }
         break;

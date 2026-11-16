@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFocusTimer } from './focus-timer-context';
@@ -26,6 +26,8 @@ import {
   ArrowUpRight,
   SkipForward,
   CheckCircle2,
+  AlertTriangle,
+  Info,
   X,
   Bell,
 } from 'lucide-react';
@@ -71,6 +73,10 @@ export const FloatingFocusTimer: React.FC = () => {
 
   const [customMinutesInput, setCustomMinutesInput] = useState(String(focusMinutes));
 
+  useEffect(() => {
+    setCustomMinutesInput(String(focusMinutes));
+  }, [focusMinutes]);
+
   const filteredTopics = useMemo(
     () => topics.filter(t => t.area === selectedArea),
     [topics, selectedArea]
@@ -105,8 +111,22 @@ export const FloatingFocusTimer: React.FC = () => {
     return (
       <div className="fixed bottom-20 right-3 lg:bottom-6 lg:right-6 z-40 flex flex-col items-end gap-2">
         {lastNotice && (
-          <div className="max-w-[290px] p-2.5 rounded-xl bg-card/95 backdrop-blur-xl border border-emerald-500/40 shadow-xl text-[11px] font-medium text-foreground flex items-start gap-2 animate-fade-in">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+          <div
+            className={`max-w-[290px] p-2.5 rounded-xl bg-card/95 backdrop-blur-xl border shadow-xl text-[11px] font-medium text-foreground flex items-start gap-2 animate-fade-in ${
+              lastNotice.type === 'withered'
+                ? 'border-amber-500/40'
+                : lastNotice.type === 'info'
+                ? 'border-blue-500/40'
+                : 'border-emerald-500/40'
+            }`}
+          >
+            {lastNotice.type === 'withered' ? (
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            ) : lastNotice.type === 'info' ? (
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+            )}
             <div className="flex-1 space-y-1.5">
               <span className="block leading-snug">{lastNotice.message}</span>
               {lastNotice.type === 'success' && (
@@ -200,7 +220,7 @@ export const FloatingFocusTimer: React.FC = () => {
 
   // Modo Expandido Suspenso
   return (
-    <div className="fixed bottom-20 right-3 lg:bottom-6 lg:right-6 z-40 w-[330px] sm:w-[356px] rounded-2xl bg-card/95 backdrop-blur-xl border border-border shadow-2xl overflow-hidden animate-fade-in">
+    <div className="fixed bottom-20 right-3 lg:bottom-6 lg:right-6 z-40 w-[calc(100vw-1.5rem)] max-w-[356px] max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-2xl bg-card/95 backdrop-blur-xl border border-border shadow-2xl animate-fade-in">
       {/* Cabeçalho */}
       <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between bg-muted/30">
         <div className="flex items-center gap-2">
@@ -245,8 +265,22 @@ export const FloatingFocusTimer: React.FC = () => {
 
       <div className="p-4 space-y-3.5">
         {lastNotice && (
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-start gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div
+            className={`p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${
+              lastNotice.type === 'withered'
+                ? 'bg-amber-500/10 border-amber-500/35 text-amber-800 dark:text-amber-300'
+                : lastNotice.type === 'info'
+                ? 'bg-blue-500/10 border-blue-500/30 text-blue-800 dark:text-blue-300'
+                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+            }`}
+          >
+            {lastNotice.type === 'withered' ? (
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            ) : lastNotice.type === 'info' ? (
+              <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            )}
             <div className="flex-1 space-y-1">
               <span className="block leading-snug">{lastNotice.message}</span>
               {lastNotice.type === 'success' && (
@@ -333,6 +367,7 @@ export const FloatingFocusTimer: React.FC = () => {
                     setPomodoroDurations(val, val >= 45 ? 10 : 5);
                   }
                 }}
+                onBlur={() => setCustomMinutesInput(String(focusMinutes))}
                 className="w-12 h-7 rounded-lg border border-border bg-background px-1.5 text-center text-[11px] font-mono font-bold text-foreground"
                 title="Minutos customizados"
               />

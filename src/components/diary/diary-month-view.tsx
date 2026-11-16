@@ -447,7 +447,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
         <Card className="p-3 bg-card border-border">
           <p className="text-[11px] font-medium text-muted-foreground">Revisões Realizadas</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-extrabold text-emerald-400">
+            <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
               {monthStats.completedReviews}
             </span>
             <Badge variant="concluido" className="text-[10px]">
@@ -459,7 +459,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
         <Card className="p-3 bg-card border-border">
           <p className="text-[11px] font-medium text-muted-foreground">Estudos Programados</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-extrabold text-blue-400">
+            <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
               {monthStats.plannedTopicsCount}
             </span>
             <Badge variant="secondary" className="text-[10px]">
@@ -473,7 +473,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
           <div className="flex items-baseline justify-between mt-1">
             <span
               className={`text-xl font-extrabold ${
-                monthStats.overdueReviews > 0 ? 'text-rose-400' : 'text-muted-foreground'
+                monthStats.overdueReviews > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'
               }`}
             >
               {monthStats.overdueReviews}
@@ -571,7 +571,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                     <button
                       type="button"
                       onClick={e => handleOpenPlanForDate(e, cell.dateStr)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                       title={`Agendar estudo para ${formatDateBR(cell.dateStr)}`}
                     >
                       <Plus className="h-3 w-3" />
@@ -602,7 +602,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
                             {item.isHighPrevalence && (
-                              <Flame className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+                              <Flame className="h-2.5 w-2.5 text-amber-500 fill-amber-500 dark:text-amber-400 dark:fill-amber-400" />
                             )}
                             {item.type === 'planned_study' && (
                               <button
@@ -611,7 +611,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                                   e.stopPropagation();
                                   updatePlannedTopicDate(item.id, null);
                                 }}
-                                className="opacity-0 group-hover/item:opacity-100 p-0.5 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/20 rounded transition-all"
+                                className="opacity-100 lg:opacity-0 lg:group-hover/item:opacity-100 p-0.5 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/20 rounded transition-all"
                                 title="Desagendar deste dia e manter na Meta da Semana"
                               >
                                 <X className="h-2.5 w-2.5" />
@@ -642,7 +642,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                         {items.length} {items.length === 1 ? 'item' : 'itens'}
                       </span>
                       {completedCount > 0 && (
-                        <span className="text-emerald-400 font-semibold">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                           ✓ {completedCount}/{items.length}
                         </span>
                       )}
@@ -699,7 +699,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                           >
                             {t.area}
                           </span>
@@ -708,7 +708,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                               Em {formatDateBR(t.planned_date)}
                             </span>
                           ) : (
-                            <span className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 px-1 rounded">
+                            <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1 rounded">
                               Sem dia fixo
                             </span>
                           )}
@@ -723,7 +723,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                           <button
                             type="button"
                             onClick={() => updatePlannedTopicDate(t.id, null)}
-                            className="p-1 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+                            className="p-1 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
                             title="Desagendar da data e manter na meta em aberto"
                           >
                             <X className="h-3 w-3" />
@@ -755,7 +755,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
             <CardHeader className="pb-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
+                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400">
                     <AlertTriangle className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-bold">Revisões em Atraso</CardTitle>
@@ -771,7 +771,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
 
             <CardContent className="p-3 space-y-2 max-h-[340px] overflow-y-auto">
               {overdueReviews.length === 0 ? (
-                <div className="py-6 text-center text-xs text-emerald-400 font-medium">
+                <div className="py-6 text-center text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                   Nenhuma revisão em atraso.
                 </div>
               ) : (
@@ -794,7 +794,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                         <div className="flex items-center gap-1.5">
                           {topic && style && (
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                             >
                               {topic.area}
                             </span>
@@ -802,7 +802,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                           <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
                             R{review.review_number}
                           </span>
-                          <span className="text-[9px] font-bold text-rose-400">
+                          <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">
                             {statusInfo.daysDiff}d atraso
                           </span>
                         </div>
@@ -815,7 +815,7 @@ export const DiaryMonthView: React.FC<DiaryMonthViewProps> = ({ currentDate, onS
                         size="sm"
                         variant="outline"
                         onClick={() => rescheduleReview(review.id, todayStr)}
-                        className="text-[10px] h-6 px-1.5 font-bold text-rose-400 border-rose-500/30 hover:bg-rose-500/20 shrink-0"
+                        className="text-[10px] h-6 px-1.5 font-bold text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20 shrink-0"
                         title="Reprogramar para hoje"
                       >
                         Para Hoje

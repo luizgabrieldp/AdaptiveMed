@@ -60,7 +60,10 @@ export async function GET(request: NextRequest) {
           .single();
 
         const hasActivePlan = Boolean(
-          profile && (profile.is_subscribed || profile.subscription_status === 'active')
+          profile &&
+            (profile.is_subscribed ||
+              profile.subscription_status === 'active' ||
+              profile.subscription_status === 'trial')
         );
 
         // Se NÃO tem plano ativo, mantém o usuário logado e direciona para o pagamento preservando ?plan=

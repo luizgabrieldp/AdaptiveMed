@@ -60,11 +60,13 @@ export const RetentionChart: React.FC = () => {
     const overallData: Record<string, { sum: number; count: number }> = {};
     stages.forEach(s => (overallData[s.key] = { sum: 0, count: 0 }));
 
-    // 1º Contato
-    relevantTopics.forEach(t => {
-      overallData['initial'].sum += t.initial_percentage;
-      overallData['initial'].count += 1;
-    });
+    // 1º Contato (apenas assuntos já estudados, excluindo planejados)
+    relevantTopics
+      .filter(t => !t.is_planned)
+      .forEach(t => {
+        overallData['initial'].sum += t.initial_percentage;
+        overallData['initial'].count += 1;
+      });
 
     // Revisões concluídas
     reviews.forEach(r => {
@@ -162,20 +164,20 @@ export const RetentionChart: React.FC = () => {
         <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border opacity-60" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis
                 dataKey="stage"
                 stroke="#64748B"
                 fontSize={12}
                 tickLine={false}
-                axisLine={{ stroke: '#475569' }}
+                axisLine={{ stroke: 'var(--border)' }}
               />
               <YAxis
                 domain={[40, 100]}
                 stroke="#64748B"
                 fontSize={11}
                 tickLine={false}
-                axisLine={{ stroke: '#475569' }}
+                axisLine={{ stroke: 'var(--border)' }}
                 tickFormatter={val => `${val}%`}
               />
               <Tooltip
@@ -231,7 +233,7 @@ export const RetentionChart: React.FC = () => {
                 name="Sua Curva Real (%)"
                 stroke="#10B981"
                 strokeWidth={3}
-                dot={{ r: 5, fill: '#10B981', strokeWidth: 2, stroke: '#0B0F17' }}
+                dot={{ r: 5, fill: '#10B981', strokeWidth: 2, stroke: 'var(--card)' }}
                 activeDot={{ r: 7 }}
                 connectNulls
               />

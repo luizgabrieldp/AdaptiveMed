@@ -56,6 +56,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
     areas,
     updateTopic,
     studySessions,
+    errorLogs,
     addErrorLog,
   } = useData();
   const [area, setArea] = useState<string>('');
@@ -80,8 +81,10 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
   React.useEffect(() => {
     if (!open || !review) {
       seededOpenKeyRef.current = '';
+      setShowDeleteConfirm(false);
       return;
     }
+    setShowDeleteConfirm(false);
     const openKey = `${review.id}:${isEdit ? 'edit' : 'complete'}`;
     if (seededOpenKeyRef.current === openKey) return;
     seededOpenKeyRef.current = openKey;
@@ -136,14 +139,21 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
   const currentTopic = topic || topics.find(t => t.id === review.topic_id);
 
-  // Cálculo científico do próximo ciclo
+  // Cálculo científico do próximo ciclo com peso do Caderno de Erros
   const baseCount = currentTopic?.base_questions_count || currentTopic?.initial_questions || 20;
   const prevInterval = review.previous_interval_days || 7;
+  const pendingTopicCauses = errorLogs
+    .filter(e => e.topic_id === review.topic_id && !e.is_reviewed)
+    .map(e => e.cause);
+  const draftCauses = collectFinalErrorDrafts(quickErrorState).map(d => d.cause);
+  const combinedErrorCauses = [...pendingTopicCauses, ...draftCauses];
+
   const nextReviewCalc = calculateNextReview({
     currentCycle: review.review_number,
     accuracy: calculatedPct ?? 80,
     baseQuestionsCount: baseCount,
     previousIntervalDays: prevInterval,
+    errorCauses: combinedErrorCauses,
   });
 
   const nextCycleNumber = review.review_number < 8 ? nextReviewCalc.nextCycle : null;
@@ -217,10 +227,13 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         }
       }
 
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      const draftCausesToSave = errorDrafts.map(d => d.cause);
+
       if (isEdit) {
         await updateCompletedReview(review.id, doneNum, correctNum, completedDate || undefined);
       } else {
-        await completeReview(review.id, doneNum, correctNum, durNum);
+        await completeReview(review.id, doneNum, correctNum, durNum, draftCausesToSave);
 
         // Efeito festivo de gamificação
         try {
@@ -236,7 +249,6 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       }
 
       // Salva eventuais pré-registros no Caderno de Erros vinculados ao assunto e revisão
-      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
       for (const draft of errorDrafts) {
         await addErrorLog({
           topic_id: review.topic_id,
@@ -284,7 +296,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Isso apagará o ciclo <strong className="text-foreground">R{review.review_number}</strong> (e revisões seguintes) deste assunto da sua agenda.
-                  O seu <strong className="text-emerald-500 font-semibold">estudo inicial (R0) continuará salvo intacto</strong> no seu histórico.
+                  O seu <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">estudo inicial (R0) continuará salvo intacto</strong> no seu histórico.
                 </p>
               </div>
             </div>
@@ -316,7 +328,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         ) : (
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400 mb-1">
+              <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
                 <BrainCircuit className="h-4 w-4" />
                 <span>Ciclo de Revisão R{review.review_number}</span>
               </div>
@@ -383,10 +395,10 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
               {/* Meta Recomendada para a Revisão Atual */}
               {review.recommended_questions ? (
                 <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-amber-300 flex items-center gap-1.5">
-                    <Target className="h-4 w-4 text-amber-400" /> Meta Científica (R{review.review_number}):
+                  <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Meta Científica (R{review.review_number}):
                   </span>
-                  <span className="font-black text-amber-400 font-mono tabular-nums">
+                  <span className="font-black text-amber-700 dark:text-amber-400 font-mono tabular-nums">
                     {review.recommended_questions} questões
                   </span>
                 </div>
@@ -425,7 +437,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                       const val = e.target.value.replace(/\D/g, '');
                       setQuestionsCorrect(val);
                     }}
-                    className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
+                    className="font-bold text-base text-emerald-600 dark:text-emerald-400 placeholder:text-muted-foreground/35 placeholder:font-normal"
                     placeholder="Ex: 16"
                   />
                 </div>
@@ -452,6 +464,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     value={durationMinutes}
                     onChange={e => {
                       const val = e.target.value.replace(/\D/g, '');
+                      setPulledTimerMinutes(null);
                       setDurationMinutes(val);
                     }}
                     placeholder="Ex: 45 min"
@@ -487,7 +500,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
               {/* Alerta de Acertos maior que Questões */}
               {isCorrectFilled && correctNum > doneNum && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-[11px] flex items-center gap-2">
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] flex items-center gap-2">
                   <span>O número de acertos ({correctNum}) não pode ser maior que o total de questões ({doneNum}).</span>
                 </div>
               )}
@@ -524,6 +537,20 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   </p>
                 )}
 
+                {nextReviewCalc.errorWeightApplied && nextReviewCalc.errorWeightApplied.activeCount > 0 && (
+                  <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px]">
+                    <span className="font-semibold text-amber-800 dark:text-amber-300">
+                      Peso do Erro ({nextReviewCalc.errorWeightApplied.dominantCause}):
+                    </span>
+                    <span className="font-bold text-foreground font-mono tabular-nums">
+                      intervalo ×{nextReviewCalc.errorWeightApplied.intervalMultiplier}
+                      {nextReviewCalc.errorWeightApplied.bonusQuestions > 0
+                        ? ` • +${nextReviewCalc.errorWeightApplied.bonusQuestions}q`
+                        : ''}
+                    </span>
+                  </div>
+                )}
+
                 {isNextCyclePaused ? (
                   <div className="pt-2 border-t border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-amber-500/10 -mx-3 -mb-3 p-3 rounded-b-xl mt-1">
                     <div className="space-y-0.5">
@@ -551,7 +578,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                     <>
                       <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                          <Sparkles className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                           Próxima Revisão (R{nextCycleNumber}):
                         </span>
                         <span className="font-semibold text-foreground">
@@ -561,7 +588,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
 
                       <div className="pt-1 border-t border-border/40 flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">Meta Sugerida (R{nextCycleNumber}):</span>
-                        <span className="font-bold text-amber-400 font-mono tabular-nums">
+                        <span className="font-bold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
                           {nextReviewCalc.recommendedQuestions} questões
                         </span>
                       </div>
@@ -569,7 +596,7 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
                   )
                 )}
                 {review.review_number === 8 && (
-                  <p className="text-[11px] text-emerald-400 font-medium pt-1 border-t border-border/60">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-1 border-t border-border/60">
                     Último ciclo de revisão deste assunto! Fixação consolidada na memória de longo prazo.
                   </p>
                 )}

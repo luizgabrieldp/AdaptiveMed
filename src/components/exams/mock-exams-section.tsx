@@ -77,7 +77,7 @@ export const MockExamsSection: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <GraduationCap className="h-5 w-5 text-blue-400" />
+            <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             Simulados Gerais de Residência
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -97,7 +97,7 @@ export const MockExamsSection: React.FC = () => {
       {/* Se não houver simulados registrados, exibe empty state elegante sem cards zerados fictícios */}
       {mockExams.length === 0 ? (
         <Card className="p-12 text-center border-dashed border-border space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
             <GraduationCap className="h-7 w-7" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
@@ -137,12 +137,12 @@ export const MockExamsSection: React.FC = () => {
                 Maior Nota
               </p>
               <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-2xl sm:text-3xl font-black text-emerald-400">
+                <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
                   {kpis.maior}%
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                <Award className="h-3 w-3 text-emerald-400" /> Recorde pessoal
+                <Award className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> Recorde pessoal
               </p>
             </Card>
 
@@ -151,7 +151,7 @@ export const MockExamsSection: React.FC = () => {
                 Menor Nota
               </p>
               <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-2xl sm:text-3xl font-black text-amber-400">
+                <span className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
                   {kpis.menor}%
                 </span>
               </div>
@@ -163,7 +163,7 @@ export const MockExamsSection: React.FC = () => {
                 Acima de 80%
               </p>
               <div className="flex items-baseline space-x-1.5 mt-1">
-                <span className="text-2xl sm:text-3xl font-black text-blue-400">
+                <span className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400">
                   {kpis.distribuicao.gt90 + kpis.distribuicao.f80_90}
                 </span>
                 <span className="text-xs text-muted-foreground">provas</span>
@@ -180,31 +180,31 @@ export const MockExamsSection: React.FC = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <p className="text-emerald-400 font-extrabold text-lg">{kpis.distribuicao.gt90}</p>
+                <p className="text-emerald-600 dark:text-emerald-400 font-extrabold text-lg">{kpis.distribuicao.gt90}</p>
                 <p className="text-[11px] font-semibold text-foreground mt-0.5">&gt; 90%</p>
                 <p className="text-[10px] text-muted-foreground">Excelência</p>
               </div>
 
               <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <p className="text-blue-400 font-extrabold text-lg">{kpis.distribuicao.f80_90}</p>
+                <p className="text-blue-600 dark:text-blue-400 font-extrabold text-lg">{kpis.distribuicao.f80_90}</p>
                 <p className="text-[11px] font-semibold text-foreground mt-0.5">80% a 90%</p>
                 <p className="text-[10px] text-muted-foreground">Aprovado USP/ENARE</p>
               </div>
 
               <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                <p className="text-indigo-400 font-extrabold text-lg">{kpis.distribuicao.f70_80}</p>
+                <p className="text-indigo-600 dark:text-indigo-400 font-extrabold text-lg">{kpis.distribuicao.f70_80}</p>
                 <p className="text-[11px] font-semibold text-foreground mt-0.5">70% a 80%</p>
                 <p className="text-[10px] text-muted-foreground">Competitivo</p>
               </div>
 
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <p className="text-amber-400 font-extrabold text-lg">{kpis.distribuicao.f50_70}</p>
+                <p className="text-amber-600 dark:text-amber-400 font-extrabold text-lg">{kpis.distribuicao.f50_70}</p>
                 <p className="text-[11px] font-semibold text-foreground mt-0.5">50% a 70%</p>
                 <p className="text-[10px] text-muted-foreground">Intermediário</p>
               </div>
 
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 col-span-2 sm:col-span-1">
-                <p className="text-rose-400 font-extrabold text-lg">{kpis.distribuicao.lt50}</p>
+                <p className="text-rose-600 dark:text-rose-400 font-extrabold text-lg">{kpis.distribuicao.lt50}</p>
                 <p className="text-[11px] font-semibold text-foreground mt-0.5">&lt; 50%</p>
                 <p className="text-[10px] text-muted-foreground">Alerta Crítico</p>
               </div>
@@ -238,7 +238,7 @@ export const MockExamsSection: React.FC = () => {
                   <TableCell className="text-center text-xs font-semibold">
                     {m.total_questions}
                   </TableCell>
-                  <TableCell className="text-center text-xs font-semibold text-emerald-400">
+                  <TableCell className="text-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     {m.correct_answers}
                   </TableCell>
                   <TableCell className="text-center">
@@ -256,6 +256,7 @@ export const MockExamsSection: React.FC = () => {
                       onClick={() => deleteMockExam(m.id)}
                       className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       title="Excluir Simulado"
+                      aria-label="Excluir Simulado"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

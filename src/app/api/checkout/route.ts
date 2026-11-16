@@ -19,6 +19,16 @@ function getAppUrl(): string {
   return 'https://adaptive-med.vercel.app';
 }
 
+function extractPeriodEndIso(sub: Stripe.Subscription | null | undefined): string | undefined {
+  if (!sub) return undefined;
+  const periodEndSec =
+    (sub as { current_period_end?: number | null }).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  return typeof periodEndSec === 'number' && periodEndSec > 0
+    ? new Date(periodEndSec * 1000).toISOString()
+    : undefined;
+}
+
 interface PlanConfig {
   name: string;
   description: string;
@@ -81,16 +91,53 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const profileClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const { data: profile, error: profileError } = await profileClient
+      .from('profiles')
+      .select('stripe_customer_id, is_subscribed, subscription_status')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Erro ao consultar perfil no checkout:', profileError.message);
+      return NextResponse.json(
+        { error: 'Erro ao verificar status da assinatura no servidor.' },
+        { status: 500 }
+      );
+    }
+
+    if (
+      profile?.is_subscribed ||
+      profile?.subscription_status === 'active' ||
+      profile?.subscription_status === 'trial' ||
+      profile?.subscription_status === 'trialing'
+    ) {
+      return NextResponse.json(
+        { error: 'Você já possui uma assinatura ativa.' },
+        { status: 409 }
+      );
+    }
+
+    const existingCustomerId = profile?.stripe_customer_id?.trim() || null;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
       client_reference_id: user.id,
-      customer_email: user.email || undefined,
+      ...(existingCustomerId
+        ? { customer: existingCustomerId }
+        : { customer_email: user.email || undefined }),
       allow_promotion_codes: true,
       payment_method_collection: 'if_required',
       metadata: {
         userId: user.id,
         planId,
+      },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          planId,
+        },
       },
       line_items: [
         {
@@ -152,7 +199,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription'],
+    });
 
     // Verifica propriedade da sessão de checkout
     const sessionUserId = session.client_reference_id || session.metadata?.userId;
@@ -165,13 +214,37 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso negado a esta sessão de pagamento' }, { status: 403 });
     }
 
+    const sub =
+      session.subscription && typeof session.subscription === 'object'
+        ? (session.subscription as Stripe.Subscription)
+        : null;
+    const isSubscriptionCurrentlyActive = sub
+      ? sub.status === 'active' || sub.status === 'trialing'
+      : true;
+
     const isValid =
       session.status === 'complete' &&
-      (session.payment_status === 'paid' || session.payment_status === 'no_payment_required');
+      (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') &&
+      isSubscriptionCurrentlyActive;
 
     // Ativação idempotente no servidor via service_role (complementa o webhook)
-    if (isValid && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (isValid) {
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.error('SUPABASE_SERVICE_ROLE_KEY não configurada para ativar assinatura.');
+        return NextResponse.json(
+          { error: 'Serviço administrativo de assinatura não configurado no servidor.' },
+          { status: 500 }
+        );
+      }
+
       const admin = createAdminClient();
+      if (!admin) {
+        return NextResponse.json(
+          { error: 'Cliente administrativo indisponível no servidor.' },
+          { status: 500 }
+        );
+      }
+
       const customerId =
         typeof session.customer === 'string' ? session.customer : session.customer?.id || null;
       const subscriptionId =
@@ -179,15 +252,62 @@ export async function GET(req: NextRequest) {
           ? session.subscription
           : session.subscription?.id || null;
 
-      await admin
+      const currentPeriodEnd = extractPeriodEndIso(sub);
+      const updatePayload: Record<string, unknown> = {
+        is_subscribed: true,
+        subscription_status: sub?.status === 'trialing' ? 'trial' : 'active',
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        cancel_at_period_end: Boolean(sub?.cancel_at_period_end),
+      };
+      if (currentPeriodEnd !== undefined) {
+        updatePayload.current_period_end = currentPeriodEnd;
+      }
+
+      const { data: updatedRows, error: updateError } = await admin
         .from('profiles')
-        .update({
-          is_subscribed: true,
-          subscription_status: 'active',
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-        })
-        .eq('id', user.id);
+        .update(updatePayload)
+        .eq('id', user.id)
+        .select('id');
+
+      if (updateError) {
+        console.error('Erro ao ativar assinatura no Supabase via GET /api/checkout:', updateError);
+        return NextResponse.json(
+          { error: 'Erro ao registrar ativação da assinatura' },
+          { status: 500 }
+        );
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        const { error: upsertError } = await admin
+          .from('profiles')
+          .upsert(
+            {
+              id: user.id,
+              full_name:
+                typeof user.user_metadata?.full_name === 'string'
+                  ? user.user_metadata.full_name
+                  : '',
+              target_specialty:
+                typeof user.user_metadata?.target_specialty === 'string'
+                  ? user.user_metadata.target_specialty
+                  : '',
+              ...updatePayload,
+            },
+            { onConflict: 'id' }
+          );
+
+        if (upsertError) {
+          console.error(
+            'Erro ao criar/ativar perfil ausente no Supabase via GET /api/checkout:',
+            upsertError
+          );
+          return NextResponse.json(
+            { error: 'Erro ao registrar ativação da assinatura' },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     return NextResponse.json({

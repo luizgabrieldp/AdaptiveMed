@@ -1694,7 +1694,7 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       )}
 
       {/* Overlay Superior Esquerdo: Contadores */}
-      <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 pointer-events-none">
+      <div className="absolute top-3 left-3 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-19rem)] flex flex-wrap items-center gap-2 pointer-events-none">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/90 backdrop-blur-md border border-border text-[11px] font-bold text-foreground shadow-sm">
           <Trees className="h-3.5 w-3.5 text-emerald-500" />
           <span>
@@ -1719,8 +1719,8 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
         )}
       </div>
 
-      {/* Overlay Superior Direito: Controles de Câmera + Modo Zen/Eco */}
-      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+      {/* Overlay Superior Direito (Desktop) / Inferior Direito (Mobile): Controles de Câmera + Modo Zen/Eco */}
+      <div className="absolute bottom-3 right-3 sm:top-3 sm:bottom-auto flex items-center gap-1.5">
         <Button
           type="button"
           size="sm"
@@ -1770,9 +1770,12 @@ export const Forest3DScene: React.FC<Forest3DSceneProps> = ({
       </div>
 
       {/* Dica de interação no rodapé */}
-      <div className="absolute bottom-2.5 left-3 pointer-events-none">
-        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-card/80 backdrop-blur-sm border border-border/60 text-muted-foreground">
-          Passe o cursor para interagir • Arraste para girar • Scroll para zoom • Clique nos canteiros
+      <div className="absolute bottom-3 left-3 max-w-[calc(100%-10.5rem)] sm:max-w-none pointer-events-none">
+        <span className="inline-block truncate max-w-full text-[10px] font-medium px-2 py-0.5 rounded-md bg-card/80 backdrop-blur-sm border border-border/60 text-muted-foreground">
+          <span className="sm:hidden">Arraste • Zoom • Toque</span>
+          <span className="hidden sm:inline">
+            Passe o cursor para interagir • Arraste para girar • Scroll para zoom • Clique nos canteiros
+          </span>
         </span>
       </div>
     </div>

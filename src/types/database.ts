@@ -10,16 +10,106 @@ export interface StudyArea {
 }
 
 export const COLOR_PALETTE = [
-  { name: 'Azul', hex: '#3B82F6', bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20' },
-  { name: 'Esmeralda', hex: '#10B981', bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20' },
-  { name: 'Âmbar', hex: '#F59E0B', bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/20' },
-  { name: 'Rosa', hex: '#EC4899', bg: 'bg-pink-500/10', text: 'text-pink-500', border: 'border-pink-500/20' },
-  { name: 'Roxo', hex: '#8B5CF6', bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/20' },
-  { name: 'Vermelho', hex: '#EF4444', bg: 'bg-red-500/10', text: 'text-red-500', border: 'border-red-500/20' },
-  { name: 'Ciano', hex: '#06B6D4', bg: 'bg-cyan-500/10', text: 'text-cyan-500', border: 'border-cyan-500/20' },
-  { name: 'Índigo', hex: '#6366F1', bg: 'bg-indigo-500/10', text: 'text-indigo-500', border: 'border-indigo-500/20' },
-  { name: 'Laranja', hex: '#F97316', bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20' },
-  { name: 'Verde Lima', hex: '#84CC16', bg: 'bg-lime-500/10', text: 'text-lime-500', border: 'border-lime-500/20' },
+  {
+    name: 'Azul',
+    hex: '#3B82F6',
+    bg: 'bg-blue-500/15 dark:bg-blue-500/25',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40 dark:border-blue-500/50',
+    cardBg: 'bg-blue-500/15 dark:bg-blue-500/20',
+    cardBorder: 'border-blue-500/30 dark:border-blue-500/40 border-l-4 border-l-blue-500',
+    cardHover: 'hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-sm',
+  },
+  {
+    name: 'Esmeralda',
+    hex: '#10B981',
+    bg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40 dark:border-emerald-500/50',
+    cardBg: 'bg-emerald-500/15 dark:bg-emerald-500/20',
+    cardBorder: 'border-emerald-500/30 dark:border-emerald-500/40 border-l-4 border-l-emerald-500',
+    cardHover: 'hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-sm',
+  },
+  {
+    name: 'Âmbar',
+    hex: '#F59E0B',
+    bg: 'bg-amber-500/15 dark:bg-amber-500/25',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40 dark:border-amber-500/50',
+    cardBg: 'bg-amber-500/15 dark:bg-amber-500/20',
+    cardBorder: 'border-amber-500/30 dark:border-amber-500/40 border-l-4 border-l-amber-500',
+    cardHover: 'hover:border-amber-500 dark:hover:border-amber-400 hover:shadow-sm',
+  },
+  {
+    name: 'Rosa',
+    hex: '#EC4899',
+    bg: 'bg-pink-500/15 dark:bg-pink-500/25',
+    text: 'text-pink-700 dark:text-pink-300',
+    border: 'border-pink-500/40 dark:border-pink-500/50',
+    cardBg: 'bg-pink-500/15 dark:bg-pink-500/20',
+    cardBorder: 'border-pink-500/30 dark:border-pink-500/40 border-l-4 border-l-pink-500',
+    cardHover: 'hover:border-pink-500 dark:hover:border-pink-400 hover:shadow-sm',
+  },
+  {
+    name: 'Roxo',
+    hex: '#8B5CF6',
+    bg: 'bg-purple-500/15 dark:bg-purple-500/25',
+    text: 'text-purple-700 dark:text-purple-300',
+    border: 'border-purple-500/40 dark:border-purple-500/50',
+    cardBg: 'bg-purple-500/15 dark:bg-purple-500/20',
+    cardBorder: 'border-purple-500/30 dark:border-purple-500/40 border-l-4 border-l-purple-500',
+    cardHover: 'hover:border-purple-500 dark:hover:border-purple-400 hover:shadow-sm',
+  },
+  {
+    name: 'Vermelho',
+    hex: '#EF4444',
+    bg: 'bg-red-500/15 dark:bg-red-500/25',
+    text: 'text-red-700 dark:text-red-300',
+    border: 'border-red-500/40 dark:border-red-500/50',
+    cardBg: 'bg-red-500/15 dark:bg-red-500/20',
+    cardBorder: 'border-red-500/30 dark:border-red-500/40 border-l-4 border-l-red-500',
+    cardHover: 'hover:border-red-500 dark:hover:border-red-400 hover:shadow-sm',
+  },
+  {
+    name: 'Ciano',
+    hex: '#06B6D4',
+    bg: 'bg-cyan-500/15 dark:bg-cyan-500/25',
+    text: 'text-cyan-700 dark:text-cyan-300',
+    border: 'border-cyan-500/40 dark:border-cyan-500/50',
+    cardBg: 'bg-cyan-500/15 dark:bg-cyan-500/20',
+    cardBorder: 'border-cyan-500/30 dark:border-cyan-500/40 border-l-4 border-l-cyan-500',
+    cardHover: 'hover:border-cyan-500 dark:hover:border-cyan-400 hover:shadow-sm',
+  },
+  {
+    name: 'Índigo',
+    hex: '#6366F1',
+    bg: 'bg-indigo-500/15 dark:bg-indigo-500/25',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    border: 'border-indigo-500/40 dark:border-indigo-500/50',
+    cardBg: 'bg-indigo-500/15 dark:bg-indigo-500/20',
+    cardBorder: 'border-indigo-500/30 dark:border-indigo-500/40 border-l-4 border-l-indigo-500',
+    cardHover: 'hover:border-indigo-500 dark:hover:border-indigo-400 hover:shadow-sm',
+  },
+  {
+    name: 'Laranja',
+    hex: '#F97316',
+    bg: 'bg-orange-500/15 dark:bg-orange-500/25',
+    text: 'text-orange-700 dark:text-orange-300',
+    border: 'border-orange-500/40 dark:border-orange-500/50',
+    cardBg: 'bg-orange-500/15 dark:bg-orange-500/20',
+    cardBorder: 'border-orange-500/30 dark:border-orange-500/40 border-l-4 border-l-orange-500',
+    cardHover: 'hover:border-orange-500 dark:hover:border-orange-400 hover:shadow-sm',
+  },
+  {
+    name: 'Verde Lima',
+    hex: '#84CC16',
+    bg: 'bg-lime-500/15 dark:bg-lime-500/25',
+    text: 'text-lime-700 dark:text-lime-300',
+    border: 'border-lime-500/40 dark:border-lime-500/50',
+    cardBg: 'bg-lime-500/15 dark:bg-lime-500/20',
+    cardBorder: 'border-lime-500/30 dark:border-lime-500/40 border-l-4 border-l-lime-500',
+    cardHover: 'hover:border-lime-500 dark:hover:border-lime-400 hover:shadow-sm',
+  },
 ];
 
 export const DEFAULT_STUDY_AREAS: StudyArea[] = [
@@ -27,41 +117,41 @@ export const DEFAULT_STUDY_AREAS: StudyArea[] = [
     id: 'area-clinica',
     name: 'Clínica Médica',
     color: '#3B82F6',
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-500',
-    border: 'border-blue-500/20',
+    bg: 'bg-blue-500/15 dark:bg-blue-500/25',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40 dark:border-blue-500/50',
   },
   {
     id: 'area-cirurgia',
     name: 'Cirurgia Geral',
     color: '#10B981',
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-500',
-    border: 'border-emerald-500/20',
+    bg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40 dark:border-emerald-500/50',
   },
   {
     id: 'area-pediatria',
     name: 'Pediatria',
     color: '#F59E0B',
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-500',
-    border: 'border-amber-500/20',
+    bg: 'bg-amber-500/15 dark:bg-amber-500/25',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40 dark:border-amber-500/50',
   },
   {
     id: 'area-go',
     name: 'Ginecologia e Obstetrícia',
     color: '#EC4899',
-    bg: 'bg-pink-500/10',
-    text: 'text-pink-500',
-    border: 'border-pink-500/20',
+    bg: 'bg-pink-500/15 dark:bg-pink-500/25',
+    text: 'text-pink-700 dark:text-pink-300',
+    border: 'border-pink-500/40 dark:border-pink-500/50',
   },
   {
     id: 'area-preventiva',
     name: 'Medicina Preventiva',
     color: '#8B5CF6',
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-500',
-    border: 'border-purple-500/20',
+    bg: 'bg-purple-500/15 dark:bg-purple-500/25',
+    text: 'text-purple-700 dark:text-purple-300',
+    border: 'border-purple-500/40 dark:border-purple-500/50',
   },
 ];
 
@@ -126,44 +216,73 @@ export const AREA_COLORS: Record<string, AreaStyle> = {
 };
 
 export function getAreaStyle(areaName: string, customAreas: StudyArea[] = []): AreaStyle {
+  const safeName = areaName || '';
+  const normalizedArea = safeName.toLowerCase();
+
   // Procura primeiro nas áreas do usuário
-  const found = customAreas.find(a => a.name.toLowerCase() === areaName.toLowerCase());
+  const found = customAreas.find(a => (a.name || '').toLowerCase() === normalizedArea);
   if (found) {
-    // Se o customArea coincidir com uma das áreas padrão
-    if (AREA_COLORS[found.name]) {
-      return AREA_COLORS[found.name];
+    // Só usa AREA_COLORS padrão se o customArea mantiver exatamente a cor padrão daquela área
+    const defaultStyle = AREA_COLORS[found.name];
+    if (
+      defaultStyle &&
+      found.color?.toLowerCase() === defaultStyle.primary.toLowerCase()
+    ) {
+      return defaultStyle;
     }
+
+    const paletteMatch = COLOR_PALETTE.find(
+      c => c.hex.toLowerCase() === found.color?.toLowerCase()
+    );
+    if (paletteMatch) {
+      return {
+        primary: paletteMatch.hex,
+        bg: paletteMatch.bg,
+        text: `${paletteMatch.text} font-bold`,
+        border: paletteMatch.border,
+        cardBg: paletteMatch.cardBg,
+        cardBorder: paletteMatch.cardBorder,
+        cardHover: paletteMatch.cardHover,
+      };
+    }
+
+    const foundText = found.text
+      ? found.text.includes('font-bold')
+        ? found.text
+        : `${found.text} font-bold`
+      : 'text-primary font-bold';
+
     return {
-      primary: found.color,
+      primary: found.color || '#3B82F6',
       bg: found.bg || 'bg-primary/10',
-      text: found.text || 'text-primary font-bold',
+      text: foundText,
       border: found.border || 'border-primary/20',
-      cardBg: found.bg ? `${found.bg.replace('/10', '/15')} dark:${found.bg.replace('/10', '/20')}` : 'bg-primary/15 dark:bg-primary/20',
-      cardBorder: found.border ? `${found.border.replace('/20', '/30')} border-l-4 border-l-primary` : 'border-primary/30 border-l-4 border-l-primary',
+      cardBg: 'bg-primary/15 dark:bg-primary/20',
+      cardBorder: 'border-primary/30 dark:border-primary/40 border-l-4 border-l-primary',
       cardHover: 'hover:border-primary hover:shadow-sm',
     };
   }
 
   // Fallback para mapa padrão
-  if (AREA_COLORS[areaName]) {
-    return AREA_COLORS[areaName];
+  if (AREA_COLORS[safeName]) {
+    return AREA_COLORS[safeName];
   }
 
   // Fallback hash baseado no nome para cores consistentes
   let hash = 0;
-  for (let i = 0; i < areaName.length; i++) {
-    hash = areaName.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < safeName.length; i++) {
+    hash = safeName.charCodeAt(i) + ((hash << 5) - hash);
   }
   const colorIndex = Math.abs(hash) % COLOR_PALETTE.length;
   const c = COLOR_PALETTE[colorIndex];
   return {
     primary: c.hex,
     bg: c.bg,
-    text: c.text,
+    text: `${c.text} font-bold`,
     border: c.border,
-    cardBg: `${c.bg.replace('/10', '/15')} dark:${c.bg.replace('/10', '/20')}`,
-    cardBorder: `${c.border.replace('/20', '/30')} border-l-4 border-l-primary`,
-    cardHover: 'hover:border-primary hover:shadow-sm',
+    cardBg: c.cardBg,
+    cardBorder: c.cardBorder,
+    cardHover: c.cardHover,
   };
 }
 
@@ -295,6 +414,7 @@ export interface ReviewCalculationInput {
   fsrsState?: FsrsCardState;
   reviewHistory?: Array<{ date: string; accuracy: number }>;
   referenceDate?: string;
+  errorCauses?: ErrorLogCause[]; // Causas de erros não revisados/lançados no tema
 }
 
 export interface ReviewCalculationResult {
@@ -306,6 +426,12 @@ export interface ReviewCalculationResult {
   pedagogicalNote: string;
   fsrsState?: FsrsCardState;
   fsrsRating?: number;
+  errorWeightApplied?: {
+    activeCount: number;
+    dominantCause: ErrorLogCause | null;
+    intervalMultiplier: number;
+    bonusQuestions: number;
+  };
 }
 
 export interface TopicWithReviews extends StudyTopic {

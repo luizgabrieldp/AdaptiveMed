@@ -16,7 +16,9 @@ import {
   StudyTopic,
   getAreaStyle,
 } from '@/types/database';
-import { formatDateBR } from '@/lib/spaced-repetition';
+import { ERROR_CAUSE_WEIGHTS, formatDateBR } from '@/lib/spaced-repetition';
+import { useFocusTimer } from '@/components/focus/focus-timer-context';
+import { ErrorFlashcardModal } from '@/components/reviews/error-flashcard-modal';
 import {
   AlertTriangle,
   Plus,
@@ -30,6 +32,8 @@ import {
   Filter,
   Sparkles,
   RotateCcw,
+  Layers,
+  Timer,
 } from 'lucide-react';
 
 export default function CadernoErrosPage() {
@@ -42,7 +46,9 @@ export default function CadernoErrosPage() {
     updateErrorLog,
     deleteErrorLog,
   } = useData();
+  const { focusOnTopic } = useFocusTimer();
 
+  const [flashcardsOpen, setFlashcardsOpen] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [cause, setCause] = useState<ErrorLogCause>('Lacuna teórica');
@@ -127,6 +133,12 @@ export default function CadernoErrosPage() {
     });
   }, [errorLogs, statusFilter, causeFilter, areaFilter, searchTerm, topicMap]);
 
+  const flashcardErrors = useMemo(() => {
+    if (statusFilter === 'reviewed') return filteredErrors;
+    const pending = filteredErrors.filter(e => !e.is_reviewed);
+    return pending.length > 0 ? pending : filteredErrors;
+  }, [filteredErrors, statusFilter]);
+
   const handleOpenCreate = () => {
     if (!selectedTopicId && sortedTopics.length > 0) {
       setSelectedTopicId(sortedTopics[0].id);
@@ -197,6 +209,25 @@ export default function CadernoErrosPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={flashcardErrors.length === 0}
+              onClick={() => setFlashcardsOpen(true)}
+              className="text-xs font-bold gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md shadow-amber-500/20 border border-amber-400/40"
+              title={
+                flashcardErrors.length === 0
+                  ? 'Nenhum erro disponível para treinar com os filtros atuais'
+                  : 'Treinar seus erros no modo flashcard'
+              }
+            >
+              <Layers className="h-4 w-4" />
+              <span>Treinar Meus Erros (Flashcards)</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-slate-950/15 text-[10px] font-extrabold tabular-nums">
+                {flashcardErrors.length}
+              </span>
+            </Button>
+
             <Button
               size="sm"
               onClick={handleOpenCreate}
@@ -350,13 +381,16 @@ export default function CadernoErrosPage() {
                           key={c}
                           type="button"
                           onClick={() => setCause(c)}
-                          className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all text-left ${
+                          className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all text-left space-y-0.5 ${
                             cause === c
                               ? 'bg-primary/15 text-primary border-primary ring-2 ring-primary/25'
                               : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground'
                           }`}
                         >
-                          {c}
+                          <span className="block">{c}</span>
+                          <span className="block text-[10px] font-medium opacity-80">
+                            {ERROR_CAUSE_WEIGHTS[c].shortLabel}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -533,7 +567,7 @@ export default function CadernoErrosPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {filteredErrors.map(err => {
               const topic = topicMap.get(err.topic_id);
-              const areaName = topic?.area || 'Clínica Médica';
+              const areaName = topic?.area || areas[0]?.name || 'Clínica Médica';
               const areaStyle = getAreaStyle(areaName, areas);
               const isEditing = editingId === err.id;
 
@@ -563,6 +597,14 @@ export default function CadernoErrosPage() {
                           >
                             {err.cause}
                           </span>
+                          {!err.is_reviewed && ERROR_CAUSE_WEIGHTS[err.cause] && (
+                            <span
+                              className="text-[10px] font-semibold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded border border-border/50"
+                              title="Impacto ativo no cálculo do próximo intervalo FSRS-6 deste tema"
+                            >
+                              FSRS: {ERROR_CAUSE_WEIGHTS[err.cause].shortLabel}
+                            </span>
+                          )}
                           {err.question_ref && (
                             <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/60">
                               {err.question_ref}
@@ -665,10 +707,21 @@ export default function CadernoErrosPage() {
                           {err.concept_summary}
                         </p>
 
-                        <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-muted-foreground">
                           <span>Registrado em {formatDateBR(err.created_at.slice(0, 10))}</span>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                focusOnTopic(areaName, topic ? err.topic_id : null, true)
+                              }
+                              className="px-2.5 py-1 rounded-lg border font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                              title="Iniciar relógio de foco neste assunto"
+                            >
+                              <Timer className="h-3 w-3" />
+                              <span>Focar</span>
+                            </button>
                             {isDraftToComplete(err) && (
                               <button
                                 type="button"
@@ -702,6 +755,14 @@ export default function CadernoErrosPage() {
           </div>
         )}
       </div>
+
+      <ErrorFlashcardModal
+        open={flashcardsOpen}
+        onOpenChange={setFlashcardsOpen}
+        errors={flashcardErrors}
+        topicMap={topicMap}
+        areas={areas}
+      />
     </AppLayout>
   );
 }

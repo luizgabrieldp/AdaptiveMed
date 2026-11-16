@@ -60,11 +60,15 @@ export default function PagamentoPage() {
         .then(({ data: prof }) => {
           setProfile(prof);
           // Se já tiver pago, verifica se completou o onboarding
-          if (prof?.is_subscribed || prof?.subscription_status === 'active') {
+          if (
+            prof?.is_subscribed ||
+            prof?.subscription_status === 'active' ||
+            prof?.subscription_status === 'trial'
+          ) {
             if (prof?.onboarding_completed) {
-              router.replace('/dashboard');
+              window.location.replace('/dashboard');
             } else {
-              router.replace('/onboarding');
+              window.location.replace('/onboarding');
             }
           } else {
             setLoadingUser(false);
@@ -102,6 +106,14 @@ export default function PagamentoPage() {
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    if (typeof window !== 'undefined') {
+      try {
+        Object.keys(localStorage)
+          .filter(key => key.startsWith('adaptivemed_'))
+          .forEach(key => localStorage.removeItem(key));
+        document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
+      } catch {}
+    }
     window.location.href = '/login';
   };
 
@@ -239,7 +251,7 @@ export default function PagamentoPage() {
 
           {/* PLANO ANUAL (DESTAQUE) */}
           <Card
-            className={`border-2 relative flex flex-col justify-between scale-[1.02] shadow-xl ${
+            className={`border-2 relative flex flex-col justify-between md:scale-[1.02] shadow-xl ${
               selectedPlan === 'annual'
                 ? 'border-primary ring-2 ring-primary/40 bg-card'
                 : 'border-primary/60 bg-card'
@@ -247,15 +259,15 @@ export default function PagamentoPage() {
             onClick={() => setSelectedPlan('annual')}
           >
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <Badge className="bg-primary text-primary-foreground font-extrabold text-[11px] px-3 py-0.5 shadow-md">
+              <Badge className="bg-primary text-primary-foreground font-extrabold text-[11px] px-3 py-0.5 shadow-md whitespace-nowrap">
                 MAIS ESCOLHIDO (ECONOMIZE 27%)
               </Badge>
             </div>
 
             <div>
               <CardHeader className="space-y-1 pt-6 pb-3">
-                <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                  <Flame className="h-3.5 w-3.5 fill-emerald-400" /> Ano Completo de Estudos
+                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <Flame className="h-3.5 w-3.5 fill-emerald-500/20 text-emerald-600 dark:text-emerald-400 dark:fill-emerald-400" /> Ano Completo de Estudos
                 </div>
                 <CardTitle className="text-xl font-black">Plano Anual VIP</CardTitle>
                 <CardDescription className="text-xs">
@@ -265,7 +277,7 @@ export default function PagamentoPage() {
 
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black text-emerald-400">R$ 69,90</span>
+                  <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">R$ 69,90</span>
                   <span className="text-xs text-muted-foreground">/ano</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
@@ -274,15 +286,15 @@ export default function PagamentoPage() {
 
                 <ul className="space-y-2 text-xs text-muted-foreground pt-2 border-t border-border">
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>Todas as funções do plano mensal</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>Acesso ininterrupto por 12 meses</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>Economia máxima garantida</span>
                   </li>
                 </ul>
@@ -310,7 +322,7 @@ export default function PagamentoPage() {
 
         {/* Garantia */}
         <div className="text-center pt-2 text-xs text-muted-foreground flex items-center justify-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <span>Pagamento 100% seguro processado pelo Stripe com criptografia de ponta a ponta.</span>
         </div>
       </main>

@@ -115,11 +115,16 @@ export const NotificationManager: React.FC = () => {
             ? 'Notificações ativas no navegador'
             : 'Configurar notificações de estudo'
         }
+        aria-label={
+          permission === 'granted'
+            ? 'Notificações ativas no navegador'
+            : 'Configurar notificações de estudo'
+        }
       >
         {permission === 'granted' ? (
-          <BellRing className="h-4 w-4 text-emerald-400" />
+          <BellRing className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         ) : permission === 'denied' ? (
-          <BellOff className="h-4 w-4 text-rose-400 opacity-60" />
+          <BellOff className="h-4 w-4 text-rose-600 dark:text-rose-400 opacity-60" />
         ) : (
           <Bell className="h-4 w-4 text-muted-foreground" />
         )}
@@ -134,7 +139,7 @@ export const NotificationManager: React.FC = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
+              <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
                 <BellRing className="h-5 w-5" />
               </div>
               <div>
@@ -161,7 +166,7 @@ export const NotificationManager: React.FC = () => {
                   <BellOff className="h-3 w-3" /> Bloqueado no Navegador
                 </Badge>
               ) : (
-                <Badge variant="outline" className="gap-1 text-xs text-amber-400 border-amber-500/30">
+                <Badge variant="outline" className="gap-1 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30">
                   <AlertCircle className="h-3 w-3" /> Aguardando Permissão
                 </Badge>
               )}
@@ -170,7 +175,7 @@ export const NotificationManager: React.FC = () => {
             {/* Como funciona */}
             <div className="space-y-2 text-muted-foreground leading-relaxed">
               <div className="flex items-start gap-2.5">
-                <div className="p-1 rounded bg-blue-500/15 text-blue-400 shrink-0 mt-0.5">
+                <div className="p-1 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
                   <Sparkles className="h-3.5 w-3.5" />
                 </div>
                 <p>
@@ -179,7 +184,7 @@ export const NotificationManager: React.FC = () => {
               </div>
 
               <div className="flex items-start gap-2.5">
-                <div className="p-1 rounded bg-amber-500/15 text-amber-400 shrink-0 mt-0.5">
+                <div className="p-1 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
                   <Flame className="h-3.5 w-3.5" />
                 </div>
                 <p>
@@ -188,7 +193,7 @@ export const NotificationManager: React.FC = () => {
               </div>
 
               <div className="flex items-start gap-2.5">
-                <div className="p-1 rounded bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
+                <div className="p-1 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
                   <ShieldCheck className="h-3.5 w-3.5" />
                 </div>
                 <p>

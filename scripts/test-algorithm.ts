@@ -12,6 +12,7 @@ import {
   diffInDays,
   calculateReviewStatus,
   calculateQualifiedStreak,
+  computeErrorCauseAdjustment,
   computeRebalancedSchedule,
 } from '../src/lib/spaced-repetition';
 import { sanitizeCsvCell } from '../src/lib/export/csv-generator';
@@ -202,11 +203,17 @@ test('calculateReviewStatus e calculateQualifiedStreak funcionam em casos de bor
   assert.equal(streak.streakQualifiedToday, true);
 });
 
-test('sanitizeCsvCell previne CSV Formula Injection (=, +, -, @, tab, cr)', () => {
+test('sanitizeCsvCell previne CSV Formula Injection (=, +, -, @, |, tab, cr)', () => {
   assert.equal(sanitizeCsvCell('=CMD("calc")'), '"\'=CMD(""calc"")"');
   assert.equal(sanitizeCsvCell('+1+1'), '"\'+1+1"');
   assert.equal(sanitizeCsvCell('-2+3'), '"\'-2+3"');
   assert.equal(sanitizeCsvCell('@SUM(A1:A2)'), '"\'@SUM(A1:A2)"');
+  assert.equal(sanitizeCsvCell('|calc.exe'), '"\'|calc.exe"');
+  assert.equal(sanitizeCsvCell('  |cmd'), '"\'  |cmd"');
+  assert.equal(sanitizeCsvCell('\t=1+1'), '"\'\t=1+1"');
+  assert.equal(sanitizeCsvCell('\tfoo'), '"\'\tfoo"');
+  assert.equal(sanitizeCsvCell(' \tfoo'), '"\' \tfoo"');
+  assert.equal(sanitizeCsvCell('\rfoo'), '"\' foo"');
   assert.equal(sanitizeCsvCell('  =1+1'), '"\'  =1+1"');
   assert.equal(sanitizeCsvCell('Cardiologia'), '"Cardiologia"');
 });
@@ -249,6 +256,89 @@ test('escapeICalText e generateICalendarFile previnem iCalendar Injection (RFC 5
   const ics = generateICalendarFile(topics, reviews, 30);
   const eventCount = (ics.match(/^BEGIN:VEVENT$/gm) || []).length;
   assert.equal(eventCount, 1, 'Injeção não pode criar linha BEGIN:VEVENT extra');
+});
+
+test('generateICalendarFile sanitiza scheduled_date e review_number adulterados', () => {
+  const tomorrow = addDaysToDate(new Date().toISOString().slice(0, 10), 1);
+  const topics: StudyTopic[] = [
+    {
+      id: 't-sec',
+      user_id: 'u1',
+      area: 'Pediatria',
+      subject_name: 'Bronquiolite',
+      initial_date: '2026-06-01',
+      initial_questions: 20,
+      initial_correct: 15,
+      initial_percentage: 75,
+      created_at: '2026-06-01T00:00:00Z',
+    },
+  ];
+  const tamperedReviews: TopicReview[] = [
+    {
+      id: 'r-date-tamper',
+      topic_id: 't-sec',
+      user_id: 'u1',
+      review_number: '2\r\nBEGIN:VEVENT\r\nSUMMARY:PWNED' as unknown as number,
+      scheduled_date: `${tomorrow}\r\nBEGIN:VEVENT\r\nSUMMARY:PWNED`,
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      created_at: '2026-06-01T00:00:00Z',
+    },
+    {
+      id: 'r-short-date-tamper',
+      topic_id: 't-sec',
+      user_id: 'u1',
+      review_number: 'invalid' as unknown as number,
+      scheduled_date: '123\r\nSUMMARY:PWNED',
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      created_at: '2026-06-01T00:00:00Z',
+    },
+    {
+      id: 'r-invalid-calendar-date',
+      topic_id: 't-sec',
+      user_id: 'u1',
+      review_number: 0,
+      scheduled_date: '20259999',
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      created_at: '2026-06-01T00:00:00Z',
+    },
+    {
+      id: 'r-leap-invalid-date',
+      topic_id: 't-sec',
+      user_id: 'u1',
+      review_number: -3,
+      scheduled_date: '2026-02-30',
+      completed_date: null,
+      questions_done: null,
+      questions_correct: null,
+      percentage: null,
+      created_at: '2026-06-01T00:00:00Z',
+    },
+  ];
+
+  const ics = generateICalendarFile(topics, tamperedReviews, 30);
+  const eventCount = (ics.match(/^BEGIN:VEVENT$/gm) || []).length;
+  assert.equal(eventCount, 4, 'Adulteração em data/review_number não pode criar VEVENT extra');
+  assert.ok(!ics.includes('SUMMARY:PWNED'), 'Conteúdo injetado deve ser removido');
+  assert.ok(!ics.includes('NaN'), 'Datas inválidas não devem gerar NaN no calendário');
+  assert.ok(!ics.includes('20259999'), 'Data calendário inválida (mês/dia 99) deve sofrer fallback para hoje');
+  assert.ok(!ics.includes('20260230'), 'Data 30/02 inválida deve sofrer fallback para hoje');
+  assert.ok(ics.includes('SUMMARY:[R1] Bronquiolite (Pediatria)'));
+
+  const dtStartLines = ics.match(/^DTSTART;VALUE=DATE:.+$/gm) || [];
+  const dtEndLines = ics.match(/^DTEND;VALUE=DATE:.+$/gm) || [];
+  assert.equal(dtStartLines.length, 4);
+  assert.equal(dtEndLines.length, 4);
+  dtStartLines.forEach(line => assert.match(line, /^DTSTART;VALUE=DATE:\d{8}$/));
+  dtEndLines.forEach(line => assert.match(line, /^DTEND;VALUE=DATE:\d{8}$/));
 });
 
 test('computeRebalancedSchedule redistribui atrasados respeitando cota diária e ordem cronológica', () => {
@@ -554,6 +644,45 @@ test('collectFinalErrorDrafts preserva rascunhos adicionados e linha pendente se
     concept_summary: 'Botrópico consome fibrinogênio e causa incoagulabilidade',
     question_ref: 'ENARE 2024',
   });
+});
+
+test('computeErrorCauseAdjustment e calculateNextReview aplicam peso da causa do erro no FSRS-6', () => {
+  const noErrors = computeErrorCauseAdjustment([]);
+  assert.equal(noErrors.activeCount, 0);
+  assert.equal(noErrors.intervalMultiplier, 1);
+  assert.equal(noErrors.bonusQuestions, 0);
+
+  const lacunaAdj = computeErrorCauseAdjustment(['Lacuna teórica', 'Distração']);
+  assert.equal(lacunaAdj.activeCount, 2);
+  assert.equal(lacunaAdj.dominantCause, 'Lacuna teórica');
+  assert.equal(lacunaAdj.bonusQuestions, 3);
+  assert.ok(lacunaAdj.intervalMultiplier < 0.8);
+
+  const baseInput = {
+    currentCycle: 2,
+    accuracy: 85,
+    baseQuestionsCount: 25,
+    previousIntervalDays: 14,
+    actualElapsedDays: 14,
+    referenceDate: '2026-11-16',
+  };
+
+  const withoutErrors = calculateNextReview(baseInput);
+  const withDistracao = calculateNextReview({
+    ...baseInput,
+    errorCauses: ['Distração'],
+  });
+  const withLacuna = calculateNextReview({
+    ...baseInput,
+    errorCauses: ['Lacuna teórica', 'Interpretação'],
+  });
+
+  assert.equal(withoutErrors.errorWeightApplied, undefined);
+  assert.ok(withDistracao.errorWeightApplied);
+  assert.equal(withDistracao.recommendedQuestions, withoutErrors.recommendedQuestions);
+  assert.ok(withLacuna.nextIntervalDays <= withoutErrors.nextIntervalDays);
+  assert.ok(withLacuna.recommendedQuestions > withoutErrors.recommendedQuestions);
+  assert.equal(withLacuna.errorWeightApplied?.dominantCause, 'Lacuna teórica');
 });
 
 console.log(`\nTodos os ${passed} testes passaram com 100% de sucesso!`);

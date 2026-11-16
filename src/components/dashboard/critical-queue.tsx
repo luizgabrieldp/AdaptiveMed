@@ -13,11 +13,13 @@ import {
   interleaveQueueByArea,
 } from '@/lib/spaced-repetition';
 import { ReviewCompletionModal } from './review-completion-modal';
-import { CheckCircle2, Clock, AlertCircle, Sparkles, Plus, Tag } from 'lucide-react';
+import { CheckCircle2, Clock, Plus, Tag, Timer } from 'lucide-react';
 import { NewTopicModal } from './new-topic-modal';
+import { useFocusTimer } from '@/components/focus/focus-timer-context';
 
 export const CriticalQueue: React.FC = () => {
   const { reviews, topics, areas } = useData();
+  const { focusOnTopic } = useFocusTimer();
   const [selectedReview, setSelectedReview] = useState<TopicReview | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newTopicOpen, setNewTopicOpen] = useState(false);
@@ -80,7 +82,7 @@ export const CriticalQueue: React.FC = () => {
       <CardContent>
         {criticalItems.length === 0 ? (
           <div className="py-12 px-4 text-center rounded-xl bg-card border border-dashed border-border/80 space-y-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <div>
@@ -138,7 +140,7 @@ export const CriticalQueue: React.FC = () => {
                           {topic.tags.map(t => (
                             <span
                               key={t}
-                              className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground border border-border flex items-center gap-0.5"
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground border border-border flex items-center gap-0.5"
                             >
                               <Tag className="h-2.5 w-2.5 opacity-70" />
                               {t}
@@ -165,14 +167,33 @@ export const CriticalQueue: React.FC = () => {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={() => handleOpenReview(review)}
-                    variant={isOverdue ? 'destructive' : 'default'}
-                    className="sm:self-center font-bold text-xs gap-1.5 shrink-0 shadow-sm"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Concluir Revisão
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2 sm:self-center shrink-0">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        focusOnTopic(
+                          topic?.area || areas[0]?.name || 'Clínica Médica',
+                          topic?.id || review.topic_id,
+                          true
+                        )
+                      }
+                      className="font-bold text-xs gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
+                      title="Iniciar foco neste assunto"
+                    >
+                      <Timer className="h-3.5 w-3.5" />
+                      Focar
+                    </Button>
+                    <Button
+                      onClick={() => handleOpenReview(review)}
+                      variant={isOverdue ? 'destructive' : 'default'}
+                      className="font-bold text-xs gap-1.5 shrink-0 shadow-sm"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Concluir Revisão
+                    </Button>
+                  </div>
                 </div>
               );
             })}

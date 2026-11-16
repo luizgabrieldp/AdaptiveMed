@@ -3,12 +3,17 @@ import { getTodayDateString, formatDateBR } from '@/lib/spaced-repetition';
 
 /**
  * Proteção contra CSV Formula Injection (DDE/Excel/Calc):
- * Prefixa células que iniciam com =, +, -, @, \t ou \r com apóstrofo (')
+ * Prefixa células que iniciam com =, +, -, @, |, \t ou \r com apóstrofo (')
  * e escapa aspas duplas conforme RFC 4180.
  */
 export function sanitizeCsvCell(raw: string | number | null | undefined): string {
-  const str = String(raw ?? '').replace(/[\r\n]+/g, ' ');
-  const safe = /^[=+\-@\t\r]/.test(str.trimStart()) ? `'${str}` : str;
+  const rawStr = String(raw ?? '');
+  const str = rawStr.replace(/[\r\n]+/g, ' ');
+  const shouldPrefix =
+    /^[=+\-@|\t\r]/.test(rawStr) ||
+    /^[=+\-@|\t\r]/.test(rawStr.replace(/^ +/, '')) ||
+    /^[=+\-@|]/.test(str.trimStart());
+  const safe = shouldPrefix ? `'${str}` : str;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 

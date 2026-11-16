@@ -34,17 +34,25 @@ export default function DiarioPage() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('semana');
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
+  const [initialSearch, setInitialSearch] = useState<string | undefined>(undefined);
 
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [newTopicModalOpen, setNewTopicModalOpen] = useState(false);
 
-  // Lê parâmetros da URL caso informado via link externo ou navegação (ex: ?view=dia&date=2026-10-01)
+  // Lê parâmetros da URL caso informado via link externo ou navegação (ex: ?view=dia&date=2026-10-01 ou ?search=Asma)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const urlView = params.get('view');
       const urlDate = params.get('date');
+      const urlSearch = params.get('search');
 
+      if (urlSearch && urlSearch.trim() !== '') {
+        setInitialSearch(urlSearch);
+        if (!urlView) {
+          setViewMode('tabela');
+        }
+      }
       if (urlView && ['dia', 'semana', 'mes', 'tabela'].includes(urlView)) {
         setViewMode(urlView as ViewMode);
       }
@@ -210,7 +218,7 @@ export default function DiarioPage() {
 
           {viewMode === 'tabela' && (
             <div className="space-y-4">
-              <ReviewsTable />
+              <ReviewsTable initialSearch={initialSearch} />
             </div>
           )}
         </div>

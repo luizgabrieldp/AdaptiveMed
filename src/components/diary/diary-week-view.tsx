@@ -908,11 +908,20 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                             </h5>
 
                             {/* Linha 4: Rodapé com Ação */}
-                            <div className="flex items-center justify-between text-[10px] pt-1 border-t border-border/40">
-                              <span className="text-muted-foreground font-medium flex items-center gap-1">
-                                <MoveRight className="h-2.5 w-2.5 text-muted-foreground" />
-                                Arraste para o dia
-                              </span>
+                            <div className="flex items-center justify-between gap-2 text-[10px] pt-1.5 border-t border-border/40">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  void rescheduleReview(rev.id, todayStr);
+                                }}
+                                className="text-[10px] h-6 px-2 font-bold text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/15 shrink-0"
+                                title="Reprogramar para hoje"
+                              >
+                                Para Hoje
+                              </Button>
                               <span className="font-bold text-primary group-hover/overdue:underline flex items-center gap-0.5">
                                 Concluir →
                               </span>
@@ -985,7 +994,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                               setSelectedTopicToEdit(topic);
                               setEditModalOpen(true);
                             }}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary transition-opacity"
+                            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 text-muted-foreground hover:text-primary transition-opacity"
                             title="Editar assunto"
                           >
                             <Edit2 className="h-3 w-3" />
@@ -994,7 +1003,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                           <button
                             type="button"
                             onClick={() => deleteTopic(topic.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-opacity"
+                            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-opacity"
                             title="Remover assunto"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -1176,7 +1185,7 @@ export const DiaryWeekView: React.FC<DiaryWeekViewProps> = ({ onSelectDay }) => 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1 mb-0.5">
                           <span
-                            className={`text-[8px] font-bold px-1 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            className={`text-[8px] font-bold px-1 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                           >
                             {p.area.split(' ')[0]}
                           </span>

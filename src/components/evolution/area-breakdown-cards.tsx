@@ -8,7 +8,8 @@ import { useData } from '@/lib/store/data-context';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export const AreaBreakdownCards: React.FC = () => {
-  const { stats, areas } = useData();
+  const { stats, areas, profile } = useData();
+  const targetCutoff = profile?.target_cutoff_percentage || 80;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -20,7 +21,7 @@ export const AreaBreakdownCards: React.FC = () => {
           percentage: 0,
           topicsCount: 0,
         };
-        const isConsolidated = areaData.percentage >= 80;
+        const isConsolidated = areaData.percentage >= targetCutoff;
 
         return (
           <Card key={areaObj.id} className="border-border shadow-sm">
@@ -70,7 +71,7 @@ export const AreaBreakdownCards: React.FC = () => {
 
               <div className="flex justify-between items-center text-[11px] text-muted-foreground pt-1 border-t border-border/60">
                 <span>{areaData.topicsCount} {areaData.topicsCount === 1 ? 'assunto' : 'assuntos'}</span>
-                <span>Meta: 80%</span>
+                <span>Meta: {targetCutoff}%</span>
               </div>
             </CardContent>
           </Card>

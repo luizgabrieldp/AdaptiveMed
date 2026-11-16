@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -19,16 +19,23 @@ const EXAM_HORIZONS = [
   { id: 'two_years', label: 'Daqui a 2 Anos', yearOffset: 2, desc: 'Base sólida (Internato)' },
 ] as const;
 
+const SSR_FALLBACK_DATE = '2026-11-16';
+
 export const FsrsLiveSimulator: React.FC = () => {
   const [accuracy, setAccuracy] = useState<number>(82);
   const [cycle, setCycle] = useState<number>(1); // 0 = R0, 1..7 = R1..R7
   const [horizonId, setHorizonId] = useState<'this_year' | 'next_year' | 'two_years'>('next_year');
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [todayStr, setTodayStr] = useState<string>(SSR_FALLBACK_DATE);
 
-  const todayStr = useMemo(() => getTodayDateString(), []);
+  useEffect(() => {
+    setTodayStr(getTodayDateString());
+    setMounted(true);
+  }, []);
 
   const simulation = useMemo(() => {
     const horizon = EXAM_HORIZONS.find(h => h.id === horizonId) || EXAM_HORIZONS[1];
-    const currentYear = parseInt(todayStr.slice(0, 4), 10) || new Date().getFullYear();
+    const currentYear = parseInt(todayStr.slice(0, 4), 10) || 2026;
     const targetYear = currentYear + horizon.yearOffset;
 
     const baseStability = Math.max(1.5, Math.pow(2.1, cycle));
@@ -217,7 +224,7 @@ export const FsrsLiveSimulator: React.FC = () => {
                   <Calendar className="h-3 w-3 text-primary" /> Data Calculada
                 </p>
                 <p className="text-xs font-bold font-mono text-primary">
-                  {formatDateBR(simulation.nextDate)}
+                  {mounted ? formatDateBR(simulation.nextDate) : '--/--/----'}
                 </p>
               </div>
             </div>

@@ -7,6 +7,7 @@ import {
   type Grade,
 } from 'ts-fsrs';
 import {
+  ErrorLogCause,
   ReviewStatus,
   ReviewCalculationInput,
   ReviewCalculationResult,
@@ -16,6 +17,80 @@ import {
   FsrsCardState,
   TopicReview,
 } from '@/types/database';
+
+export const ERROR_CAUSE_WEIGHTS: Record<
+  ErrorLogCause,
+  { intervalFactor: number; extraQuestions: number; shortLabel: string }
+> = {
+  'Lacuna teórica': {
+    intervalFactor: 0.78,
+    extraQuestions: 3,
+    shortLabel: '-22% intervalo • +3 questões',
+  },
+  Interpretação: {
+    intervalFactor: 0.88,
+    extraQuestions: 2,
+    shortLabel: '-12% intervalo • +2 questões',
+  },
+  'Pegadinha da banca': {
+    intervalFactor: 0.92,
+    extraQuestions: 1,
+    shortLabel: '-8% intervalo • +1 questão',
+  },
+  Distração: {
+    intervalFactor: 0.98,
+    extraQuestions: 0,
+    shortLabel: '-2% intervalo • sem questões extras',
+  },
+};
+
+export function computeErrorCauseAdjustment(errorCauses?: ErrorLogCause[]): {
+  activeCount: number;
+  dominantCause: ErrorLogCause | null;
+  intervalMultiplier: number;
+  bonusQuestions: number;
+} {
+  if (!errorCauses || errorCauses.length === 0) {
+    return {
+      activeCount: 0,
+      dominantCause: null,
+      intervalMultiplier: 1,
+      bonusQuestions: 0,
+    };
+  }
+
+  let prod = 1;
+  let totalExtra = 0;
+  let dominantCause: ErrorLogCause | null = null;
+  let lowestFactor = 1.01;
+
+  for (const cause of errorCauses) {
+    const cfg = ERROR_CAUSE_WEIGHTS[cause];
+    if (!cfg) continue;
+    prod *= cfg.intervalFactor;
+    totalExtra += cfg.extraQuestions;
+    if (cfg.intervalFactor < lowestFactor) {
+      lowestFactor = cfg.intervalFactor;
+      dominantCause = cause;
+    }
+  }
+
+  if (dominantCause === null) {
+    return {
+      activeCount: 0,
+      dominantCause: null,
+      intervalMultiplier: 1,
+      bonusQuestions: 0,
+    };
+  }
+
+  return {
+    activeCount: errorCauses.filter(c => Boolean(ERROR_CAUSE_WEIGHTS[c])).length,
+    dominantCause,
+    intervalMultiplier: Math.max(0.55, Number(prod.toFixed(3))),
+    bonusQuestions: Math.min(8, totalExtra),
+  };
+}
 
 /**
  * Normaliza o valor de porcentagem para uma escala de 0 a 100.
@@ -285,18 +360,35 @@ export function calculateNextReview(input: ReviewCalculationInput): ReviewCalcul
     nextIntervalDays = Math.min(maxInterval, Math.max(3, nextIntervalDays));
   }
 
+  const adj = computeErrorCauseAdjustment(input.errorCauses);
+  let recommendedQuestions = volumeData.volume;
+  let pedagogicalNote = volumeData.diagnosis.pedagogicalNote;
+
+  if (adj.activeCount > 0) {
+    if (rating !== Rating.Again) {
+      const minDays = input.errorCauses?.includes('Lacuna teórica') ? 2 : 3;
+      nextIntervalDays = Math.min(
+        maxInterval,
+        Math.max(minDays, Math.round(nextIntervalDays * adj.intervalMultiplier))
+      );
+    }
+    recommendedQuestions = Math.min(30, volumeData.volume + adj.bonusQuestions);
+    pedagogicalNote = `${pedagogicalNote} Peso do Caderno de Erros aplicado (${adj.activeCount} ativo(s), destaque: ${adj.dominantCause}).`;
+  }
+
   // review_number é estritamente monotônico (desacoplado da estabilidade FSRS para evitar colisão em lapses)
   const nextCycle = currentCycle === 0 ? 1 : Math.min(8, currentCycle + 1);
 
   return {
     nextIntervalDays,
     nextCycle,
-    recommendedQuestions: volumeData.volume,
+    recommendedQuestions,
     diagnosis: volumeData.diagnosis.title,
     diagnosisBadge: volumeData.diagnosis.badge,
-    pedagogicalNote: volumeData.diagnosis.pedagogicalNote,
+    pedagogicalNote,
     fsrsState: serializeFsrsCard(nextCard),
     fsrsRating: rating,
+    ...(adj.activeCount > 0 ? { errorWeightApplied: adj } : {}),
   };
 }
 

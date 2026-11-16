@@ -84,6 +84,7 @@ interface FocusTimerContextType {
   applyBoost: (boostType: ForestBoostType, targetSlotIndex?: 0 | 1 | 2) => Promise<void>;
   toggleSound: () => void;
   setFloatingExpanded: (expanded: boolean) => void;
+  focusOnTopic: (area: string, topicId?: string | null, autoStart?: boolean) => void;
   start: () => void;
   pause: () => void;
   finishAndSave: () => Promise<void>;
@@ -585,6 +586,121 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setState(prev => ({ ...prev, isFloatingExpanded: expanded }));
   }, []);
 
+  const focusOnTopic = useCallback(
+    (area: string, topicId?: string | null, autoStart = true) => {
+      const foundTopic = topicId ? topics.find(t => t.id === topicId) : undefined;
+      const resolvedTopicId = foundTopic
+        ? foundTopic.id
+        : topics.length === 0
+        ? topicId || null
+        : null;
+      const rawArea = foundTopic?.area || area || defaultArea;
+      const resolvedArea =
+        areas.length === 0 || areas.some(a => a.name === rawArea) ? rawArea : defaultArea;
+      const resolvedSubject = foundTopic?.subject_name || null;
+
+      let targetSlotIndex: 0 | 1 | 2 = activeSlotIndex;
+      if (activeSlot.area !== resolvedArea && activeSlot.accumulatedSeconds > 0) {
+        const sameAreaIdx = forestGarden.slots.findIndex(s => s.area === resolvedArea);
+        if (sameAreaIdx === 0 || sameAreaIdx === 1 || sameAreaIdx === 2) {
+          targetSlotIndex = sameAreaIdx;
+        } else {
+          const emptyIdx = forestGarden.slots.findIndex(s => s.accumulatedSeconds === 0);
+          if (emptyIdx === 0 || emptyIdx === 1 || emptyIdx === 2) {
+            targetSlotIndex = emptyIdx;
+          }
+        }
+      }
+
+      const nextSlots = forestGarden.slots.map((s, idx) =>
+        idx === targetSlotIndex
+          ? {
+              ...s,
+              area: resolvedArea,
+              topicId: resolvedTopicId,
+              subjectName: resolvedSubject,
+            }
+          : s
+      ) as [NurserySlotState, NurserySlotState, NurserySlotState];
+
+      void updateForestGarden({
+        ...forestGarden,
+        activeSlotIndex: targetSlotIndex,
+        slots: nextSlots,
+      });
+
+      const now = Date.now();
+      const shouldStart = state.status === 'idle' && autoStart !== false;
+      if (shouldStart) {
+        setNowMs(now);
+      }
+
+      setState(prev => {
+        const base = {
+          ...prev,
+          selectedArea: resolvedArea,
+          selectedTopicId: resolvedTopicId,
+          isFloatingExpanded: true,
+        };
+        if (prev.status === 'idle') {
+          if (autoStart !== false) {
+            return {
+              ...base,
+              phase: 'focus' as TimerPhase,
+              status: 'running' as TimerRunStatus,
+              startedAtMs: now,
+              accumulatedSeconds: 0,
+              sessionStartIso: new Date(now).toISOString(),
+            };
+          }
+          return {
+            ...base,
+            phase: 'focus' as TimerPhase,
+            startedAtMs: null,
+            accumulatedSeconds: 0,
+            sessionStartIso: null,
+          };
+        }
+        return base;
+      });
+
+      const labelSuffix = resolvedSubject ? ` (${resolvedSubject})` : ` (${resolvedArea})`;
+      if (state.status === 'running') {
+        setLastNotice({
+          type: 'info',
+          message:
+            state.phase === 'break'
+              ? `Foco vinculado ao assunto!${labelSuffix} Intervalo em andamento — valerá no próximo bloco.`
+              : `Foco vinculado ao assunto!${labelSuffix} Sessão em andamento atualizada.`,
+        });
+      } else if (state.status === 'paused') {
+        setLastNotice({
+          type: 'info',
+          message:
+            state.phase === 'break'
+              ? `Foco vinculado ao assunto!${labelSuffix} Intervalo pausado — retome ou pule o intervalo para focar.`
+              : `Foco vinculado ao assunto!${labelSuffix} Relógio pausado — clique em Retomar para continuar.`,
+        });
+      } else {
+        setLastNotice({
+          type: 'info',
+          message: `Foco vinculado ao assunto!${labelSuffix}`,
+        });
+      }
+    },
+    [
+      areas,
+      topics,
+      defaultArea,
+      activeSlotIndex,
+      activeSlot,
+      forestGarden,
+      state.status,
+      state.phase,
+      updateForestGarden,
+    ]
+  );
+
   const start = useCallback(() => {
     const now = Date.now();
     setLastNotice(null);
@@ -750,6 +866,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         applyBoost,
         toggleSound,
         setFloatingExpanded,
+        focusOnTopic,
         start,
         pause,
         finishAndSave,

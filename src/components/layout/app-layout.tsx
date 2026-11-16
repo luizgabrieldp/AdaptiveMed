@@ -13,27 +13,31 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const router = useRouter();
   const { user, profile, isLoading } = useData();
 
+  const isContaResetAccess =
+    typeof window !== 'undefined' &&
+    window.location.pathname.startsWith('/conta') &&
+    new URLSearchParams(window.location.search).get('reset') === 'true';
+
+  const hasActivePlan = Boolean(
+    profile?.is_subscribed ||
+      profile?.subscription_status === 'active' ||
+      profile?.subscription_status === 'trial'
+  );
+
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
         router.replace('/login');
         return;
       }
-      const hasActivePlan = Boolean(
-        profile?.is_subscribed || profile?.subscription_status === 'active'
-      );
-      if (!hasActivePlan) {
+      if (!hasActivePlan && !isContaResetAccess) {
         router.replace('/pagamento');
       }
     }
-  }, [user, profile, isLoading, router]);
+  }, [user, hasActivePlan, isContaResetAccess, isLoading, router]);
 
   // Enquanto carrega ou se não tiver permissão, bloqueia a renderização do layout
-  if (
-    isLoading ||
-    !user ||
-    (!profile?.is_subscribed && profile?.subscription_status !== 'active')
-  ) {
+  if (isLoading || !user || (!hasActivePlan && !isContaResetAccess)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">

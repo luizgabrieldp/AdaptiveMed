@@ -6,6 +6,8 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/types/**/*.{js,ts,jsx,tsx}',
+    './src/lib/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
@@ -14,39 +16,39 @@ const config: Config = {
         mono: ['var(--font-mono)', 'monospace'],
       },
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
+        background: 'rgb(var(--background-rgb) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground-rgb) / <alpha-value>)',
         card: {
-          DEFAULT: 'var(--card)',
-          foreground: 'var(--card-foreground)',
+          DEFAULT: 'rgb(var(--card-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--card-foreground-rgb) / <alpha-value>)',
         },
         popover: {
-          DEFAULT: 'var(--popover)',
-          foreground: 'var(--popover-foreground)',
+          DEFAULT: 'rgb(var(--popover-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--popover-foreground-rgb) / <alpha-value>)',
         },
         primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
+          DEFAULT: 'rgb(var(--primary-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--primary-foreground-rgb) / <alpha-value>)',
         },
         secondary: {
-          DEFAULT: 'var(--secondary)',
-          foreground: 'var(--secondary-foreground)',
+          DEFAULT: 'rgb(var(--secondary-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--secondary-foreground-rgb) / <alpha-value>)',
         },
         muted: {
-          DEFAULT: 'var(--muted)',
-          foreground: 'var(--muted-foreground)',
+          DEFAULT: 'rgb(var(--muted-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--muted-foreground-rgb) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--accent-foreground)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--accent-foreground-rgb) / <alpha-value>)',
         },
         destructive: {
-          DEFAULT: 'var(--destructive)',
-          foreground: 'var(--destructive-foreground)',
+          DEFAULT: 'rgb(var(--destructive-rgb) / <alpha-value>)',
+          foreground: 'rgb(var(--destructive-foreground-rgb) / <alpha-value>)',
         },
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
+        border: 'rgb(var(--border-rgb) / <alpha-value>)',
+        input: 'rgb(var(--input-rgb) / <alpha-value>)',
+        ring: 'rgb(var(--ring-rgb) / <alpha-value>)',
         // Áreas Médicas de Residência
         area: {
           clinica: '#3B82F6',

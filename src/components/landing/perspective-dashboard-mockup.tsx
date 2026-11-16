@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import {
   BrainCircuit,
@@ -62,25 +62,32 @@ const CARD_TONE: Record<string, string> = {
 export const PerspectiveDashboardMockup: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const shouldReduceMotion = mounted && Boolean(prefersReducedMotion);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start end', 'center center'],
   });
 
-  const rotateX = useTransform(scrollYProgress, [0, 1], prefersReducedMotion ? [0, 0] : [14, 0]);
-  const scale = useTransform(scrollYProgress, [0, 1], prefersReducedMotion ? [1, 1] : [0.94, 1]);
-  const yFloatLeft = useTransform(scrollYProgress, [0, 1], prefersReducedMotion ? [0, 0] : [26, -6]);
-  const yFloatRight = useTransform(scrollYProgress, [0, 1], prefersReducedMotion ? [0, 0] : [-20, 8]);
+  const rotateX = useTransform(scrollYProgress, [0, 1], [14, 0]);
+  const scale = useTransform(scrollYProgress, [0, 1], [0.94, 1]);
+  const yFloatLeft = useTransform(scrollYProgress, [0, 1], [6, -6]);
+  const yFloatRight = useTransform(scrollYProgress, [0, 1], [-6, 6]);
 
   return (
-    <div ref={containerRef} className="relative pt-6 pb-8 [perspective:1400px]">
+    <div ref={containerRef} className="relative pt-6 lg:pt-20 pb-8 lg:pb-16 [perspective:1400px]">
       {/* Cards Flutuantes Satélites com Profundidade */}
       <motion.div
-        style={{ y: yFloatLeft }}
-        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-emerald-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-emerald-500/10 absolute -left-6 top-16 z-20"
+        style={shouldReduceMotion ? undefined : { y: yFloatLeft }}
+        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-emerald-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-emerald-500/10 absolute left-6 top-0 z-20"
       >
-        <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-500">
+        <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
           <TrendingUp className="h-4 w-4" />
         </div>
         <div>
@@ -90,10 +97,10 @@ export const PerspectiveDashboardMockup: React.FC = () => {
       </motion.div>
 
       <motion.div
-        style={{ y: yFloatRight }}
-        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-rose-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-rose-500/10 absolute -right-5 bottom-14 z-20"
+        style={shouldReduceMotion ? undefined : { y: yFloatRight }}
+        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-rose-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-rose-500/10 absolute right-6 bottom-0 z-20"
       >
-        <div className="p-2 rounded-xl bg-rose-500/15 text-rose-500">
+        <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
           <RotateCcw className="h-4 w-4" />
         </div>
         <div>
@@ -104,7 +111,7 @@ export const PerspectiveDashboardMockup: React.FC = () => {
 
       {/* Janela Principal em Perspectiva 3D */}
       <motion.div
-        style={{ rotateX, scale }}
+        style={shouldReduceMotion ? undefined : { rotateX, scale }}
         className="rounded-3xl border border-border/80 bg-card/95 backdrop-blur-xl shadow-[0_32px_90px_-20px_rgba(37,99,235,0.28)] overflow-hidden"
       >
         {/* Top Bar Window Chrome */}

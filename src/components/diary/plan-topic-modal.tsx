@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,20 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
   const [tagInput, setTagInput] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const validDefaultArea =
+      defaultArea && (areas.length === 0 || areas.some(a => a.name === defaultArea))
+        ? defaultArea
+        : areas[0]?.name || defaultArea || 'Clínica Médica';
+    setArea(validDefaultArea);
+    setSubjectName(defaultSubject || '');
+    setHasSpecificDate(Boolean(defaultDate));
+    setPlannedDate(defaultDate || getTodayDateString());
+    setTagInput('');
+    setNotes('');
+  }, [open, defaultArea, defaultSubject, defaultDate, areas]);
 
   // Sugestões de assuntos prevalentes para preenchimento rápido (somente os ainda não estudados)
   const suggestedTopics = React.useMemo(() => {
@@ -138,7 +152,7 @@ export const PlanTopicModal: React.FC<PlanTopicModalProps> = ({
             {suggestedTopics.length > 0 && (
               <div className="pt-1 flex flex-wrap items-center gap-1">
                 <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                  <Sparkles className="h-2.5 w-2.5 text-amber-400" /> Sugestões da Banca:
+                  <Sparkles className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" /> Sugestões da Banca:
                 </span>
                 {suggestedTopics.map(p => (
                   <button

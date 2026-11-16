@@ -78,7 +78,7 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
       <DialogContent className="max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-400 mb-1">
+            <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
               <Building2 className="h-4 w-4" />
               <span>Prova na Íntegra por Instituição</span>
             </div>
@@ -134,7 +134,7 @@ export const NewInstitutionModal: React.FC<NewInstitutionModalProps> = ({
                   placeholder="Ex: 80.0"
                   value={scorePercentage}
                   onChange={e => setScorePercentage(e.target.value)}
-                  className="font-bold text-base text-emerald-400 placeholder:text-muted-foreground/35"
+                  className="font-bold text-base text-emerald-600 dark:text-emerald-400 placeholder:text-muted-foreground/35"
                 />
               </div>
             </div>

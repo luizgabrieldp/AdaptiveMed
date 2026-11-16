@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Table,
   TableHeader,
@@ -40,12 +40,22 @@ import {
   BookOpen,
 } from 'lucide-react';
 
-export const ReviewsTable: React.FC = () => {
+interface ReviewsTableProps {
+  initialSearch?: string;
+}
+
+export const ReviewsTable: React.FC<ReviewsTableProps> = ({ initialSearch }) => {
   const { topics, reviews, deleteTopic, areas, allTags } = useData();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch ?? '');
   const [selectedArea, setSelectedArea] = useState<string>('TODAS');
   const [selectedTag, setSelectedTag] = useState<string>('TODAS');
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
+
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setSearchTerm(initialSearch);
+    }
+  }, [initialSearch]);
 
   // Controle dos modais e drawer
   const [drawerTopic, setDrawerTopic] = useState<StudyTopic | null>(null);
@@ -223,6 +233,7 @@ export const ReviewsTable: React.FC = () => {
             <option value="REVISAR HOJE">Revisar Hoje</option>
             <option value="PROGRAMADO">Programados</option>
             <option value="CONCLUÍDO">Concluídos</option>
+            <option value="PENDENTE DE ESTUDO">A Estudar (Planejados)</option>
           </select>
         </div>
       </div>
@@ -282,7 +293,7 @@ export const ReviewsTable: React.FC = () => {
                         </div>
                       )}
                       {topic.is_planned ? (
-                        <p className="text-[11px] text-amber-400 font-medium">
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
                           {topic.planned_date ? `Estudo previsto para ${formatDateBR(topic.planned_date)}` : 'Aguardando primeiro contato'}
                         </p>
                       ) : (
@@ -297,7 +308,7 @@ export const ReviewsTable: React.FC = () => {
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
                     {topic.is_planned ? (
                       <>
-                        <p className="text-xs font-semibold text-amber-400">
+                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
                           {topic.planned_date ? formatDateBR(topic.planned_date) : '-'}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
@@ -319,7 +330,7 @@ export const ReviewsTable: React.FC = () => {
                   {/* Ciclo Ativo */}
                   <TableCell className="text-center" onClick={() => handleOpenDrawer(topic)}>
                     {topic.is_planned ? (
-                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-bold text-[11px] border border-amber-500/20">
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold text-[11px] border border-amber-500/20">
                         R0 (Planejado)
                       </span>
                     ) : activeReview ? (
@@ -327,11 +338,11 @@ export const ReviewsTable: React.FC = () => {
                         R{activeReview.review_number}
                       </span>
                     ) : lastReview && lastReview.review_number >= 8 && lastReview.completed_date ? (
-                      <span className="text-xs text-emerald-400 font-semibold">R8 Final</span>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">R8 Final</span>
                     ) : lastReview && lastReview.completed_date ? (
-                      <span className="text-xs text-blue-400 font-semibold">R{lastReview.review_number} Feita</span>
+                      <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">R{lastReview.review_number} Feita</span>
                     ) : (
-                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold text-[11px] border border-blue-500/20">
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[11px] border border-blue-500/20">
                         R1 Pendente
                       </span>
                     )}

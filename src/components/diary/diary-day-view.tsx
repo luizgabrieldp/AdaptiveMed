@@ -18,6 +18,7 @@ import { RecordPlannedStudyModal } from './record-planned-study-modal';
 import { PlanTopicModal } from './plan-topic-modal';
 import { EditPlannedTopicModal } from './edit-planned-topic-modal';
 import { ReviewsTable } from '@/components/reviews/reviews-table';
+import { useFocusTimer } from '@/components/focus/focus-timer-context';
 import {
   Calendar,
   ChevronLeft,
@@ -38,6 +39,7 @@ import {
   Layers,
   ShieldAlert,
   Edit2,
+  Timer,
 } from 'lucide-react';
 
 interface DiaryDayViewProps {
@@ -55,6 +57,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
     updatePlannedTopicDate,
     rescheduleReview,
   } = useData();
+  const { focusOnTopic } = useFocusTimer();
 
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<TopicReview | null>(null);
@@ -154,7 +157,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -188,13 +191,13 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
             type="date"
             value={selectedDate}
             onChange={e => e.target.value && onDateChange(e.target.value)}
-            className="h-8 text-xs w-36 ml-1"
+            className="h-8 text-xs w-36"
           />
 
           <Button
             size="sm"
             onClick={() => setPlanModalOpen(true)}
-            className="h-8 text-xs font-bold gap-1 shadow-sm ml-2"
+            className="h-8 text-xs font-bold gap-1 shadow-sm"
           >
             <Plus className="h-3.5 w-3.5" /> Programar Estudo
           </Button>
@@ -210,7 +213,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
             <CardHeader className="pb-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
+                  <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
                     <BookOpen className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-bold">Estudos do Dia (R0)</CardTitle>
@@ -326,7 +329,19 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                           <p className="font-bold text-xs text-foreground truncate">{t.subject_name}</p>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-start sm:self-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => focusOnTopic(t.area, t.id, true)}
+                            className="h-7 px-2 text-xs font-bold gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
+                            title="Iniciar foco neste assunto"
+                          >
+                            <Timer className="h-3.5 w-3.5" />
+                            Focar
+                          </Button>
+
                           <Button
                             type="button"
                             size="sm"
@@ -347,7 +362,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                             size="sm"
                             onClick={() => updatePlannedTopicDate(t.id, null)}
                             title="Remover data e manter na Meta da Semana em aberto"
-                            className="text-[11px] h-7 px-2 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10"
+                            className="text-[11px] h-7 px-2 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10"
                           >
                             <X className="h-3.5 w-3.5 mr-1" /> Desagendar
                           </Button>
@@ -376,7 +391,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
             <CardHeader className="pb-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-400">
+                  <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
                     <CalendarCheck2 className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-bold">Revisões Agendadas (Ciclos R1 a R8)</CardTitle>
@@ -419,16 +434,16 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         <div className="flex items-center gap-1.5">
                           {topic && style && (
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                             >
                               {topic.area}
                             </span>
                           )}
-                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.2 rounded">
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                             R{review.review_number}
                           </span>
                           {review.recommended_questions && (
-                            <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.2 rounded font-mono tabular-nums">
+                            <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded font-mono tabular-nums">
                               {review.recommended_questions} Qs
                             </span>
                           )}
@@ -445,7 +460,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         </p>
 
                         {isDone && review.questions_done && (
-                          <p className="text-[10px] text-emerald-400 font-semibold">
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
                             {review.questions_correct}/{review.questions_done} questões ({review.percentage}%)
                           </p>
                         )}
@@ -472,17 +487,36 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                           </span>
                         </div>
                       ) : (
-                        <Button
-                          size="sm"
-                          onClick={e => {
-                            e.stopPropagation();
-                            setSelectedReview(review);
-                            setCompletionModalOpen(true);
-                          }}
-                          className="text-xs h-7 font-bold gap-1 shrink-0 self-start sm:self-center"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
-                        </Button>
+                        <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={e => {
+                              e.stopPropagation();
+                              focusOnTopic(
+                                topic?.area || areas[0]?.name || 'Clínica Médica',
+                                topic?.id || review.topic_id,
+                                true
+                              );
+                            }}
+                            className="text-xs h-7 px-2 font-bold gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
+                            title="Iniciar foco neste assunto"
+                          >
+                            <Timer className="h-3.5 w-3.5" /> Focar
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedReview(review);
+                              setCompletionModalOpen(true);
+                            }}
+                            className="text-xs h-7 font-bold gap-1 shrink-0"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
+                          </Button>
+                        </div>
                       )}
                     </div>
                   );
@@ -530,7 +564,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                           >
                             {t.area}
                           </span>
@@ -539,7 +573,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                               Em {formatDateBR(t.planned_date)}
                             </span>
                           ) : (
-                            <span className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 px-1 rounded">
+                            <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1 rounded">
                               Sem dia fixo
                             </span>
                           )}
@@ -570,7 +604,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
             <CardHeader className="pb-3 border-b border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-400">
+                  <div className="p-1.5 rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400">
                     <AlertTriangle className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-bold">Revisões em Atraso</CardTitle>
@@ -586,7 +620,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
 
             <CardContent className="p-3 space-y-2.5 max-h-[460px] overflow-y-auto">
               {overdueReviews.length === 0 ? (
-                <div className="py-6 text-center text-xs text-emerald-400 font-medium">
+                <div className="py-6 text-center text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                   Nenhuma revisão em atraso pendente.
                 </div>
               ) : (
@@ -594,8 +628,8 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                   {/* Fila Prioritária de Atrasos (respeitando a cota anti-sobrecarga) */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
-                      <span className="font-semibold text-rose-300 flex items-center gap-1">
-                        <Flame className="h-3 w-3 text-rose-400" />
+                      <span className="font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1">
+                        <Flame className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                         Fila Prioritária de Hoje ({priorityOverdueReviews.length})
                       </span>
                       {backlogOverdueReviews.length > 0 && (
@@ -617,7 +651,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                             <div className="flex items-center gap-1.5">
                               {topic && style && (
                                 <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                                 >
                                   {topic.area}
                                 </span>
@@ -625,7 +659,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                               <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1 rounded">
                                 R{review.review_number}
                               </span>
-                              <span className="text-[9px] font-bold text-rose-400">
+                              <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">
                                 {statusInfo.daysDiff}d atraso
                               </span>
                             </div>
@@ -638,7 +672,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                             size="sm"
                             variant="outline"
                             onClick={() => rescheduleReview(review.id, selectedDate)}
-                            className="text-[11px] h-7 px-2 font-bold shrink-0 text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
+                            className="text-[11px] h-7 px-2 font-bold shrink-0 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/20"
                             title="Reprogramar para este dia"
                           >
                             Reprogramar
@@ -657,9 +691,9 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         className="w-full p-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/15 transition-colors flex items-center justify-between text-left cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-amber-400 shrink-0" />
+                          <Layers className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                           <div>
-                            <p className="text-xs font-bold text-amber-300">
+                            <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
                               Backlog de Atrasos (+{backlogOverdueReviews.length})
                             </p>
                             <p className="text-[10px] text-muted-foreground">
@@ -669,9 +703,9 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                         </div>
 
                         {isBacklogExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-amber-400 shrink-0" />
+                          <ChevronUp className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-amber-400 shrink-0" />
+                          <ChevronDown className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         )}
                       </button>
 
@@ -693,7 +727,7 @@ export const DiaryDayView: React.FC<DiaryDayViewProps> = ({ selectedDate, onDate
                                   <div className="flex items-center gap-1.5">
                                     {topic && style && (
                                       <span
-                                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${style.bg} ${style.text} ${style.border}`}
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${style.bg} ${style.text} ${style.border}`}
                                       >
                                         {topic.area}
                                       </span>

@@ -79,7 +79,10 @@ export default function LoginPage() {
           .single()
           .then(({ data: prof }) => {
             const hasActivePlan = Boolean(
-              prof && (prof.is_subscribed || prof.subscription_status === 'active')
+              prof &&
+                (prof.is_subscribed ||
+                  prof.subscription_status === 'active' ||
+                  prof.subscription_status === 'trial')
             );
 
             if (!hasActivePlan) {
@@ -88,9 +91,9 @@ export default function LoginPage() {
             }
 
             if (prof && prof.onboarding_completed) {
-              router.replace('/dashboard');
+              window.location.replace('/dashboard');
             } else {
-              router.replace('/onboarding');
+              window.location.replace('/onboarding');
             }
           });
       }
@@ -108,7 +111,10 @@ export default function LoginPage() {
           .single()
           .then(({ data: prof }) => {
             const hasActivePlan = Boolean(
-              prof && (prof.is_subscribed || prof.subscription_status === 'active')
+              prof &&
+                (prof.is_subscribed ||
+                  prof.subscription_status === 'active' ||
+                  prof.subscription_status === 'trial')
             );
 
             if (!hasActivePlan) {
@@ -117,9 +123,9 @@ export default function LoginPage() {
             }
 
             if (prof && prof.onboarding_completed) {
-              router.replace('/dashboard');
+              window.location.replace('/dashboard');
             } else {
-              router.replace('/onboarding');
+              window.location.replace('/onboarding');
             }
           });
       }
@@ -170,22 +176,24 @@ export default function LoginPage() {
           .single();
 
         const hasActivePlan = Boolean(
-          prof && (prof.is_subscribed || prof.subscription_status === 'active')
+          prof &&
+            (prof.is_subscribed ||
+              prof.subscription_status === 'active' ||
+              prof.subscription_status === 'trial')
         );
 
         // Se a conta não tiver assinatura paga ativa, vai direto para a tela de pagamento já autenticado
         if (!hasActivePlan) {
           setIsLoading(false);
-          router.push(planParam ? `/pagamento?plan=${planParam}` : '/pagamento');
+          window.location.assign(planParam ? `/pagamento?plan=${planParam}` : '/pagamento');
           return;
         }
 
         if (prof && prof.onboarding_completed) {
-          router.push('/dashboard');
+          window.location.assign('/dashboard');
         } else {
-          router.push('/onboarding');
+          window.location.assign('/onboarding');
         }
-        router.refresh();
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro inesperado ao efetuar login.');
@@ -296,12 +304,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand */}
         <div className="text-center space-y-2">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-xl shadow-blue-500/25 mb-1">
-            <Stethoscope className="h-7 w-7 text-white stroke-[2.2]" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-            AdaptiveMed
-          </h1>
+          <Link href="/" className="inline-flex flex-col items-center group">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-xl shadow-blue-500/25 mb-2 group-hover:scale-105 transition-transform">
+              <Stethoscope className="h-7 w-7 text-white stroke-[2.2]" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground group-hover:text-primary transition-colors">
+              AdaptiveMed
+            </h1>
+          </Link>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Repetição espaçada adaptativa para candidatos à Residência Médica
           </p>

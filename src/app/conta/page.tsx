@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -82,6 +82,7 @@ export default function ContaPage() {
   const {
     profile,
     user,
+    isLoading,
     isDemoMode,
     signOut,
     streakConfig,
@@ -107,6 +108,28 @@ export default function ContaPage() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordNotice, setPasswordNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [isResetFlow, setIsResetFlow] = useState(false);
+  const securityCardRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledResetRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('reset') === 'true') {
+        setIsResetFlow(true);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isResetFlow || hasScrolledResetRef.current) return;
+    if (!securityCardRef.current) return;
+    hasScrolledResetRef.current = true;
+    const timer = window.setTimeout(() => {
+      securityCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [isResetFlow, isLoading, profile, user]);
 
   // Estados da Regra da Ofensiva (Streak)
   const currentStreakConfig = streakConfig || profile?.streak_config || DEFAULT_STREAK_CONFIG;
@@ -408,7 +431,7 @@ export default function ContaPage() {
               <div>
                 {isDemoMode ? (
                   <Badge variant="secondary" className="gap-1 font-semibold text-xs">
-                    <Sparkles className="h-3 w-3 text-blue-400" /> Modo Demonstração
+                    <Sparkles className="h-3 w-3 text-blue-600 dark:text-blue-400" /> Modo Demonstração
                   </Badge>
                 ) : subData?.cancelAtPeriodEnd ? (
                   <Badge variant="atrasado" className="gap-1 font-semibold text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
@@ -949,7 +972,8 @@ export default function ContaPage() {
         </Card>
 
         {/* CARD: SEGURANÇA & MÉTODOS DE ACESSO */}
-        <Card className="border-border shadow-sm">
+        <div ref={securityCardRef} id="seguranca">
+          <Card className={`shadow-sm transition-all ${isResetFlow ? 'border-primary ring-2 ring-primary/30' : 'border-border'}`}>
           <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex items-center space-x-2.5">
               <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
@@ -965,6 +989,17 @@ export default function ContaPage() {
           </CardHeader>
 
           <CardContent className="p-5 space-y-6">
+            {isResetFlow && (
+              <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-900 dark:text-blue-200 text-xs flex items-start gap-2.5 animate-fade-in">
+                <KeyRound className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold">Redefinição de senha confirmada</p>
+                  <p className="leading-relaxed">
+                    Digite sua nova senha abaixo e confirme para concluir a atualização de acesso da sua conta.
+                  </p>
+                </div>
+              </div>
+            )}
             {/* Vínculo com Conta Google */}
             <div className="p-4 rounded-xl bg-muted/40 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -1087,7 +1122,8 @@ export default function ContaPage() {
               </div>
             </form>
           </CardContent>
-        </Card>
+          </Card>
+        </div>
 
         {/* CARD DE BACKUP & PORTABILIDADE DE DADOS */}
         <Card className="border-border shadow-sm">

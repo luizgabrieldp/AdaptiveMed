@@ -1,4 +1,12 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV !== 'production';
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  ...(isDev ? ["'unsafe-eval'"] : []),
+  'https://js.stripe.com',
+].join(' ');
+
 const securityHeaders = [
   {
     key: 'X-Frame-Options',
@@ -24,15 +32,16 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+      `script-src ${scriptSrc}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
+      "worker-src 'self' blob:",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com",
       "frame-src 'self' https://js.stripe.com https://checkout.stripe.com https://billing.stripe.com",
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self' https://checkout.stripe.com",
+      "form-action 'self' https://checkout.stripe.com https://billing.stripe.com https://*.supabase.co https://accounts.google.com",
       "frame-ancestors 'none'",
     ].join('; '),
   },

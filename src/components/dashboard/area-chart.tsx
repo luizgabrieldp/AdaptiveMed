@@ -90,14 +90,14 @@ export const AreaPerformanceChart: React.FC = () => {
                   stroke="#64748B"
                   fontSize={12}
                   tickLine={false}
-                  axisLine={{ stroke: '#334155' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                 />
                 <YAxis
                   domain={[0, 100]}
                   stroke="#64748B"
                   fontSize={11}
                   tickLine={false}
-                  axisLine={{ stroke: '#334155' }}
+                  axisLine={{ stroke: 'var(--border)' }}
                   tickFormatter={val => `${val}%`}
                 />
                 <Tooltip
@@ -107,7 +107,7 @@ export const AreaPerformanceChart: React.FC = () => {
                       return (
                         <div className="rounded-xl border border-border bg-card p-3 shadow-xl text-xs space-y-1">
                           <p className="font-bold text-foreground">{data.area}</p>
-                          <p className="text-emerald-400 font-semibold">
+                          <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
                             Acurácia: {data.percentage}%
                           </p>
                           <p className="text-muted-foreground">
@@ -142,16 +142,16 @@ export const AreaPerformanceChart: React.FC = () => {
               </BarChart>
             ) : (
               <RadarChart data={chartData} margin={{ top: 10, right: 20, left: 20, bottom: 10 }}>
-                <PolarGrid stroke="#334155" />
+                <PolarGrid stroke="var(--border)" />
                 <PolarAngleAxis
                   dataKey="shortName"
-                  stroke="#94A3B8"
+                  stroke="var(--muted-foreground)"
                   fontSize={11}
-                  tick={{ fill: '#94A3B8' }}
+                  tick={{ fill: 'var(--muted-foreground)' }}
                 />
                 <PolarRadiusAxis
                   domain={[0, 100]}
-                  stroke="#475569"
+                  stroke="var(--border)"
                   fontSize={10}
                   tickFormatter={val => `${val}%`}
                 />
@@ -169,7 +169,7 @@ export const AreaPerformanceChart: React.FC = () => {
                       return (
                         <div className="rounded-xl border border-border bg-card p-3 shadow-xl text-xs">
                           <p className="font-bold text-foreground">{data.area}</p>
-                          <p className="text-blue-400 font-semibold mt-1">
+                          <p className="text-blue-600 dark:text-blue-400 font-semibold mt-1">
                             Acurácia: {data.percentage}%
                           </p>
                         </div>

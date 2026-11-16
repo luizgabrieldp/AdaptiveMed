@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +9,6 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { Stethoscope, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function SignupPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +18,6 @@ export default function SignupPage() {
   const [socialLoading, setSocialLoading] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [sessionVerified, setSessionVerified] = useState<boolean>(false);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -32,17 +29,6 @@ export default function SignupPage() {
       }
       if (sId) {
         setSessionId(sId);
-        fetch(`/api/checkout?session_id=${encodeURIComponent(sId)}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.valid) {
-              setSessionVerified(true);
-              if (data.customer_email) {
-                setEmail(data.customer_email);
-              }
-            }
-          })
-          .catch(() => {});
       }
     }
   }, []);
@@ -78,25 +64,27 @@ export default function SignupPage() {
         return;
       }
 
-      if (data.user && (sessionVerified || sessionId)) {
-        // Ativação imediata da assinatura no perfil do usuário
-        await supabase
-          .from('profiles')
-          .update({
-            is_subscribed: true,
-            subscription_status: 'active',
-          })
-          .eq('id', data.user.id);
-      }
-
       // Se logado diretamente (confirmação desativada ou automática)
       if (data.session) {
-        if (sessionVerified || sessionId) {
-          router.push('/onboarding');
+        if (sessionId) {
+          let checkoutValid = false;
+          try {
+            const res = await fetch('/api/checkout?session_id=' + encodeURIComponent(sessionId));
+            const checkoutData = await res.json().catch(() => null);
+            checkoutValid = Boolean(res.ok && checkoutData?.valid);
+          } catch {
+            checkoutValid = false;
+          }
+
+          if (checkoutValid) {
+            window.location.assign('/onboarding');
+          } else {
+            window.location.assign(`/pagamento?plan=${planId || 'annual'}`);
+          }
         } else {
-          router.push(`/pagamento?plan=${planId || 'annual'}`);
+          window.location.assign(`/pagamento?plan=${planId || 'annual'}`);
         }
-        router.refresh();
+        return;
       } else {
         setSuccessMessage(
           'Conta criada com sucesso! Você já pode efetuar o login para ativar seu plano.'
@@ -163,12 +151,14 @@ export default function SignupPage() {
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         <div className="text-center space-y-2">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-xl shadow-blue-500/25 mb-1">
-            <Stethoscope className="h-7 w-7 text-white stroke-[2.2]" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-            AdaptiveMed
-          </h1>
+          <Link href="/" className="inline-flex flex-col items-center group">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 shadow-xl shadow-blue-500/25 mb-2 group-hover:scale-105 transition-transform">
+              <Stethoscope className="h-7 w-7 text-white stroke-[2.2]" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground group-hover:text-primary transition-colors">
+              AdaptiveMed
+            </h1>
+          </Link>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Cadastre-se para iniciar seu cronograma adaptativo de residência médica
           </p>
@@ -216,7 +206,7 @@ export default function SignupPage() {
             )}
 
             {successMessage && (
-              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{successMessage}</span>
               </div>
@@ -311,7 +301,7 @@ export default function SignupPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full font-bold text-sm shadow-md shadow-primary/20 mt-2"
+                className="w-full font-bold text-sm shadow-md shadow-primary/20 mt-2 whitespace-normal text-center leading-tight h-auto min-h-10 py-2.5"
               >
                 {isLoading ? 'Criando Conta...' : 'Cadastrar e Personalizar Cronograma'}
               </Button>

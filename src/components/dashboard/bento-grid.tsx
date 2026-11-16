@@ -87,7 +87,7 @@ export const BentoGrid: React.FC = () => {
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Fila de Hoje
             </span>
-            <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
+            <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400">
               <CalendarClock className="h-5 w-5" />
             </div>
           </div>
@@ -144,21 +144,21 @@ export const BentoGrid: React.FC = () => {
                   e.stopPropagation();
                   setIsStreakModalOpen(true);
                 }}
-                className="p-1 rounded-md text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                className="p-1 rounded-md text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
                 title="Configurar meta da ofensiva"
                 aria-label="Configurar meta da ofensiva"
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
               </button>
             </div>
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
               <Flame className="h-5 w-5 fill-amber-500 text-amber-500" />
             </div>
           </div>
 
           <div className="my-3">
             <div className="flex items-baseline space-x-2">
-              <span className="text-3xl font-extrabold font-mono tabular-nums tracking-tight text-amber-400">
+              <span className="text-3xl font-extrabold font-mono tabular-nums tracking-tight text-amber-600 dark:text-amber-400">
                 {stats.currentStreak}
               </span>
               <span className="text-xs text-muted-foreground font-medium">
@@ -176,7 +176,7 @@ export const BentoGrid: React.FC = () => {
                 Pontuou Hoje
               </Badge>
             ) : (
-              <Badge variant="secondary" className="text-[10px] text-amber-300 bg-amber-500/10 border-amber-500/20">
+              <Badge variant="secondary" className="text-[10px] text-amber-800 dark:text-amber-300 bg-amber-500/10 border-amber-500/20">
                 {getStreakBadgeText()}
               </Badge>
             )}
@@ -193,14 +193,14 @@ export const BentoGrid: React.FC = () => {
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Acurácia Global
               </span>
-              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                 <Target className="h-5 w-5" />
               </div>
             </div>
 
             <div className="my-3">
               <div className="flex items-baseline space-x-2">
-                <span className="text-3xl font-extrabold font-mono tabular-nums tracking-tight text-emerald-400">
+                <span className="text-3xl font-extrabold font-mono tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">
                   {stats.overallAccuracy}%
                 </span>
                 <span className="text-xs text-muted-foreground font-medium">
@@ -213,7 +213,7 @@ export const BentoGrid: React.FC = () => {
             </div>
 
             <div className="pt-2 border-t border-border/60 flex items-center justify-between">
-              <span className="text-[11px] text-emerald-300 font-medium flex items-center gap-1">
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" /> {topics.length} assuntos catalogados
               </span>
               <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
@@ -232,7 +232,7 @@ export const BentoGrid: React.FC = () => {
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Ponto de Atenção
               </span>
-              <div className="p-2 rounded-xl bg-rose-500/15 text-rose-400">
+              <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
                 <AlertTriangle className="h-5 w-5" />
               </div>
             </div>
@@ -241,13 +241,13 @@ export const BentoGrid: React.FC = () => {
               {stats.vulnerableArea ? (
                 <>
                   <div className="flex items-baseline space-x-2">
-                    <span className="text-2xl font-extrabold tracking-tight text-rose-400 truncate">
+                    <span className="text-2xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400 truncate">
                       {stats.vulnerableArea.area}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Menor acurácia registrada:{' '}
-                    <span className="font-bold text-rose-400">
+                    <span className="font-bold text-rose-600 dark:text-rose-400">
                       {stats.vulnerableArea.accuracy}%
                     </span>
                   </p>
@@ -263,7 +263,7 @@ export const BentoGrid: React.FC = () => {
             </div>
 
             <div className="pt-2 border-t border-border/60 flex items-center justify-between">
-              <span className="text-[11px] font-medium text-rose-400">
+              <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">
                 Reforço recomendado
               </span>
               <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
