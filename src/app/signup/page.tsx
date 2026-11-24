@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
@@ -147,7 +147,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         <div className="text-center space-y-2">
@@ -166,9 +166,9 @@ export default function SignupPage() {
 
         <Card className="border-border shadow-xl">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-lg font-bold">
+            <h2 className="text-lg font-bold leading-none tracking-tight text-foreground">
               {sessionId ? 'Criar Acesso do Aluno' : 'Criar conta'}
-            </CardTitle>
+            </h2>
             <CardDescription className="text-xs">
               {sessionId
                 ? 'Defina sua senha para vincular sua assinatura ao seu plano de estudos.'
@@ -256,11 +256,16 @@ export default function SignupPage() {
 
             <form onSubmit={handleSignup} className="space-y-3.5">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <label
+                  htmlFor="signup-full-name"
+                  className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+                >
                   <User className="h-3.5 w-3.5" /> Nome Completo
                 </label>
                 <Input
+                  id="signup-full-name"
                   type="text"
+                  autoComplete="name"
                   required
                   placeholder="Ex: Dra. Mariana Costa"
                   value={fullName}
@@ -270,11 +275,16 @@ export default function SignupPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <label
+                  htmlFor="signup-email"
+                  className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+                >
                   <Mail className="h-3.5 w-3.5" /> E-mail
                 </label>
                 <Input
+                  id="signup-email"
                   type="email"
+                  autoComplete="email"
                   required
                   placeholder="seu.email@medicina.com"
                   value={email}
@@ -284,11 +294,16 @@ export default function SignupPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <label
+                  htmlFor="signup-password"
+                  className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+                >
                   <Lock className="h-3.5 w-3.5" /> Senha (mínimo 6 caracteres)
                 </label>
                 <Input
+                  id="signup-password"
                   type="password"
+                  autoComplete="new-password"
                   required
                   minLength={6}
                   placeholder="••••••••"
@@ -319,6 +334,6 @@ export default function SignupPage() {
           </CardFooter>
         </Card>
       </div>
-    </div>
+    </main>
   );
 }

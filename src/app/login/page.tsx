@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +15,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { useData } from '@/lib/store/data-context';
 import {
   Stethoscope,
   ArrowRight,
@@ -30,7 +29,6 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signInDemo } = useData();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -299,7 +297,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand */}
@@ -320,7 +318,9 @@ export default function LoginPage() {
         {/* Card do Formulário */}
         <Card className="border-border shadow-xl">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-lg font-bold">Acesse sua conta</CardTitle>
+            <h2 className="text-lg font-bold leading-none tracking-tight text-foreground">
+              Acesse sua conta
+            </h2>
             <CardDescription className="text-xs">
               Entre para visualizar suas métricas, simulados e cronograma de revisões.
             </CardDescription>
@@ -410,11 +410,16 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-3.5">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <label
+                  htmlFor="login-email"
+                  className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+                >
                   <Mail className="h-3.5 w-3.5" /> E-mail ou Usuário
                 </label>
                 <Input
+                  id="login-email"
                   type="text"
+                  autoComplete="username"
                   required
                   placeholder="seu.email@medicina.com"
                   value={email}
@@ -425,7 +430,10 @@ export default function LoginPage() {
 
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <label
+                    htmlFor="login-password"
+                    className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+                  >
                     <Lock className="h-3.5 w-3.5" /> Senha
                   </label>
                   <button
@@ -441,7 +449,9 @@ export default function LoginPage() {
                   </button>
                 </div>
                 <Input
+                  id="login-password"
                   type="password"
+                  autoComplete="current-password"
                   required
                   placeholder="••••••••"
                   value={password}
@@ -466,7 +476,7 @@ export default function LoginPage() {
               href={planParam ? `/signup?plan=${encodeURIComponent(planParam)}` : '/signup'}
               className="font-bold text-primary hover:underline ml-1 inline-flex items-center gap-0.5"
             >
-              Criar conta gratuita <ArrowRight className="h-3 w-3" />
+              Criar minha conta <ArrowRight className="h-3 w-3" />
             </Link>
           </CardFooter>
         </Card>
@@ -508,11 +518,16 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <label
+                htmlFor="reset-email"
+                className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+              >
                 <Mail className="h-3.5 w-3.5" /> E-mail cadastrado
               </label>
               <Input
+                id="reset-email"
                 type="email"
+                autoComplete="email"
                 required
                 placeholder="seu.email@medicina.com"
                 value={resetEmail}
@@ -548,6 +563,6 @@ export default function LoginPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 }

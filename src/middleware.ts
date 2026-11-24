@@ -9,30 +9,40 @@ function redirectWithCookies(url: URL, baseResponse: NextResponse): NextResponse
   return redirectRes;
 }
 
+function matchesRoutePrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  const isAuthPage = path === '/login' || path === '/signup';
+  const isPaymentPage = matchesRoutePrefix(path, '/pagamento');
+  const isPaymentSuccessPage = matchesRoutePrefix(path, '/pagamento/sucesso');
+
+  // Rotas restritas que exigem assinatura paga ativa
+  const isRestrictedAppPage =
+    matchesRoutePrefix(path, '/dashboard') ||
+    matchesRoutePrefix(path, '/diario') ||
+    matchesRoutePrefix(path, '/revisoes') ||
+    matchesRoutePrefix(path, '/erros') ||
+    matchesRoutePrefix(path, '/foco') ||
+    matchesRoutePrefix(path, '/evolucao') ||
+    matchesRoutePrefix(path, '/simulados') ||
+    matchesRoutePrefix(path, '/prevalencia') ||
+    matchesRoutePrefix(path, '/onboarding') ||
+    matchesRoutePrefix(path, '/conta');
+
+  // Rotas públicas/SEO (/, /bancas/*, /guias/*, /metodologia, /privacidade, /termos, etc.)
+  // retornam imediatamente sem instanciar cliente Supabase nem fazer chamadas de rede.
+  if (!isRestrictedAppPage && !isPaymentPage && !isAuthPage) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
-
-  const path = request.nextUrl.pathname;
-  const isAuthPage = path === '/login' || path === '/signup';
-  const isPaymentPage = path.startsWith('/pagamento');
-  const isPaymentSuccessPage = path.startsWith('/pagamento/sucesso');
-
-  // Rotas restritas que exigem assinatura paga ativa
-  const isRestrictedAppPage =
-    path.startsWith('/dashboard') ||
-    path.startsWith('/diario') ||
-    path.startsWith('/revisoes') ||
-    path.startsWith('/erros') ||
-    path.startsWith('/foco') ||
-    path.startsWith('/evolucao') ||
-    path.startsWith('/simulados') ||
-    path.startsWith('/prevalencia') ||
-    path.startsWith('/onboarding') ||
-    path.startsWith('/conta');
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -102,7 +112,8 @@ export async function middleware(request: NextRequest) {
       );
 
       const isContaResetAccess =
-        path.startsWith('/conta') && request.nextUrl.searchParams.get('reset') === 'true';
+        matchesRoutePrefix(path, '/conta') &&
+        request.nextUrl.searchParams.get('reset') === 'true';
 
       // Se NÃO pagou e está tentando entrar no app (exceto /conta?reset=true)
       if (isRestrictedAppPage && !hasActiveSubscription && !isContaResetAccess) {
@@ -118,8 +129,8 @@ export async function middleware(request: NextRequest) {
         profile &&
         !profile.onboarding_completed &&
         isRestrictedAppPage &&
-        !path.startsWith('/onboarding') &&
-        !path.startsWith('/conta')
+        !matchesRoutePrefix(path, '/onboarding') &&
+        !matchesRoutePrefix(path, '/conta')
       ) {
         const onboardingUrl = request.nextUrl.clone();
         onboardingUrl.pathname = '/onboarding';
@@ -168,6 +179,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sitemap.xml|robots.txt|icons/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|html|xml|txt)$).*)',
+    '/((?!_next/static|_next/image|api/|auth/|favicon.ico|manifest.webmanifest|sitemap.xml|robots.txt|icons/.*|.*opengraph-image.*|.*twitter-image.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|html|xml|txt)$).*)',
   ],
 };

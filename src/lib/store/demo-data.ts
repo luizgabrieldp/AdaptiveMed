@@ -23,8 +23,8 @@ export const INITIAL_DEMO_PROFILE: Profile = {
   created_at: new Date().toISOString(),
 };
 
-export function getInitialDemoTopics(): StudyTopic[] {
-  const today = getTodayDateString();
+export function getInitialDemoTopics(referenceDate?: string): StudyTopic[] {
+  const today = referenceDate || getTodayDateString();
   return [
     {
       id: 'topic-1',
@@ -134,8 +134,8 @@ export function getInitialDemoTopics(): StudyTopic[] {
   ];
 }
 
-export function getInitialDemoReviews(): TopicReview[] {
-  const today = getTodayDateString();
+export function getInitialDemoReviews(referenceDate?: string): TopicReview[] {
+  const today = referenceDate || getTodayDateString();
   return [
     // topic-1 (Pneumonia): R1 feita, R2 agendada para HOJE!
     {
@@ -261,8 +261,8 @@ export function getInitialDemoReviews(): TopicReview[] {
   ];
 }
 
-export function getInitialDemoMockExams(): MockExam[] {
-  const today = getTodayDateString();
+export function getInitialDemoMockExams(referenceDate?: string): MockExam[] {
+  const today = referenceDate || getTodayDateString();
   return [
     {
       id: 'mock-1',
@@ -307,8 +307,8 @@ export function getInitialDemoMockExams(): MockExam[] {
   ];
 }
 
-export function getInitialDemoInstitutionExams(): InstitutionExam[] {
-  const today = getTodayDateString();
+export function getInitialDemoInstitutionExams(referenceDate?: string): InstitutionExam[] {
+  const today = referenceDate || getTodayDateString();
   return [
     // USP-SP
     { id: 'inst-1', user_id: 'demo-user-id', institution_name: 'USP-SP', exam_year: 2021, score_percentage: 71.5, created_at: today },
@@ -339,8 +339,8 @@ export function getInitialDemoInstitutionExams(): InstitutionExam[] {
   ];
 }
 
-export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
-  const today = getTodayDateString();
+export function getInitialDemoPrevalentTopics(referenceDate?: string): PrevalentTopic[] {
+  const today = referenceDate || getTodayDateString();
   return [
     // Clínica Médica
     {
@@ -349,7 +349,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Hipertensão Arterial Sistêmica e Crise Hipertensiva',
       prevalence_level: 'ALTA',
       rank_order: 1,
-      banca: 'ENARE / USP',
+      banca: 'ENARE / USP-SP',
       frequency_notes: 'Tema recorrente em todas as edições (estratificação e conduta)',
       created_at: today,
     },
@@ -359,7 +359,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Diabetes Mellitus: Critérios Diagnósticos e Metas Terapêuticas',
       prevalence_level: 'ALTA',
       rank_order: 2,
-      banca: 'USP / UNICAMP',
+      banca: 'USP-SP / UNICAMP / UNIFESP',
       frequency_notes: 'Foco em novas classes de hipoglicemiantes (iSGLT2 e GLP-1)',
       created_at: today,
     },
@@ -401,7 +401,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Trauma Torácico e Abdominal (ATLS 10ª Edição)',
       prevalence_level: 'ALTA',
       rank_order: 2,
-      banca: 'USP / ENARE',
+      banca: 'USP-SP / ENARE / UNIFESP',
       frequency_notes: 'Indicações de FAST, laparotomia de emergência e drenagem de tórax',
       created_at: today,
     },
@@ -411,7 +411,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Doença Litiásica Biliar: Colecistite e Coledocolitíase',
       prevalence_level: 'MEDIA',
       rank_order: 3,
-      banca: 'UNICAMP / SUS-SP',
+      banca: 'UNICAMP / SUS-SP / UNIFESP',
       frequency_notes: 'Critérios de Tokyo, momento cirúrgico e CPRE',
       created_at: today,
     },
@@ -433,7 +433,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Bronquiolite Viral Aguda e Crises de Asma na Infância',
       prevalence_level: 'ALTA',
       rank_order: 2,
-      banca: 'USP / UNICAMP',
+      banca: 'USP-SP / UNICAMP / UNIFESP',
       frequency_notes: 'Manejo oxigenoterapia de suporte e broncodilatadores',
       created_at: today,
     },
@@ -465,7 +465,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Hemorragias da Primeira Metade da Gestação',
       prevalence_level: 'ALTA',
       rank_order: 2,
-      banca: 'USP / ENARE',
+      banca: 'USP-SP / ENARE',
       frequency_notes: 'Diagnóstico diferencial: Abortamento, Gravidez Ectópica e Mola',
       created_at: today,
     },
@@ -475,7 +475,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Rastreamento de Câncer de Colo Uterino e Mama',
       prevalence_level: 'MEDIA',
       rank_order: 3,
-      banca: 'SUS-SP / UNICAMP',
+      banca: 'SUS-SP / UNICAMP / UNIFESP',
       frequency_notes: 'Diretrizes do Ministério da Saúde / INCA',
       created_at: today,
     },
@@ -497,7 +497,7 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
       subject_name: 'Testes Diagnósticos: Sensibilidade, Especificidade, VPP e VPN',
       prevalence_level: 'ALTA',
       rank_order: 2,
-      banca: 'ENARE / USP',
+      banca: 'ENARE / USP-SP',
       frequency_notes: 'Influência da prevalência nos valores preditivos',
       created_at: today,
     },
@@ -514,8 +514,8 @@ export function getInitialDemoPrevalentTopics(): PrevalentTopic[] {
   ];
 }
 
-export function getInitialDemoErrorLogs(): ErrorLog[] {
-  const today = getTodayDateString();
+export function getInitialDemoErrorLogs(referenceDate?: string): ErrorLog[] {
+  const today = referenceDate || getTodayDateString();
   return [
     {
       id: 'err-1',
@@ -564,8 +564,8 @@ export function getInitialDemoErrorLogs(): ErrorLog[] {
   ];
 }
 
-export function getInitialDemoStudySessions(): StudySession[] {
-  const today = getTodayDateString();
+export function getInitialDemoStudySessions(referenceDate?: string): StudySession[] {
+  const today = referenceDate || getTodayDateString();
   const makeTs = (dateStr: string, hour: number) => `${dateStr}T${String(hour).padStart(2, '0')}:00:00.000Z`;
   return [
     {

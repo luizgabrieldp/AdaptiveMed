@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ActivityHeatmapView } from '@/components/evolution/activity-heatmap';
+import { ActivityHeatmapView } from '@/components/evolution/activity-heatmap-view';
 import {
   getInitialDemoTopics,
   getInitialDemoReviews,
@@ -44,35 +44,69 @@ import {
 } from 'lucide-react';
 
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const SSR_DEMO_DATE = '2026-11-16';
+
+function matchesBancaFilter(bancaField: string | null | undefined, selectedBanca: string): boolean {
+  if (selectedBanca === 'TODAS') return true;
+  if (!bancaField) return false;
+  const normalizedBanca = bancaField.toLowerCase();
+  const normalizedTarget = selectedBanca.toLowerCase();
+  if (normalizedBanca.includes(normalizedTarget)) return true;
+  if (normalizedTarget === 'usp-sp' && /\busp\b/.test(normalizedBanca)) return true;
+  return false;
+}
 
 export const InteractiveDemoShowcase: React.FC = () => {
-  const [mounted, setMounted] = useState(false);
-  const [todayStr, setTodayStr] = useState<string>('2026-11-16');
-
-  const [topics, setTopics] = useState<StudyTopic[]>([]);
-  const [reviews, setReviews] = useState<TopicReview[]>([]);
-  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
-  const [mockExams, setMockExams] = useState<ReturnType<typeof getInitialDemoMockExams>>([]);
-  const [institutionExams, setInstitutionExams] = useState<ReturnType<typeof getInitialDemoInstitutionExams>>([]);
-  const [prevalentTopics, setPrevalentTopics] = useState<ReturnType<typeof getInitialDemoPrevalentTopics>>([]);
+  const [todayStr, setTodayStr] = useState<string>(SSR_DEMO_DATE);
+  const [topics, setTopics] = useState<StudyTopic[]>(() => getInitialDemoTopics(SSR_DEMO_DATE));
+  const [reviews, setReviews] = useState<TopicReview[]>(() => getInitialDemoReviews(SSR_DEMO_DATE));
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>(() => getInitialDemoErrorLogs(SSR_DEMO_DATE));
+  const [mockExams, setMockExams] = useState(() => getInitialDemoMockExams(SSR_DEMO_DATE));
+  const [institutionExams, setInstitutionExams] = useState(() =>
+    getInitialDemoInstitutionExams(SSR_DEMO_DATE)
+  );
+  const [prevalentTopics, setPrevalentTopics] = useState(() =>
+    getInitialDemoPrevalentTopics(SSR_DEMO_DATE)
+  );
   const [selectedErrorCause, setSelectedErrorCause] = useState<ErrorLogCause | 'TODAS'>('TODAS');
   const [selectedBanca, setSelectedBanca] = useState<string>('TODAS');
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [demoNotice, setDemoNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showDemoNotice = useCallback((message: string, durationMs: number) => {
+    if (noticeTimerRef.current !== null) {
+      clearTimeout(noticeTimerRef.current);
+    }
+    setDemoNotice(message);
+    noticeTimerRef.current = setTimeout(() => {
+      setDemoNotice(null);
+      noticeTimerRef.current = null;
+    }, durationMs);
+  }, []);
 
   useEffect(() => {
-    setTodayStr(getTodayDateString());
-    setTopics(getInitialDemoTopics());
-    setReviews(getInitialDemoReviews());
-    setErrorLogs(getInitialDemoErrorLogs());
-    setMockExams(getInitialDemoMockExams());
-    setInstitutionExams(getInitialDemoInstitutionExams());
-    setPrevalentTopics(getInitialDemoPrevalentTopics());
-    setMounted(true);
+    return () => {
+      if (noticeTimerRef.current !== null) {
+        clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const clientToday = getTodayDateString();
+    if (clientToday !== SSR_DEMO_DATE) {
+      setTodayStr(clientToday);
+      setTopics(getInitialDemoTopics(clientToday));
+      setReviews(getInitialDemoReviews(clientToday));
+      setErrorLogs(getInitialDemoErrorLogs(clientToday));
+      setMockExams(getInitialDemoMockExams(clientToday));
+      setInstitutionExams(getInitialDemoInstitutionExams(clientToday));
+      setPrevalentTopics(getInitialDemoPrevalentTopics(clientToday));
+    }
   }, []);
 
   const showcaseDays = useMemo(() => {
-    if (!mounted) return [];
     return Array.from({ length: 5 }, (_, idx) => {
       const dateStr = addDaysToDate(todayStr, idx);
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -84,7 +118,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
         isToday: idx === 0,
       };
     });
-  }, [todayStr, mounted]);
+  }, [todayStr]);
 
   const overdueReviews = useMemo(
     () => reviews.filter(r => !r.completed_date && r.scheduled_date < todayStr),
@@ -98,32 +132,33 @@ export const InteractiveDemoShowcase: React.FC = () => {
   }, [topics]);
 
   const handleResetDemo = () => {
-    setTodayStr(getTodayDateString());
-    setTopics(getInitialDemoTopics());
-    setReviews(getInitialDemoReviews());
-    setErrorLogs(getInitialDemoErrorLogs());
-    setMockExams(getInitialDemoMockExams());
-    setInstitutionExams(getInitialDemoInstitutionExams());
-    setPrevalentTopics(getInitialDemoPrevalentTopics());
-    setDemoNotice('Dados da demonstração restaurados.');
-    setTimeout(() => setDemoNotice(null), 3000);
+    const currentToday = getTodayDateString();
+    setTodayStr(currentToday);
+    setTopics(getInitialDemoTopics(currentToday));
+    setReviews(getInitialDemoReviews(currentToday));
+    setErrorLogs(getInitialDemoErrorLogs(currentToday));
+    setMockExams(getInitialDemoMockExams(currentToday));
+    setInstitutionExams(getInitialDemoInstitutionExams(currentToday));
+    setPrevalentTopics(getInitialDemoPrevalentTopics(currentToday));
+    setSelectedBanca('TODAS');
+    setSelectedErrorCause('TODAS');
+    showDemoNotice('Dados da demonstração restaurados.', 3000);
   };
 
   const handleRebalanceDemo = () => {
     const updates = computeRebalancedSchedule(reviews, 3, todayStr);
     if (updates.length === 0) {
-      setDemoNotice('Todas as revisões já estão dentro dos próximos dias sem atraso!');
-      setTimeout(() => setDemoNotice(null), 3500);
+      showDemoNotice('Todas as revisões já estão dentro dos próximos dias sem atraso!', 3500);
       return;
     }
     const updateMap = new Map(updates.map(u => [u.reviewId, u.newScheduledDate]));
     setReviews(prev =>
       prev.map(r => (updateMap.has(r.id) ? { ...r, scheduled_date: updateMap.get(r.id)! } : r))
     );
-    setDemoNotice(
-      `${updates.length} ${updates.length === 1 ? 'revisão atrasada redistribuída' : 'revisões atrasadas redistribuídas'} respeitando cota de 3/dia!`
+    showDemoNotice(
+      `${updates.length} ${updates.length === 1 ? 'revisão atrasada redistribuída' : 'revisões atrasadas redistribuídas'} respeitando cota de 3/dia!`,
+      4000
     );
-    setTimeout(() => setDemoNotice(null), 4000);
   };
 
   const handleDropReview = (e: React.DragEvent, targetDate: string) => {
@@ -134,8 +169,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
     setReviews(prev =>
       prev.map(r => (r.id === reviewId ? { ...r, scheduled_date: targetDate } : r))
     );
-    setDemoNotice(`Revisão reagendada para ${formatDateBR(targetDate)}.`);
-    setTimeout(() => setDemoNotice(null), 2500);
+    showDemoNotice(`Revisão reagendada para ${formatDateBR(targetDate)}.`, 2500);
   };
 
   const handleMoveToNextDay = (rev: TopicReview) => {
@@ -145,15 +179,13 @@ export const InteractiveDemoShowcase: React.FC = () => {
         ? showcaseDays[currentIdx + 1].dateStr
         : showcaseDays[0].dateStr;
     setReviews(prev => prev.map(r => (r.id === rev.id ? { ...r, scheduled_date: nextDay } : r)));
-    setDemoNotice(`Revisão movida para ${formatDateBR(nextDay)}.`);
-    setTimeout(() => setDemoNotice(null), 2500);
+    showDemoNotice(`Revisão movida para ${formatDateBR(nextDay)}.`, 2500);
   };
 
   const handleAddPrevalentToDemo = (subjectName: string, area: string) => {
     const exists = topics.some(t => t.subject_name.toLowerCase() === subjectName.toLowerCase());
     if (exists) {
-      setDemoNotice(`"${subjectName}" já está na sua grade de demonstração.`);
-      setTimeout(() => setDemoNotice(null), 2500);
+      showDemoNotice(`"${subjectName}" já está na sua grade de demonstração.`, 2500);
       return;
     }
     const newId = `demo-added-${Date.now()}`;
@@ -185,8 +217,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
     };
     setTopics(prev => [newTopic, ...prev]);
     setReviews(prev => [newReview, ...prev]);
-    setDemoNotice(`"${subjectName}" adicionado à coluna Hoje!`);
-    setTimeout(() => setDemoNotice(null), 3000);
+    showDemoNotice(`"${subjectName}" adicionado à coluna Hoje!`, 3000);
   };
 
   const toggleDemoErrorReviewed = (id: string) => {
@@ -195,9 +226,15 @@ export const InteractiveDemoShowcase: React.FC = () => {
 
   const filteredPrevalent = useMemo(() => {
     if (selectedBanca === 'TODAS') return prevalentTopics.slice(0, 6);
-    return prevalentTopics
-      .filter(p => p.banca?.toLowerCase().includes(selectedBanca.toLowerCase()))
-      .slice(0, 6);
+    const directMatches = prevalentTopics.filter(p => matchesBancaFilter(p.banca, selectedBanca));
+    if (directMatches.length === 0) return [];
+    if (directMatches.length >= 6) return directMatches.slice(0, 6);
+    const universalFallback = prevalentTopics.filter(
+      p =>
+        !directMatches.some(d => d.id === p.id) &&
+        p.banca?.toLowerCase().includes('todas as bancas')
+    );
+    return [...directMatches, ...universalFallback].slice(0, 6);
   }, [prevalentTopics, selectedBanca]);
 
   const filteredErrors = useMemo(() => {
@@ -231,17 +268,16 @@ export const InteractiveDemoShowcase: React.FC = () => {
         </div>
 
         {demoNotice && (
-          <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-2 animate-fade-in">
+          <div
+            role="status"
+            aria-live="polite"
+            className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-2 animate-fade-in"
+          >
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
             <span>{demoNotice}</span>
           </div>
         )}
 
-        {!mounted ? (
-          <div className="min-h-[380px] rounded-2xl border border-border/60 bg-background/40 flex items-center justify-center p-6 text-xs text-muted-foreground">
-            Carregando demonstração interativa...
-          </div>
-        ) : (
         <Tabs defaultValue="grade" className="w-full">
           <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
             <TabsTrigger value="grade" className="text-xs py-2 gap-1.5">
@@ -265,10 +301,10 @@ export const InteractiveDemoShowcase: React.FC = () => {
               <div className="lg:col-span-4 p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/[0.06] space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
+                    <h3 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
                       Revisões Atrasadas ({overdueReviews.length})
-                    </h4>
+                    </h3>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       Arraste para um dia ou clique para rebalancear automaticamente.
                     </p>
@@ -410,6 +446,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
                     key={b}
                     type="button"
                     onClick={() => setSelectedBanca(b)}
+                    aria-pressed={selectedBanca === b}
                     className={`px-3 py-1 rounded-xl text-xs font-semibold border transition-all ${
                       selectedBanca === b
                         ? 'bg-primary text-primary-foreground border-primary shadow-sm'
@@ -425,47 +462,67 @@ export const InteractiveDemoShowcase: React.FC = () => {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredPrevalent.map(item => {
-                const style = getAreaStyle(item.area);
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3.5 rounded-2xl border border-border bg-background/60 flex flex-col justify-between gap-3"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${style.bg} ${style.text} ${style.border}`}>
-                          {item.area}
-                        </span>
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-500" /> {item.prevalence_level}
-                        </span>
+            {filteredPrevalent.length === 0 ? (
+              <div className="p-8 rounded-2xl border border-dashed border-border bg-background/40 text-center space-y-3">
+                <p className="text-xs font-semibold text-foreground">
+                  Nenhum tema encontrado para o filtro selecionado ({selectedBanca}).
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Experimente visualizar todas as bancas ou selecionar outra instituição.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedBanca('TODAS')}
+                  className="text-xs font-bold"
+                >
+                  Mostrar todas as bancas
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredPrevalent.map(item => {
+                  const style = getAreaStyle(item.area);
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3.5 rounded-2xl border border-border bg-background/60 flex flex-col justify-between gap-3"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${style.bg} ${style.text} ${style.border}`}>
+                            {item.area}
+                          </span>
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-500" /> {item.prevalence_level}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-bold text-foreground leading-snug">{item.subject_name}</h3>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                          {item.frequency_notes || 'Tema recorrente nas principais provas de residência médica.'}
+                        </p>
                       </div>
-                      <h5 className="text-sm font-bold text-foreground leading-snug">{item.subject_name}</h5>
-                      <p className="text-[11px] text-muted-foreground line-clamp-2">
-                        {item.frequency_notes || 'Tema recorrente nas principais provas de residência médica.'}
-                      </p>
-                    </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
-                      <span className="text-[10px] font-mono text-muted-foreground truncate">
-                        {item.banca || 'Geral'}
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAddPrevalentToDemo(item.subject_name, item.area)}
-                        className="h-7 text-[11px] font-bold gap-1 shrink-0"
-                      >
-                        <Plus className="h-3 w-3" /> Grade
-                      </Button>
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+                        <span className="text-[10px] font-mono text-muted-foreground truncate">
+                          {item.banca || 'Geral'}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAddPrevalentToDemo(item.subject_name, item.area)}
+                          className="h-7 text-[11px] font-bold gap-1 shrink-0"
+                        >
+                          <Plus className="h-3 w-3" /> Grade
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </TabsContent>
 
           {/* TAB 3: Caderno de Erros Estruturado + Heatmap 365 dias */}
@@ -476,6 +533,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSelectedErrorCause('TODAS')}
+                    aria-pressed={selectedErrorCause === 'TODAS'}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
                       selectedErrorCause === 'TODAS'
                         ? 'bg-primary text-primary-foreground border-primary'
@@ -489,6 +547,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
                       key={cause}
                       type="button"
                       onClick={() => setSelectedErrorCause(cause)}
+                      aria-pressed={selectedErrorCause === cause}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
                         selectedErrorCause === cause
                           ? 'bg-primary text-primary-foreground border-primary'
@@ -552,6 +611,7 @@ export const InteractiveDemoShowcase: React.FC = () => {
               reviews={reviews}
               mockExams={mockExams}
               institutionExams={institutionExams}
+              referenceDate={todayStr}
               compact
               title="Heatmap de Consistência (Demonstração)"
               description="Visualização real do mapa estilo GitHub/Anki alimentado pelos seus estudos e simulados."
@@ -564,9 +624,9 @@ export const InteractiveDemoShowcase: React.FC = () => {
               {/* Simulados Nacionais */}
               <div className="p-4 rounded-2xl border border-border bg-background/60 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-primary" /> Simulados Nacionais
-                  </h4>
+                  </h3>
                   <Badge variant="outline" className="text-[10px]">Medcurso / Estratégia / ENARE</Badge>
                 </div>
                 <div className="space-y-2.5">
@@ -593,9 +653,9 @@ export const InteractiveDemoShowcase: React.FC = () => {
               {/* Provas na Íntegra */}
               <div className="p-4 rounded-2xl border border-border bg-background/60 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Flame className="h-4 w-4 text-amber-500" /> Provas na Íntegra por Banca
-                  </h4>
+                  </h3>
                   <Badge variant="outline" className="text-[10px]">Com Nota de Corte</Badge>
                 </div>
                 <div className="space-y-2.5">
@@ -622,7 +682,6 @@ export const InteractiveDemoShowcase: React.FC = () => {
             </div>
           </TabsContent>
         </Tabs>
-        )}
       </CardContent>
     </Card>
   );

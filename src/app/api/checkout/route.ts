@@ -12,9 +12,24 @@ const stripe = stripeSecretKey
   : null;
 
 function getAppUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configured && configured.startsWith('http')) {
-    return configured.replace(/\/+$/, '');
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ];
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = new URL(trimmed);
+      if (
+        (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+        parsed.hostname
+      ) {
+        return trimmed.replace(/\/+$/, '');
+      }
+    } catch {
+      // ignora URL inválida e tenta o próximo fallback
+    }
   }
   return 'https://adaptive-med.vercel.app';
 }

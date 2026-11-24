@@ -158,14 +158,19 @@ export const FsrsLiveSimulator: React.FC = () => {
 
             {/* Seletor Ciclo Atual */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-foreground block">
+              <span id="fsrs-cycle-label" className="text-xs font-bold text-foreground block">
                 Ciclo de Revisão Atual (R0 = 1º contato)
-              </label>
-              <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+              </span>
+              <div
+                role="group"
+                aria-labelledby="fsrs-cycle-label"
+                className="grid grid-cols-4 sm:grid-cols-8 gap-1.5"
+              >
                 {[0, 1, 2, 3, 4, 5, 6, 7].map(c => (
                   <button
                     key={c}
                     type="button"
+                    aria-pressed={cycle === c}
                     onClick={() => setCycle(c)}
                     className={`py-2 rounded-xl border text-xs font-bold font-mono transition-all ${
                       cycle === c
@@ -181,16 +186,21 @@ export const FsrsLiveSimulator: React.FC = () => {
 
             {/* Horizonte da Prova */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-foreground block">
+              <span id="fsrs-horizon-label" className="text-xs font-bold text-foreground block">
                 Horizonte até a Prova de Residência
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              </span>
+              <div
+                role="group"
+                aria-labelledby="fsrs-horizon-label"
+                className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+              >
                 {EXAM_HORIZONS.map(h => {
                   const active = horizonId === h.id;
                   return (
                     <button
                       key={h.id}
                       type="button"
+                      aria-pressed={active}
                       onClick={() => setHorizonId(h.id)}
                       className={`p-3 rounded-xl border text-left transition-all ${
                         active

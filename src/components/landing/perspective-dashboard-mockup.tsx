@@ -1,7 +1,4 @@
-'use client';
-
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
+import React from 'react';
 import {
   BrainCircuit,
   CalendarDays,
@@ -60,33 +57,10 @@ const CARD_TONE: Record<string, string> = {
 };
 
 export const PerspectiveDashboardMockup: React.FC = () => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const shouldReduceMotion = mounted && Boolean(prefersReducedMotion);
-
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start end', 'center center'],
-  });
-
-  const rotateX = useTransform(scrollYProgress, [0, 1], [14, 0]);
-  const scale = useTransform(scrollYProgress, [0, 1], [0.94, 1]);
-  const yFloatLeft = useTransform(scrollYProgress, [0, 1], [6, -6]);
-  const yFloatRight = useTransform(scrollYProgress, [0, 1], [-6, 6]);
-
   return (
-    <div ref={containerRef} className="relative pt-6 lg:pt-20 pb-8 lg:pb-16 [perspective:1400px]">
-      {/* Cards Flutuantes Satélites com Profundidade */}
-      <motion.div
-        style={shouldReduceMotion ? undefined : { y: yFloatLeft }}
-        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-emerald-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-emerald-500/10 absolute left-6 top-0 z-20"
-      >
+    <div className="group/mockup relative pt-6 lg:pt-20 pb-8 lg:pb-16 [perspective:1400px]">
+      {/* Cards Flutuantes Satélites com Profundidade em CSS Puro */}
+      <div className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-emerald-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-emerald-500/10 absolute left-6 top-0 z-20 transition-transform duration-500 ease-out group-hover/mockup:-translate-y-1.5 motion-reduce:transform-none motion-reduce:transition-none">
         <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
           <TrendingUp className="h-4 w-4" />
         </div>
@@ -94,12 +68,9 @@ export const PerspectiveDashboardMockup: React.FC = () => {
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Retenção FSRS-6</p>
           <p className="text-sm font-black text-foreground font-mono">88.4% Consolidado</p>
         </div>
-      </motion.div>
+      </div>
 
-      <motion.div
-        style={shouldReduceMotion ? undefined : { y: yFloatRight }}
-        className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-rose-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-rose-500/10 absolute right-6 bottom-0 z-20"
-      >
+      <div className="hidden lg:flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border border-rose-500/40 bg-card/90 backdrop-blur-xl shadow-2xl shadow-rose-500/10 absolute right-6 bottom-0 z-20 transition-transform duration-500 ease-out group-hover/mockup:translate-y-1.5 motion-reduce:transform-none motion-reduce:transition-none">
         <div className="p-2 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
           <RotateCcw className="h-4 w-4" />
         </div>
@@ -107,13 +78,10 @@ export const PerspectiveDashboardMockup: React.FC = () => {
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Anti-Bola de Neve</p>
           <p className="text-sm font-black text-foreground">Rebalancear em 1 clique</p>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Janela Principal em Perspectiva 3D */}
-      <motion.div
-        style={shouldReduceMotion ? undefined : { rotateX, scale }}
-        className="rounded-3xl border border-border/80 bg-card/95 backdrop-blur-xl shadow-[0_32px_90px_-20px_rgba(37,99,235,0.28)] overflow-hidden"
-      >
+      {/* Janela Principal em Perspectiva 3D CSS Puro */}
+      <div className="rounded-3xl border border-border/80 bg-card/95 backdrop-blur-xl shadow-[0_32px_90px_-20px_rgba(37,99,235,0.28)] overflow-hidden transition-transform duration-700 ease-out lg:[transform:rotateX(5deg)_scale(0.985)] lg:group-hover/mockup:[transform:rotateX(0deg)_scale(1)] motion-reduce:transform-none motion-reduce:transition-none">
         {/* Top Bar Window Chrome */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border/70 bg-muted/40">
           <div className="flex items-center gap-2">
@@ -121,7 +89,7 @@ export const PerspectiveDashboardMockup: React.FC = () => {
             <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80" />
             <span className="ml-2 text-[11px] font-mono text-muted-foreground hidden sm:inline">
-              adaptivemed.app/diario — Grade Semanal FSRS-6
+              AdaptiveMed • Diário — Grade Semanal FSRS-6
             </span>
           </div>
 
@@ -203,7 +171,7 @@ export const PerspectiveDashboardMockup: React.FC = () => {
             ))}
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

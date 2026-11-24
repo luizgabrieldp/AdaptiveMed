@@ -147,7 +147,7 @@ export const AnimatedBeamBento: React.FC = () => {
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-primary">
               2. Motor FSRS-6 AdaptiveMed
             </p>
-            <h4 className="text-sm font-black text-foreground">Cálculo de Estabilidade Neural</h4>
+            <h3 className="text-sm font-black text-foreground">Cálculo de Estabilidade Neural</h3>
             <p className="text-[11px] text-muted-foreground leading-snug">
               Ajusta intervalos R1→R8, volume de questões e teto diário pela sua curva real e data da prova.
             </p>
