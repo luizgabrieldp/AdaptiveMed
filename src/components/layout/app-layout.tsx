@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
@@ -11,21 +11,38 @@ import { Loader2 } from 'lucide-react';
 
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, profile, isLoading } = useData();
+  const [resetCheck, setResetCheck] = useState<{ pathname: string | null; isReset: boolean }>({
+    pathname: null,
+    isReset: false,
+  });
 
-  const isContaResetAccess =
-    typeof window !== 'undefined' &&
-    window.location.pathname.startsWith('/conta') &&
-    new URLSearchParams(window.location.search).get('reset') === 'true';
+  const isContaRoute = Boolean(pathname?.startsWith('/conta'));
+
+  useEffect(() => {
+    const isReset =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('reset') === 'true';
+    setResetCheck({ pathname: pathname ?? null, isReset });
+  }, [pathname]);
+
+  const isContaResetAccess = Boolean(
+    isContaRoute && resetCheck.pathname === pathname && resetCheck.isReset
+  );
+  const subscriptionStatus = profile?.subscription_status as string | undefined;
 
   const hasActivePlan = Boolean(
     profile?.is_subscribed ||
-      profile?.subscription_status === 'active' ||
-      profile?.subscription_status === 'trial'
+      subscriptionStatus === 'active' ||
+      subscriptionStatus === 'trial' ||
+      subscriptionStatus === 'trialing'
   );
 
+  const waitingResetCheck = isContaRoute && resetCheck.pathname !== pathname;
+
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !waitingResetCheck) {
       if (!user) {
         router.replace('/login');
         return;
@@ -34,10 +51,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         router.replace('/pagamento');
       }
     }
-  }, [user, hasActivePlan, isContaResetAccess, isLoading, router]);
+  }, [user, hasActivePlan, isContaResetAccess, isLoading, waitingResetCheck, router]);
 
   // Enquanto carrega ou se não tiver permissão, bloqueia a renderização do layout
-  if (isLoading || !user || (!hasActivePlan && !isContaResetAccess)) {
+  if (isLoading || waitingResetCheck || !user || (!hasActivePlan && !isContaResetAccess)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">

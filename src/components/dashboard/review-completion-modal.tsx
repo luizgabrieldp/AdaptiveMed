@@ -192,8 +192,31 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
         }
       }
 
-      await updateCompletedReview(review.id, doneNum, correctNum, completedDate || undefined);
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      const draftCausesToSave = errorDrafts.map(d => d.cause);
+      const editDurationValue = durationMinutes.trim() !== '' ? durNum : null;
+
+      await updateCompletedReview(
+        review.id,
+        doneNum,
+        correctNum,
+        completedDate || undefined,
+        editDurationValue,
+        draftCausesToSave
+      );
+
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: review.topic_id,
+          review_id: review.id,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
+      }
+
       await recalculateTopicReviews(review.topic_id);
+
       onOpenChange(false);
     } catch (err) {
       console.error('Erro ao recalcular próximo ciclo:', err);
@@ -231,7 +254,15 @@ export const ReviewCompletionModal: React.FC<ReviewCompletionModalProps> = ({
       const draftCausesToSave = errorDrafts.map(d => d.cause);
 
       if (isEdit) {
-        await updateCompletedReview(review.id, doneNum, correctNum, completedDate || undefined);
+        const editDurationValue = durationMinutes.trim() !== '' ? durNum : null;
+        await updateCompletedReview(
+          review.id,
+          doneNum,
+          correctNum,
+          completedDate || undefined,
+          editDurationValue,
+          draftCausesToSave
+        );
       } else {
         await completeReview(review.id, doneNum, correctNum, durNum, draftCausesToSave);
 

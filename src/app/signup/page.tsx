@@ -48,10 +48,20 @@ export default function SignupPage() {
     try {
       setIsLoading(true);
       const supabase = createClient();
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'https://adaptive-med.vercel.app';
+      const nextDest = `/pagamento${planId ? `?plan=${planId}` : ''}`;
+      const callbackPath = sessionId
+        ? `/auth/callback?next=/onboarding&session_id=${encodeURIComponent(sessionId)}`
+        : `/auth/callback?next=${encodeURIComponent(nextDest)}`;
+
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password,
         options: {
+          emailRedirectTo: `${origin}${callbackPath}`,
           data: {
             full_name: fullName.trim(),
           },

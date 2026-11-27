@@ -14,7 +14,7 @@ import {
   FULL_TREE_SECONDS,
   STAGE_BLOCK_SECONDS,
   STOPWATCH_CHIME_OPTIONS,
-  TREE_BLOCK_SECONDS,
+  STOPWATCH_MAX_CONTINUOUS_OPTIONS,
   formatDurationCompact,
   formatSecondsHMS,
   getExtraMaturedGardenTrees,
@@ -47,6 +47,8 @@ import {
   Sparkles,
   Bell,
   ArrowUpRight,
+  ShieldCheck,
+  Hourglass,
 } from 'lucide-react';
 
 type ForestPeriodFilter = 'today' | 'week' | 'month' | 'all';
@@ -80,6 +82,9 @@ export default function FocoFlorestaPage() {
     focusMinutes,
     breakMinutes,
     stopwatchChimeMinutes,
+    pauseOnClose,
+    pauseOnTabSwitch,
+    maxContinuousMinutes,
     displaySeconds,
     elapsedSeconds,
     progressRatio,
@@ -99,6 +104,8 @@ export default function FocoFlorestaPage() {
     setMode,
     setPomodoroDurations,
     setStopwatchChimeMinutes,
+    setPauseOnTabSwitch,
+    setMaxContinuousMinutes,
     setSelectedArea,
     setSlotArea,
     setSelectedTopicId,
@@ -115,13 +122,30 @@ export default function FocoFlorestaPage() {
   const [periodFilter, setPeriodFilter] = useState<ForestPeriodFilter>('week');
   const [customFocusInput, setCustomFocusInput] = useState(String(focusMinutes));
   const [customBreakInput, setCustomBreakInput] = useState(String(breakMinutes));
+  const [clockNowMs, setClockNowMs] = useState<number>(0);
+  const [todayStr, setTodayStr] = useState<string>(() => getTodayDateString());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     setCustomFocusInput(String(focusMinutes));
     setCustomBreakInput(String(breakMinutes));
   }, [focusMinutes, breakMinutes]);
 
-  const todayStr = useMemo(() => getTodayDateString(), []);
+  // Atualiza relógio reativo (badge "Abelhas") e a data local na virada da meia-noite (sem Date.now() no SSR/render)
+  useEffect(() => {
+    const syncClock = () => {
+      setClockNowMs(Date.now());
+      const currentDay = getTodayDateString();
+      setTodayStr(prev => (prev === currentDay ? prev : currentDay));
+    };
+    syncClock();
+    const intervalId = window.setInterval(syncClock, 30_000);
+    document.addEventListener('visibilitychange', syncClock);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', syncClock);
+    };
+  }, []);
   const weekStartStr = useMemo(() => {
     const [y, m, d] = todayStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d);
@@ -490,35 +514,67 @@ export default function FocoFlorestaPage() {
                 </div>
               )}
 
-              {/* Sinal Sonoro Periódico para Cronômetro Livre */}
+              {/* Sinal Sonoro Periódico e Auto-pausa Contínua para Cronômetro Livre */}
               {mode === 'stopwatch' && (
-                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Bell className="h-3.5 w-3.5 text-primary" />
-                      Aviso sonoro periódico (sem pausar)
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground">
-                      {stopwatchChimeMinutes === 0
-                        ? 'Desativado'
-                        : `Toca a cada ${stopwatchChimeMinutes} min`}
-                    </span>
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Bell className="h-3.5 w-3.5 text-primary" />
+                        Aviso sonoro periódico (sem pausar)
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        {stopwatchChimeMinutes === 0
+                          ? 'Desativado'
+                          : `Toca a cada ${stopwatchChimeMinutes} min`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {STOPWATCH_CHIME_OPTIONS.map(mins => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setStopwatchChimeMinutes(mins)}
+                          className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                            stopwatchChimeMinutes === mins
+                              ? 'bg-primary/15 text-primary border-primary/40 shadow-sm'
+                              : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                          }`}
+                        >
+                          {mins === 0 ? 'Off' : `${mins}m`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {STOPWATCH_CHIME_OPTIONS.map(mins => (
-                      <button
-                        key={mins}
-                        type="button"
-                        onClick={() => setStopwatchChimeMinutes(mins)}
-                        className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                          stopwatchChimeMinutes === mins
-                            ? 'bg-primary/15 text-primary border-primary/40 shadow-sm'
-                            : 'bg-background text-muted-foreground border-border hover:text-foreground'
-                        }`}
-                      >
-                        {mins === 0 ? 'Off' : `${mins}m`}
-                      </button>
-                    ))}
+
+                  <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Hourglass className="h-3.5 w-3.5 text-primary" />
+                        Auto-pausa contínua
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        {maxContinuousMinutes === 0
+                          ? 'Sem limite'
+                          : `Pausa após ${maxContinuousMinutes / 60}h seguidas`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {STOPWATCH_MAX_CONTINUOUS_OPTIONS.map(mins => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setMaxContinuousMinutes(mins)}
+                          className={`py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                            maxContinuousMinutes === mins
+                              ? 'bg-primary/15 text-primary border-primary/40 shadow-sm'
+                              : 'bg-background text-muted-foreground border-border hover:text-foreground'
+                          }`}
+                        >
+                          {mins === 0 ? 'Off' : `${mins / 60}h`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -573,8 +629,14 @@ export default function FocoFlorestaPage() {
                   </label>
                   <select
                     value={selectedArea}
+                    disabled={status !== 'idle'}
                     onChange={e => setSelectedArea(e.target.value)}
-                    className="w-full h-9 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground"
+                    title={
+                      status !== 'idle'
+                        ? 'Finalize ou cancele a sessão ativa antes de alterar a Grande Área'
+                        : undefined
+                    }
+                    className="w-full h-9 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {areas.map(a => (
                       <option key={a.id} value={a.name}>
@@ -611,6 +673,41 @@ export default function FocoFlorestaPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Proteção de Foco (Auto-Pausa) */}
+              <div className="p-3 rounded-xl border border-border/60 bg-muted/25 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Pausar ao sair da aba</p>
+                    <p className="text-[10.5px] text-muted-foreground">
+                      Desligado por padrão para você estudar em PDFs e bancos de questões.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={pauseOnTabSwitch}
+                    aria-label="Pausar ao sair da aba"
+                    onClick={() => setPauseOnTabSwitch(!pauseOnTabSwitch)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                      pauseOnTabSwitch ? 'bg-emerald-600' : 'bg-muted-foreground/30'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                        pauseOnTabSwitch ? 'translate-x-[18px]' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {pauseOnClose && (
+                  <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/50 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                    <span>Auto-pausa ativa ao fechar navegador ou hibernar PC</span>
+                  </div>
+                )}
               </div>
 
               {/* Ações Principais */}
@@ -699,7 +796,10 @@ export default function FocoFlorestaPage() {
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => setPeriodFilter(tab.id as ForestPeriodFilter)}
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        setPeriodFilter(tab.id as ForestPeriodFilter);
+                      }}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
                         periodFilter === tab.id
                           ? 'bg-primary text-primary-foreground shadow-sm'
@@ -744,7 +844,9 @@ export default function FocoFlorestaPage() {
                     const liveSec = isSelected ? slotLiveSeconds : slot.accumulatedSeconds;
                     const prog = getNurserySlotProgress(liveSec);
                     const hasBees = Boolean(
-                      slot.beesActiveUntilMs && slot.beesActiveUntilMs > Date.now()
+                      clockNowMs > 0 &&
+                        slot.beesActiveUntilMs &&
+                        slot.beesActiveUntilMs > clockNowMs
                     );
 
                     return (
@@ -1064,16 +1166,43 @@ export default function FocoFlorestaPage() {
                           </p>
                         </div>
 
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => deleteStudySession(sess.id)}
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                          title="Excluir sessão do histórico"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {confirmDeleteId === sess.id ? (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                void deleteStudySession(sess.id);
+                              }}
+                              className="h-7 px-2 text-[11px] font-bold"
+                            >
+                              Confirmar?
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="h-7 px-2 text-[11px] font-semibold text-muted-foreground"
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setConfirmDeleteId(sess.id)}
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Excluir sessão do histórico"
+                            aria-label="Excluir sessão do histórico"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     );
                   })}

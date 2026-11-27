@@ -23,6 +23,24 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const next = sanitizeRedirectPath(requestUrl.searchParams.get('next'));
 
+  let parsedNext: URL | null = null;
+  try {
+    parsedNext = new URL(next, requestUrl.origin);
+  } catch {
+    parsedNext = null;
+  }
+
+  const isContaResetAccess = Boolean(
+    parsedNext &&
+      parsedNext.pathname === '/conta' &&
+      parsedNext.searchParams.get('reset') === 'true'
+  );
+
+  const sessionId =
+    requestUrl.searchParams.get('session_id')?.trim() ||
+    parsedNext?.searchParams.get('session_id')?.trim() ||
+    null;
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -47,43 +65,56 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Fluxo de redefinição de senha deve acessar /conta?reset=true mesmo sem assinatura ativa ou onboarding completo
+      if (isContaResetAccess) {
+        return NextResponse.redirect(new URL(next, requestUrl.origin));
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (user) {
-        // Verifica status da conta e onboarding diretamente do banco (sem backdoors nem query params)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('onboarding_completed, is_subscribed, subscription_status')
-          .eq('id', user.id)
-          .single();
+      if (!user) {
+        return NextResponse.redirect(new URL('/login', requestUrl.origin));
+      }
 
-        const hasActivePlan = Boolean(
-          profile &&
-            (profile.is_subscribed ||
-              profile.subscription_status === 'active' ||
-              profile.subscription_status === 'trial')
-        );
+      // Verifica status da conta e onboarding diretamente do banco (sem backdoors nem query params)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed, is_subscribed, subscription_status')
+        .eq('id', user.id)
+        .single();
 
-        // Se NÃO tem plano ativo, mantém o usuário logado e direciona para o pagamento preservando ?plan=
-        if (!hasActivePlan) {
-          let planSuffix = '';
-          try {
-            const parsedNext = new URL(next, requestUrl.origin);
-            const planParam = parsedNext.searchParams.get('plan');
-            if (planParam === 'monthly' || planParam === 'annual') {
-              planSuffix = `?plan=${planParam}`;
-            }
-          } catch {
-            // Ignora erro de parse
-          }
-          return NextResponse.redirect(new URL(`/pagamento${planSuffix}`, requestUrl.origin));
+      const hasActivePlan = Boolean(
+        profile &&
+          (profile.is_subscribed ||
+            profile.subscription_status === 'active' ||
+            profile.subscription_status === 'trial' ||
+            profile.subscription_status === 'trialing')
+      );
+
+      // Se NÃO tem plano ativo, mas veio do signup com ?session_id= válido, valida/ativa no servidor em /pagamento/sucesso
+      if (!hasActivePlan) {
+        if (sessionId && sessionId !== 'demo_session') {
+          return NextResponse.redirect(
+            new URL(
+              `/pagamento/sucesso?session_id=${encodeURIComponent(sessionId)}`,
+              requestUrl.origin
+            )
+          );
         }
 
-        if (profile && !profile.onboarding_completed) {
-          return NextResponse.redirect(new URL('/onboarding', requestUrl.origin));
+        let planSuffix = '';
+        const planParam =
+          parsedNext?.searchParams.get('plan') || requestUrl.searchParams.get('plan');
+        if (planParam === 'monthly' || planParam === 'annual') {
+          planSuffix = `?plan=${planParam}`;
         }
+        return NextResponse.redirect(new URL(`/pagamento${planSuffix}`, requestUrl.origin));
+      }
+
+      if (profile && !profile.onboarding_completed) {
+        return NextResponse.redirect(new URL('/onboarding', requestUrl.origin));
       }
 
       return NextResponse.redirect(new URL(next, requestUrl.origin));

@@ -269,6 +269,7 @@ export const RecordPlannedStudyModal: React.FC<RecordPlannedStudyModalProps> = (
                   value={durationMinutes}
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '');
+                    setPulledTimerMinutes(null);
                     setDurationMinutes(val);
                   }}
                   placeholder="Ex: 45 min"

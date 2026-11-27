@@ -8,6 +8,7 @@ import { useData } from '@/lib/store/data-context';
 import { Button } from '@/components/ui/button';
 import {
   STOPWATCH_CHIME_OPTIONS,
+  STOPWATCH_MAX_CONTINUOUS_OPTIONS,
   formatSecondsHMS,
   getTopicCurrentMomentLabel,
   getTreeStageLabel,
@@ -30,6 +31,8 @@ import {
   Info,
   X,
   Bell,
+  ShieldCheck,
+  Hourglass,
 } from 'lucide-react';
 
 export const FloatingFocusTimer: React.FC = () => {
@@ -42,6 +45,9 @@ export const FloatingFocusTimer: React.FC = () => {
     focusMinutes,
     breakMinutes,
     stopwatchChimeMinutes,
+    pauseOnClose,
+    pauseOnTabSwitch,
+    maxContinuousMinutes,
     displaySeconds,
     elapsedSeconds,
     progressRatio,
@@ -59,6 +65,8 @@ export const FloatingFocusTimer: React.FC = () => {
     setMode,
     setPomodoroDurations,
     setStopwatchChimeMinutes,
+    setPauseOnTabSwitch,
+    setMaxContinuousMinutes,
     setSelectedArea,
     setSelectedTopicId,
     selectNurserySlot,
@@ -376,28 +384,53 @@ export const FloatingFocusTimer: React.FC = () => {
           </div>
         )}
 
-        {/* Seletor de aviso sonoro periódico para Cronômetro Livre */}
+        {/* Seletor de aviso sonoro periódico e limite contínuo para Cronômetro Livre */}
         {mode === 'stopwatch' && (
-          <div className="flex items-center justify-between gap-1.5 rounded-xl bg-muted/30 border border-border/60 px-2.5 py-1.5">
-            <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
-              <Bell className="h-3 w-3 text-primary" />
-              Sinal a cada:
-            </span>
-            <div className="flex items-center gap-1 flex-wrap justify-end">
-              {STOPWATCH_CHIME_OPTIONS.map(mins => (
-                <button
-                  key={mins}
-                  type="button"
-                  onClick={() => setStopwatchChimeMinutes(mins)}
-                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all ${
-                    stopwatchChimeMinutes === mins
-                      ? 'bg-primary/15 text-primary border-primary/40'
-                      : 'bg-background text-muted-foreground border-border/70 hover:text-foreground'
-                  }`}
-                >
-                  {mins === 0 ? 'Off' : `${mins}m`}
-                </button>
-              ))}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-1.5 rounded-xl bg-muted/30 border border-border/60 px-2.5 py-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
+                <Bell className="h-3 w-3 text-primary" />
+                Sinal a cada:
+              </span>
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                {STOPWATCH_CHIME_OPTIONS.map(mins => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setStopwatchChimeMinutes(mins)}
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all ${
+                      stopwatchChimeMinutes === mins
+                        ? 'bg-primary/15 text-primary border-primary/40'
+                        : 'bg-background text-muted-foreground border-border/70 hover:text-foreground'
+                    }`}
+                  >
+                    {mins === 0 ? 'Off' : `${mins}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-1.5 rounded-xl bg-muted/30 border border-border/60 px-2.5 py-1.5">
+              <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
+                <Hourglass className="h-3 w-3 text-primary" />
+                Auto-pausa contínua:
+              </span>
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                {STOPWATCH_MAX_CONTINUOUS_OPTIONS.map(mins => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setMaxContinuousMinutes(mins)}
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all ${
+                      maxContinuousMinutes === mins
+                        ? 'bg-primary/15 text-primary border-primary/40'
+                        : 'bg-background text-muted-foreground border-border/70 hover:text-foreground'
+                    }`}
+                  >
+                    {mins === 0 ? 'Off' : `${mins / 60}h`}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -481,9 +514,15 @@ export const FloatingFocusTimer: React.FC = () => {
         <div className="grid grid-cols-1 gap-2">
           <select
             value={selectedArea}
+            disabled={status !== 'idle'}
             onChange={e => setSelectedArea(e.target.value)}
             aria-label="Grande Área estudada"
-            className="h-8 rounded-lg border border-border bg-background px-2.5 text-[11px] font-semibold text-foreground"
+            title={
+              status !== 'idle'
+                ? 'Finalize ou cancele a sessão ativa antes de alterar a Grande Área'
+                : undefined
+            }
+            className="h-8 rounded-lg border border-border bg-background px-2.5 text-[11px] font-semibold text-foreground disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {areas.map(a => (
               <option key={a.id} value={a.name}>
@@ -517,6 +556,37 @@ export const FloatingFocusTimer: React.FC = () => {
                   </span>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Proteção contra horas esquecidas */}
+        <div className="rounded-xl border border-border/60 bg-muted/25 px-2.5 py-2 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10.5px] font-semibold text-foreground">
+              Pausar ao sair da aba
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pauseOnTabSwitch}
+              aria-label="Pausar ao sair da aba"
+              onClick={() => setPauseOnTabSwitch(!pauseOnTabSwitch)}
+              className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                pauseOnTabSwitch ? 'bg-emerald-600' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                  pauseOnTabSwitch ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {pauseOnClose && (
+            <div className="flex items-center gap-1.5 text-[9.5px] font-medium text-emerald-700 dark:text-emerald-400">
+              <ShieldCheck className="h-3 w-3 shrink-0" />
+              <span>Auto-pausa ativa ao fechar navegador ou hibernar PC</span>
             </div>
           )}
         </div>

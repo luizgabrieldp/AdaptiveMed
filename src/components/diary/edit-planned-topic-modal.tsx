@@ -184,10 +184,31 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
         notes: notes.trim(),
       };
 
+      const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      const draftCausesToSave = errorDrafts.map(d => d.cause);
+      const editDurationValue = durationMinutes.trim() !== '' ? durNum : null;
+
       if (isCompleted) {
-        await updateTopicR0(topic.id, qDone, qCorrect, studyDate, durNum, topicChanges);
+        await updateTopicR0(
+          topic.id,
+          qDone,
+          qCorrect,
+          studyDate,
+          editDurationValue,
+          topicChanges,
+          draftCausesToSave
+        );
       } else {
         await updateTopic(topic.id, topicChanges);
+      }
+
+      for (const draft of errorDrafts) {
+        await addErrorLog({
+          topic_id: topic.id,
+          cause: draft.cause,
+          concept_summary: draft.concept_summary,
+          question_ref: draft.question_ref || undefined,
+        });
       }
 
       await recalculateTopicReviews(topic.id);
@@ -226,13 +247,14 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
       };
 
       const errorDrafts = collectFinalErrorDrafts(quickErrorState);
+      const editDurationValue = durationMinutes.trim() !== '' ? durNum : null;
       if (isCompleted) {
         await updateTopicR0(
           topic.id,
           qDone,
           qCorrect,
           studyDate,
-          durNum,
+          editDurationValue,
           topicChanges,
           errorDrafts.map(d => d.cause)
         );
@@ -466,6 +488,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                       value={durationMinutes}
                       onChange={e => {
                         const val = e.target.value.replace(/\D/g, '');
+                        setPulledTimerMinutes(null);
                         setDurationMinutes(val);
                       }}
                       placeholder="Ex: 45 min"
@@ -548,7 +571,7 @@ export const EditPlannedTopicModal: React.FC<EditPlannedTopicModalProps> = ({
                     </div>
                   ) : (
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                      <span>Próxima Revisão (R{nextCycleToReactivate}):</span>
+                      <span>Próxima Revisão (R1):</span>
                       <span className="font-bold text-foreground">
                         +{r1Interval} dias ({formatDateBR(estimatedR1Date)})
                       </span>

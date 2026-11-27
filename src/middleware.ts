@@ -108,7 +108,8 @@ export async function middleware(request: NextRequest) {
       const hasActiveSubscription = Boolean(
         profile?.is_subscribed ||
           profile?.subscription_status === 'active' ||
-          profile?.subscription_status === 'trial'
+          profile?.subscription_status === 'trial' ||
+          profile?.subscription_status === 'trialing'
       );
 
       const isContaResetAccess =

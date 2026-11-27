@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -27,6 +27,51 @@ import {
   Loader2,
 } from 'lucide-react';
 
+function sanitizeRedirectPath(rawNext: string | null): string | null {
+  if (!rawNext) return null;
+  if (/[\x00-\x1f\x7f\\]/.test(rawNext)) return null;
+  if (!rawNext.startsWith('/') || rawNext.startsWith('//')) return null;
+  try {
+    const parsed = new URL(rawNext, 'http://localhost');
+    if (parsed.origin !== 'http://localhost') return null;
+    if (
+      parsed.pathname === '/login' ||
+      parsed.pathname.startsWith('/login/') ||
+      parsed.pathname === '/signup' ||
+      parsed.pathname.startsWith('/signup/') ||
+      parsed.pathname.startsWith('/auth/callback')
+    ) {
+      return null;
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function isContaResetPath(path: string | null): boolean {
+  if (!path) return false;
+  try {
+    const parsed = new URL(path, 'http://localhost');
+    return parsed.pathname === '/conta' && parsed.searchParams.get('reset') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function hasActiveSubscription(
+  prof?: { is_subscribed?: boolean | null; subscription_status?: string | null } | null
+): boolean {
+  if (!prof) return false;
+  const status = prof.subscription_status;
+  return Boolean(
+    prof.is_subscribed ||
+      status === 'active' ||
+      status === 'trial' ||
+      status === 'trialing'
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -43,15 +88,98 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetNotice, setResetNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [planParam, setPlanParam] = useState<'monthly' | 'annual' | null>(null);
+  const [redirectedFrom, setRedirectedFrom] = useState<string | null>(null);
+
+  // Locks para eliminar consultas paralelas duplicadas em profiles entre getSession, onAuthStateChange e handleLogin
+  const redirectInProgressRef = useRef<boolean>(false);
+  const manualLoginInProgressRef = useRef<boolean>(false);
+
+  const resolvePostLoginRedirect = useCallback(
+    async (
+      userId: string,
+      opts: {
+        plan: 'monthly' | 'annual' | null;
+        safeRedirect: string | null;
+        navigationMode: 'replace' | 'assign';
+      }
+    ) => {
+      if (redirectInProgressRef.current) return;
+      redirectInProgressRef.current = true;
+
+      const navigate = (dest: string, useRouterReplace = false) => {
+        if (useRouterReplace && opts.navigationMode === 'replace') {
+          router.replace(dest);
+        } else if (opts.navigationMode === 'assign') {
+          window.location.assign(dest);
+        } else {
+          window.location.replace(dest);
+        }
+      };
+
+      try {
+        // Exceção de redefinição de senha permite acesso direto a /conta?reset=true
+        if (isContaResetPath(opts.safeRedirect)) {
+          navigate(opts.safeRedirect!, false);
+          return;
+        }
+
+        const supabase = createClient();
+        const { data: prof, error: profError } = await supabase
+          .from('profiles')
+          .select('onboarding_completed, is_subscribed, subscription_status')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profError) {
+          redirectInProgressRef.current = false;
+          throw new Error('Não foi possível verificar o status da sua conta. Tente novamente.');
+        }
+
+        const hasActivePlan = hasActiveSubscription(prof);
+
+        if (!hasActivePlan) {
+          const paymentPath =
+            opts.safeRedirect && opts.safeRedirect.startsWith('/pagamento')
+              ? opts.safeRedirect
+              : opts.plan
+              ? `/pagamento?plan=${opts.plan}`
+              : '/pagamento';
+          setIsLoading(false);
+          navigate(paymentPath, true);
+          return;
+        }
+
+        if (prof && prof.onboarding_completed) {
+          const targetDest =
+            opts.safeRedirect && !opts.safeRedirect.startsWith('/pagamento')
+              ? opts.safeRedirect
+              : '/dashboard';
+          navigate(targetDest, false);
+        } else {
+          navigate('/onboarding', false);
+        }
+      } catch (err) {
+        redirectInProgressRef.current = false;
+        throw err;
+      }
+    },
+    [router]
+  );
 
   // DETECÇÃO AUTOMÁTICA DE SESSÃO ATIVA (ELIMINA A NECESSIDADE DE 2 CLIQUES)
   React.useEffect(() => {
     let capturedPlan: 'monthly' | 'annual' | null = null;
+    let capturedRedirect: string | null = null;
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const reason = params.get('reason');
       const emailParam = params.get('email');
       const pId = params.get('plan');
+      const rawRedirect = params.get('redirectedFrom');
+      capturedRedirect = sanitizeRedirectPath(rawRedirect);
+      if (capturedRedirect) {
+        setRedirectedFrom(capturedRedirect);
+      }
       if (pId === 'monthly' || pId === 'annual') {
         capturedPlan = pId;
         setPlanParam(pId);
@@ -65,72 +193,37 @@ export default function LoginPage() {
 
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
-    const paymentPath = capturedPlan ? `/pagamento?plan=${capturedPlan}` : '/pagamento';
 
-    // 1. Checa se o usuário já chegou autenticado pelo Google
+    // 1. Checa se o usuário já chegou autenticado
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        supabase
-          .from('profiles')
-          .select('onboarding_completed, is_subscribed, subscription_status')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: prof }) => {
-            const hasActivePlan = Boolean(
-              prof &&
-                (prof.is_subscribed ||
-                  prof.subscription_status === 'active' ||
-                  prof.subscription_status === 'trial')
-            );
-
-            if (!hasActivePlan) {
-              router.replace(paymentPath);
-              return;
-            }
-
-            if (prof && prof.onboarding_completed) {
-              window.location.replace('/dashboard');
-            } else {
-              window.location.replace('/onboarding');
-            }
-          });
+      if (session?.user && !manualLoginInProgressRef.current) {
+        resolvePostLoginRedirect(session.user.id, {
+          plan: capturedPlan,
+          safeRedirect: capturedRedirect,
+          navigationMode: 'replace',
+        }).catch(() => {});
       }
     });
 
-    // 2. Escuta mudanças imediatas de autenticação do OAuth
+    // 2. Escuta mudanças imediatas de autenticação do OAuth (sem duplicar com getSession/handleLogin)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-        supabase
-          .from('profiles')
-          .select('onboarding_completed, is_subscribed, subscription_status')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: prof }) => {
-            const hasActivePlan = Boolean(
-              prof &&
-                (prof.is_subscribed ||
-                  prof.subscription_status === 'active' ||
-                  prof.subscription_status === 'trial')
-            );
-
-            if (!hasActivePlan) {
-              router.replace(paymentPath);
-              return;
-            }
-
-            if (prof && prof.onboarding_completed) {
-              window.location.replace('/dashboard');
-            } else {
-              window.location.replace('/onboarding');
-            }
-          });
+      if (
+        session?.user &&
+        !manualLoginInProgressRef.current &&
+        (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
+      ) {
+        resolvePostLoginRedirect(session.user.id, {
+          plan: capturedPlan,
+          safeRedirect: capturedRedirect,
+          navigationMode: 'replace',
+        }).catch(() => {});
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [resolvePostLoginRedirect]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +240,7 @@ export default function LoginPage() {
 
     try {
       setIsLoading(true);
+      manualLoginInProgressRef.current = true;
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -154,6 +248,7 @@ export default function LoginPage() {
       });
 
       if (error) {
+        manualLoginInProgressRef.current = false;
         setIsLoading(false);
         if (error.message.toLowerCase().includes('invalid login credentials')) {
           setErrorMessage(
@@ -166,34 +261,17 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Verifica assinatura ativa e onboarding
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('onboarding_completed, is_subscribed, subscription_status')
-          .eq('id', data.user.id)
-          .single();
-
-        const hasActivePlan = Boolean(
-          prof &&
-            (prof.is_subscribed ||
-              prof.subscription_status === 'active' ||
-              prof.subscription_status === 'trial')
-        );
-
-        // Se a conta não tiver assinatura paga ativa, vai direto para a tela de pagamento já autenticado
-        if (!hasActivePlan) {
-          setIsLoading(false);
-          window.location.assign(planParam ? `/pagamento?plan=${planParam}` : '/pagamento');
-          return;
-        }
-
-        if (prof && prof.onboarding_completed) {
-          window.location.assign('/dashboard');
-        } else {
-          window.location.assign('/onboarding');
-        }
+        await resolvePostLoginRedirect(data.user.id, {
+          plan: planParam,
+          safeRedirect: redirectedFrom,
+          navigationMode: 'assign',
+        });
+      } else {
+        manualLoginInProgressRef.current = false;
+        setIsLoading(false);
       }
     } catch (err: any) {
+      manualLoginInProgressRef.current = false;
       setErrorMessage(err.message || 'Erro inesperado ao efetuar login.');
       setIsLoading(false);
     }
@@ -230,7 +308,7 @@ export default function LoginPage() {
           : 'https://adaptive-med.vercel.app';
 
       const { error } = await supabase.auth.resetPasswordForEmail(cleanResetEmail, {
-        redirectTo: `${origin}/conta?reset=true`,
+        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent('/conta?reset=true')}`,
       });
 
       if (error) throw error;
@@ -267,12 +345,13 @@ export default function LoginPage() {
           ? window.location.origin
           : 'https://adaptive-med.vercel.app';
 
+      const oauthNext =
+        redirectedFrom || (planParam ? `/pagamento?plan=${planParam}` : '/dashboard');
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(
-            planParam ? `/pagamento?plan=${planParam}` : '/dashboard'
-          )}`,
+          redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(oauthNext)}`,
         },
       });
 

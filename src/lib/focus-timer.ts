@@ -13,6 +13,133 @@ import {
 import { getTodayDateString } from './spaced-repetition';
 
 export const STOPWATCH_CHIME_OPTIONS = [0, 15, 20, 25, 30] as const;
+export const STOPWATCH_MAX_CONTINUOUS_OPTIONS = [0, 120, 180, 240] as const;
+export const DEFAULT_MAX_CONTINUOUS_MINUTES = 180;
+export const DEFAULT_SAME_TAB_RELOAD_WINDOW_MS = 8_000;
+export const DEFAULT_STALE_HEARTBEAT_THRESHOLD_MS = 120_000;
+
+export interface PersistedTimerRecoveryParams {
+  status: 'idle' | 'running' | 'paused';
+  mode: FocusMode;
+  startedAtMs: number | null;
+  accumulatedSeconds: number;
+  lastActiveAtMs: number | null;
+  ownerTabId?: string | null;
+  currentTabId: string;
+  nowMs: number;
+  pauseOnClose: boolean;
+  unloadedAtMs?: number | null;
+  sameTabReloadWindowMs?: number;
+  staleHeartbeatThresholdMs?: number;
+}
+
+export interface PersistedTimerRecoveryResult {
+  shouldAutoPause: boolean;
+  recoveredAccumulatedSeconds: number;
+  pausedAtMs: number | null;
+  reason: 'none' | 'page_closed' | 'stale_heartbeat';
+}
+
+/**
+ * Avalia deterministicamente, ao hidratar uma sessão persistida no localStorage,
+ * se um timer salvo como `running` deve continuar rodando (ex: F5 rápido na mesma aba
+ * ou outra aba ainda ativa enviando heartbeat recente) ou se deve ser congelado
+ * no último momento ativo (`unloadedAtMs` / `lastActiveAtMs` / `startedAtMs`),
+ * evitando computar horas com a página fechada ou o computador hibernado.
+ */
+export function evaluatePersistedTimerRecovery(
+  params: PersistedTimerRecoveryParams
+): PersistedTimerRecoveryResult {
+  const safeAccumulated = Math.max(0, Math.floor(Number(params.accumulatedSeconds) || 0));
+  const rawSameTabWindow = params.sameTabReloadWindowMs;
+  const sameTabWindow =
+    typeof rawSameTabWindow === 'number' && Number.isFinite(rawSameTabWindow)
+      ? Math.max(0, rawSameTabWindow)
+      : DEFAULT_SAME_TAB_RELOAD_WINDOW_MS;
+  const rawStaleThreshold = params.staleHeartbeatThresholdMs;
+  const staleThreshold =
+    typeof rawStaleThreshold === 'number' && Number.isFinite(rawStaleThreshold)
+      ? Math.max(0, rawStaleThreshold)
+      : DEFAULT_STALE_HEARTBEAT_THRESHOLD_MS;
+
+  if (params.status !== 'running' || !params.pauseOnClose) {
+    return {
+      shouldAutoPause: false,
+      recoveredAccumulatedSeconds: safeAccumulated,
+      pausedAtMs: null,
+      reason: 'none',
+    };
+  }
+
+  const startedAtMs =
+    typeof params.startedAtMs === 'number' && Number.isFinite(params.startedAtMs)
+      ? params.startedAtMs
+      : null;
+  const lastActiveAtMs =
+    typeof params.lastActiveAtMs === 'number' && Number.isFinite(params.lastActiveAtMs)
+      ? params.lastActiveAtMs
+      : null;
+  const unloadedAtMs =
+    typeof params.unloadedAtMs === 'number' && Number.isFinite(params.unloadedAtMs)
+      ? params.unloadedAtMs
+      : null;
+  const nowMs = Number.isFinite(params.nowMs) ? params.nowMs : Date.now();
+
+  const freezeAtTimestamp = (
+    targetMs: number,
+    reason: 'page_closed' | 'stale_heartbeat'
+  ): PersistedTimerRecoveryResult => {
+    const clampedPauseMs = Math.min(nowMs, targetMs);
+    const deltaSec =
+      startedAtMs !== null
+        ? Math.max(0, Math.floor((clampedPauseMs - startedAtMs) / 1000))
+        : 0;
+    return {
+      shouldAutoPause: true,
+      recoveredAccumulatedSeconds: safeAccumulated + deltaSec,
+      pausedAtMs: clampedPauseMs,
+      reason,
+    };
+  };
+
+  // Caso 1: a aba registrou descarregamento explícito (pagehide / beforeunload / freeze)
+  if (unloadedAtMs !== null) {
+    const isSameTab = Boolean(params.ownerTabId && params.ownerTabId === params.currentTabId);
+    const unloadGapMs = nowMs - unloadedAtMs;
+    if (isSameTab && unloadGapMs >= 0 && unloadGapMs <= sameTabWindow) {
+      return {
+        shouldAutoPause: false,
+        recoveredAccumulatedSeconds: safeAccumulated,
+        pausedAtMs: null,
+        reason: 'none',
+      };
+    }
+    return freezeAtTimestamp(unloadedAtMs, 'page_closed');
+  }
+
+  // Caso 2: sem unload explícito (crash, kill do navegador, hibernação ou outra aba ainda aberta)
+  const referenceActiveMs = lastActiveAtMs ?? startedAtMs;
+  if (referenceActiveMs === null) {
+    return {
+      shouldAutoPause: true,
+      recoveredAccumulatedSeconds: safeAccumulated,
+      pausedAtMs: nowMs,
+      reason: 'stale_heartbeat',
+    };
+  }
+
+  const heartbeatAgeMs = nowMs - referenceActiveMs;
+  if (heartbeatAgeMs <= staleThreshold) {
+    return {
+      shouldAutoPause: false,
+      recoveredAccumulatedSeconds: safeAccumulated,
+      pausedAtMs: null,
+      reason: 'none',
+    };
+  }
+
+  return freezeAtTimestamp(referenceActiveMs, 'stale_heartbeat');
+}
 
 export type TreeGrowthStage = 'seed' | 'sprout' | 'sapling' | 'mature';
 
@@ -457,6 +584,10 @@ export function playGentleChime(): void {
       osc.start(now + idx * 0.14);
       osc.stop(now + idx * 0.14 + 0.95);
     });
+
+    window.setTimeout(() => {
+      void ctx.close().catch(() => {});
+    }, 1400);
   } catch {
     // Ignora silenciosamente se o navegador bloquear autoplay de áudio
   }

@@ -21,6 +21,7 @@ import {
   calculateFocusOutcome,
   collectFinalErrorDrafts,
   createInitialQuickErrorState,
+  evaluatePersistedTimerRecovery,
   getLastStudiedMinutesForTopic,
   getTopicCurrentMomentLabel,
   getTreeGrowthStage,
@@ -34,6 +35,8 @@ import {
   applyBoostToGarden,
   STAGE_BLOCK_SECONDS,
   FULL_TREE_SECONDS,
+  STOPWATCH_MAX_CONTINUOUS_OPTIONS,
+  DEFAULT_MAX_CONTINUOUS_MINUTES,
 } from '../src/lib/focus-timer';
 import type { StudySession, StudyTopic, TopicReview } from '../src/types/database';
 
@@ -683,6 +686,276 @@ test('computeErrorCauseAdjustment e calculateNextReview aplicam peso da causa do
   assert.ok(withLacuna.nextIntervalDays <= withoutErrors.nextIntervalDays);
   assert.ok(withLacuna.recommendedQuestions > withoutErrors.recommendedQuestions);
   assert.equal(withLacuna.errorWeightApplied?.dominantCause, 'Lacuna teórica');
+});
+
+test('evaluatePersistedTimerRecovery: fechamento de página com pauseOnClose congela em unloadedAtMs', () => {
+  assert.deepEqual([...STOPWATCH_MAX_CONTINUOUS_OPTIONS], [0, 120, 180, 240]);
+  assert.equal(DEFAULT_MAX_CONTINUOUS_MINUTES, 180);
+
+  const tStart = 1_700_000_000_000;
+  const tClose = tStart + 15 * 60 * 1000; // estudou 15 min
+  const tNextDay = tClose + 14 * 60 * 60 * 1000; // voltou 14h depois em nova aba
+
+  const res = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 300, // 5 min prévios
+    lastActiveAtMs: tClose - 2_000,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tNextDay,
+    pauseOnClose: true,
+    unloadedAtMs: tClose,
+  });
+
+  assert.equal(res.shouldAutoPause, true);
+  assert.equal(res.reason, 'page_closed');
+  assert.equal(res.pausedAtMs, tClose);
+  // 5 min prévios + 15 min até o fechamento = 20 min (1200s), ZERO das 14h fechadas!
+  assert.equal(res.recoveredAccumulatedSeconds, 1200);
+});
+
+test('evaluatePersistedTimerRecovery: F5 rápido na mesma aba (< 8s) retoma sem pausar, e > 8s pausa', () => {
+  const tStart = 1_700_000_000_000;
+  const tUnload = tStart + 600_000; // 10 min
+
+  // Reload rápido (2.5s depois) na MESMA aba -> continua rodando!
+  const fastReload = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: tStart,
+    accumulatedSeconds: 0,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-same',
+    currentTabId: 'tab-same',
+    nowMs: tUnload + 2_500,
+    pauseOnClose: true,
+    unloadedAtMs: tUnload,
+  });
+  assert.equal(fastReload.shouldAutoPause, false);
+  assert.equal(fastReload.reason, 'none');
+
+  // Mesmo na mesma aba, se demorou 12s (> 8s) -> pausa em tUnload
+  const slowReload = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: tStart,
+    accumulatedSeconds: 0,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-same',
+    currentTabId: 'tab-same',
+    nowMs: tUnload + 12_000,
+    pauseOnClose: true,
+    unloadedAtMs: tUnload,
+  });
+  assert.equal(slowReload.shouldAutoPause, true);
+  assert.equal(slowReload.reason, 'page_closed');
+  assert.equal(slowReload.pausedAtMs, tUnload);
+  assert.equal(slowReload.recoveredAccumulatedSeconds, 600);
+});
+
+test('evaluatePersistedTimerRecovery: crash / navegador fechado de um dia pro outro congela em lastActiveAtMs', () => {
+  const tStart = 1_700_000_000_000;
+  const tLastHeartbeat = tStart + 22 * 60 * 1000; // último heartbeat após 22 min
+  const tNextMorning = tLastHeartbeat + 11 * 60 * 60 * 1000; // 11h depois, sem unloadedAtMs
+
+  const crashRes = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 120,
+    lastActiveAtMs: tLastHeartbeat,
+    ownerTabId: 'tab-crashed',
+    currentTabId: 'tab-new',
+    nowMs: tNextMorning,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+  });
+
+  assert.equal(crashRes.shouldAutoPause, true);
+  assert.equal(crashRes.reason, 'stale_heartbeat');
+  assert.equal(crashRes.pausedAtMs, tLastHeartbeat);
+  // 120s prévios + 1320s até último heartbeat = 1440s (24 min), NÃO 11h!
+  assert.equal(crashRes.recoveredAccumulatedSeconds, 1440);
+
+  // Estado legado sem lastActiveAtMs nem unloadedAtMs, apenas startedAtMs antigo (> 120s): congela em startedAtMs
+  const legacyRes = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: tStart,
+    accumulatedSeconds: 60,
+    lastActiveAtMs: null,
+    ownerTabId: null,
+    currentTabId: 'tab-new',
+    nowMs: tStart + 5 * 60 * 60 * 1000,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+  });
+  assert.equal(legacyRes.shouldAutoPause, true);
+  assert.equal(legacyRes.reason, 'stale_heartbeat');
+  assert.equal(legacyRes.pausedAtMs, tStart);
+  assert.equal(legacyRes.recoveredAccumulatedSeconds, 60);
+});
+
+test('evaluatePersistedTimerRecovery: aba viva em outro tab dentro da janela de heartbeat e casos de borda', () => {
+  const tStart = 1_700_000_000_000;
+  const tHeartbeat = tStart + 10 * 60 * 1000;
+
+  // Outra aba enviou heartbeat há 15s (< 120s) -> continua rodando em sincronia
+  const liveOtherTab = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 0,
+    lastActiveAtMs: tHeartbeat,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tHeartbeat + 15_000,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+  });
+  assert.equal(liveOtherTab.shouldAutoPause, false);
+  assert.equal(liveOtherTab.reason, 'none');
+
+  // pauseOnClose === false -> nunca auto-pausa
+  const disabledRes = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 100,
+    lastActiveAtMs: tStart,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tStart + 10 * 60 * 60 * 1000,
+    pauseOnClose: false,
+    unloadedAtMs: tStart + 5_000,
+  });
+  assert.equal(disabledRes.shouldAutoPause, false);
+  assert.equal(disabledRes.reason, 'none');
+
+  // status idle/paused -> nunca auto-pausa
+  const pausedRes = evaluatePersistedTimerRecovery({
+    status: 'paused',
+    mode: 'pomodoro',
+    startedAtMs: null,
+    accumulatedSeconds: 450,
+    lastActiveAtMs: tStart,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tStart + 10 * 60 * 60 * 1000,
+    pauseOnClose: true,
+    unloadedAtMs: tStart,
+  });
+  assert.equal(pausedRes.shouldAutoPause, false);
+  assert.equal(pausedRes.recoveredAccumulatedSeconds, 450);
+  assert.equal(pausedRes.reason, 'none');
+});
+
+test('evaluatePersistedTimerRecovery: fronteiras exatas, NaN em parâmetros opcionais e timestamps degenerados', () => {
+  const tStart = 1_700_000_000_000;
+  const tUnload = tStart + 300_000;
+
+  // Fronteira exata de F5 rápido na mesma aba (8000ms -> retoma; 8001ms -> pausa)
+  const exactBoundaryOk = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: tStart,
+    accumulatedSeconds: 10,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-1',
+    currentTabId: 'tab-1',
+    nowMs: tUnload + 8_000,
+    pauseOnClose: true,
+    unloadedAtMs: tUnload,
+    sameTabReloadWindowMs: Number.NaN, // deve cair para o default 8000ms
+  });
+  assert.equal(exactBoundaryOk.shouldAutoPause, false);
+  assert.equal(exactBoundaryOk.reason, 'none');
+
+  const exactBoundaryExpired = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: tStart,
+    accumulatedSeconds: 10,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-1',
+    currentTabId: 'tab-1',
+    nowMs: tUnload + 8_001,
+    pauseOnClose: true,
+    unloadedAtMs: tUnload,
+    sameTabReloadWindowMs: Number.NaN,
+  });
+  assert.equal(exactBoundaryExpired.shouldAutoPause, true);
+  assert.equal(exactBoundaryExpired.reason, 'page_closed');
+  assert.equal(exactBoundaryExpired.recoveredAccumulatedSeconds, 310);
+
+  // Fronteira exata de heartbeat (120_000ms -> vivo; 120_001ms -> stale_heartbeat) com NaN
+  const heartbeatBoundaryAlive = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 0,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tUnload + 120_000,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+    staleHeartbeatThresholdMs: Number.NaN, // deve cair para 120_000ms
+  });
+  assert.equal(heartbeatBoundaryAlive.shouldAutoPause, false);
+
+  const heartbeatBoundaryStale = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: 0,
+    lastActiveAtMs: tUnload,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tUnload + 120_001,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+    staleHeartbeatThresholdMs: Number.NaN,
+  });
+  assert.equal(heartbeatBoundaryStale.shouldAutoPause, true);
+  assert.equal(heartbeatBoundaryStale.reason, 'stale_heartbeat');
+  assert.equal(heartbeatBoundaryStale.recoveredAccumulatedSeconds, 300);
+
+  // Timestamps degenerados: unloadedAtMs < startedAtMs e accumulatedSeconds negativo -> nunca subtrai tempo
+  const skewedRes = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'stopwatch',
+    startedAtMs: tStart,
+    accumulatedSeconds: -50,
+    lastActiveAtMs: tStart - 5_000,
+    ownerTabId: 'tab-A',
+    currentTabId: 'tab-B',
+    nowMs: tStart + 60_000,
+    pauseOnClose: true,
+    unloadedAtMs: tStart - 10_000,
+  });
+  assert.equal(skewedRes.shouldAutoPause, true);
+  assert.equal(skewedRes.recoveredAccumulatedSeconds, 0);
+
+  // Estado running corrompido sem startedAtMs nem lastActiveAtMs nem unloadedAtMs
+  const corruptedRunning = evaluatePersistedTimerRecovery({
+    status: 'running',
+    mode: 'pomodoro',
+    startedAtMs: null,
+    accumulatedSeconds: 180,
+    lastActiveAtMs: null,
+    ownerTabId: null,
+    currentTabId: 'tab-B',
+    nowMs: tStart,
+    pauseOnClose: true,
+    unloadedAtMs: null,
+  });
+  assert.equal(corruptedRunning.shouldAutoPause, true);
+  assert.equal(corruptedRunning.reason, 'stale_heartbeat');
+  assert.equal(corruptedRunning.recoveredAccumulatedSeconds, 180);
+  assert.equal(corruptedRunning.pausedAtMs, tStart);
 });
 
 console.log(`\nTodos os ${passed} testes passaram com 100% de sucesso!`);

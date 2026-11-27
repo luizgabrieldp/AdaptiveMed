@@ -29,10 +29,21 @@ const LAST_NOTIF_DATE_KEY = 'adaptivemed_last_notif_date';
 const NOTIF_PROMPT_DISMISSED_KEY = 'adaptivemed_notif_dismissed';
 
 export const NotificationManager: React.FC = () => {
-  const { stats, topics } = useData();
+  const { stats, streakConfig } = useData();
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [modalOpen, setModalOpen] = useState(false);
   const [testSent, setTestSent] = useState(false);
+
+  const minDailyQuestions = streakConfig?.minDailyQuestions ?? 10;
+  const streakRuleType = streakConfig?.ruleType ?? 'questions_or_mock';
+  const streakGoalDescription =
+    streakRuleType === 'mock_only'
+      ? 'concluído um simulado hoje'
+      : streakRuleType === 'questions_only'
+      ? `resolvido as ${minDailyQuestions} questões mínimas`
+      : streakRuleType === 'questions_and_mock'
+      ? `resolvido as ${minDailyQuestions} questões mínimas e concluído um simulado`
+      : `resolvido as ${minDailyQuestions} questões mínimas ou o simulado`;
 
   // Checa permissão atual do navegador
   useEffect(() => {
@@ -113,11 +124,15 @@ export const NotificationManager: React.FC = () => {
         title={
           permission === 'granted'
             ? 'Notificações ativas no navegador'
+            : permission === 'unsupported'
+            ? 'Notificações não suportadas neste navegador'
             : 'Configurar notificações de estudo'
         }
         aria-label={
           permission === 'granted'
             ? 'Notificações ativas no navegador'
+            : permission === 'unsupported'
+            ? 'Notificações não suportadas neste navegador'
             : 'Configurar notificações de estudo'
         }
       >
@@ -125,11 +140,13 @@ export const NotificationManager: React.FC = () => {
           <BellRing className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         ) : permission === 'denied' ? (
           <BellOff className="h-4 w-4 text-rose-600 dark:text-rose-400 opacity-60" />
+        ) : permission === 'unsupported' ? (
+          <BellOff className="h-4 w-4 text-muted-foreground opacity-60" />
         ) : (
           <Bell className="h-4 w-4 text-muted-foreground" />
         )}
 
-        {permission !== 'granted' && (
+        {permission === 'default' && (
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-500" />
         )}
       </button>
@@ -165,6 +182,10 @@ export const NotificationManager: React.FC = () => {
                 <Badge variant="destructive" className="gap-1 text-xs">
                   <BellOff className="h-3 w-3" /> Bloqueado no Navegador
                 </Badge>
+              ) : permission === 'unsupported' ? (
+                <Badge variant="outline" className="gap-1 text-xs text-muted-foreground border-border">
+                  <BellOff className="h-3 w-3" /> Não Suportado
+                </Badge>
               ) : (
                 <Badge variant="outline" className="gap-1 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30">
                   <AlertCircle className="h-3 w-3" /> Aguardando Permissão
@@ -188,7 +209,7 @@ export const NotificationManager: React.FC = () => {
                   <Flame className="h-3.5 w-3.5" />
                 </div>
                 <p>
-                  <strong className="text-foreground">Proteção de Ofensiva:</strong> Alerta preventivo se o dia estiver acabando e você ainda não tiver resolvido as 10 questões mínimas ou o simulado.
+                  <strong className="text-foreground">Proteção de Ofensiva:</strong> Alerta preventivo se o dia estiver acabando e você ainda não tiver {streakGoalDescription}.
                 </p>
               </div>
 
@@ -201,6 +222,12 @@ export const NotificationManager: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {permission === 'unsupported' && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                Este navegador não suporta notificações web nativas neste modo (por exemplo, iOS Safari fora da Tela de Início). Para receber alertas no iPhone/iPad, adicione o AdaptiveMed à Tela de Início ou utilize um navegador compatível no desktop/Android.
+              </div>
+            )}
 
             {permission === 'denied' && (
               <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-[11px] text-destructive leading-relaxed">
@@ -221,10 +248,13 @@ export const NotificationManager: React.FC = () => {
               <Button
                 type="button"
                 onClick={requestPermission}
+                disabled={permission === 'unsupported'}
                 className="w-full sm:w-auto font-bold text-xs gap-1.5 shadow-md shadow-primary/20"
               >
                 <BellRing className="h-4 w-4" />
-                Ativar Notificações no Navegador
+                {permission === 'unsupported'
+                  ? 'Notificações Indisponíveis'
+                  : 'Ativar Notificações no Navegador'}
               </Button>
             )}
 

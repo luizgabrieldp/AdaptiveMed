@@ -16,6 +16,14 @@ const SubscriptionActionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+function extractPeriodEndSec(sub: Stripe.Subscription | null | undefined): number | null {
+  if (!sub) return null;
+  const periodEndSec =
+    (sub as { current_period_end?: number | null }).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  return typeof periodEndSec === 'number' && periodEndSec > 0 ? periodEndSec : null;
+}
+
 // GET: Retorna os detalhes da assinatura do usuário autenticado
 export async function GET() {
   try {
@@ -58,30 +66,35 @@ export async function GET() {
       }
     }
 
-    if (!stripeSubscription && user.email) {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1,
-      });
-
-      if (customers.data.length > 0) {
-        const subs = await stripe.subscriptions.list({
-          customer: customers.data[0].id,
-          status: 'all',
+    if (!stripeSubscription) {
+      let customerId = profile?.stripe_customer_id || null;
+      if (!customerId && user.email) {
+        const customers = await stripe.customers.list({
+          email: user.email,
           limit: 1,
+        });
+        customerId = customers.data[0]?.id || null;
+      }
+
+      if (customerId) {
+        const subs = await stripe.subscriptions.list({
+          customer: customerId,
+          status: 'all',
+          limit: 10,
         });
 
         if (subs.data.length > 0) {
-          stripeSubscription = subs.data[0];
+          stripeSubscription =
+            subs.data.find(s => s.status === 'active' || s.status === 'trialing') || subs.data[0];
         }
       }
     }
 
     if (stripeSubscription) {
-      const currentPeriodEndSec = (stripeSubscription as any).current_period_end;
+      const currentPeriodEndSec = extractPeriodEndSec(stripeSubscription);
       const periodEnd = currentPeriodEndSec
         ? new Date(currentPeriodEndSec * 1000).toISOString()
-        : null;
+        : profile?.current_period_end || null;
       const planItem = stripeSubscription.items.data[0]?.price;
       const unitAmount = planItem?.unit_amount ? planItem.unit_amount / 100 : 7.99;
       const interval = planItem?.recurring?.interval === 'year' ? 'ano' : 'mês';
@@ -150,20 +163,27 @@ export async function POST(req: NextRequest) {
 
     let subscriptionId: string | null = prof?.stripe_subscription_id || null;
 
-    if (!subscriptionId && user.email) {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1,
-      });
-
-      if (customers.data.length > 0) {
-        const subs = await stripe.subscriptions.list({
-          customer: customers.data[0].id,
-          status: 'active',
+    if (!subscriptionId) {
+      let customerId = prof?.stripe_customer_id || null;
+      if (!customerId && user.email) {
+        const customers = await stripe.customers.list({
+          email: user.email,
           limit: 1,
         });
-        if (subs.data.length > 0) {
-          subscriptionId = subs.data[0].id;
+        customerId = customers.data[0]?.id || null;
+      }
+
+      if (customerId) {
+        const subs = await stripe.subscriptions.list({
+          customer: customerId,
+          status: 'all',
+          limit: 10,
+        });
+        const activeOrTrialSub = subs.data.find(
+          s => s.status === 'active' || s.status === 'trialing'
+        );
+        if (activeOrTrialSub) {
+          subscriptionId = activeOrTrialSub.id;
         }
       }
     }
@@ -184,7 +204,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      const endSec = (updatedSub as any).current_period_end;
+      const endSec = extractPeriodEndSec(updatedSub);
       const periodEndIso = endSec ? new Date(endSec * 1000).toISOString() : null;
       const periodEndDate = endSec
         ? new Date(endSec * 1000).toLocaleDateString('pt-BR')
@@ -192,12 +212,15 @@ export async function POST(req: NextRequest) {
 
       if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
         const admin = createAdminClient();
+        const profileUpdate: Record<string, unknown> = {
+          cancel_at_period_end: true,
+        };
+        if (periodEndIso) {
+          profileUpdate.current_period_end = periodEndIso;
+        }
         await admin
           .from('profiles')
-          .update({
-            cancel_at_period_end: true,
-            current_period_end: periodEndIso,
-          })
+          .update(profileUpdate)
           .eq('id', user.id);
       }
 

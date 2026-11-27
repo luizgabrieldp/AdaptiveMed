@@ -10,17 +10,26 @@ import React, {
   useState,
 } from 'react';
 import { useData } from '@/lib/store/data-context';
-import { FocusMode, ForestBoostType, ForestGardenState, MaturedGardenTree, NurserySlotState } from '@/types/database';
+import {
+  FocusMode,
+  ForestBoostType,
+  ForestGardenState,
+  MaturedGardenTree,
+  NurserySlotState,
+} from '@/types/database';
 import { getTodayDateString } from '@/lib/spaced-repetition';
 import {
   BOOST_CONFIG,
+  DEFAULT_MAX_CONTINUOUS_MINUTES,
   FULL_TREE_SECONDS,
   STAGE_BLOCK_SECONDS,
   STOPWATCH_CHIME_OPTIONS,
+  STOPWATCH_MAX_CONTINUOUS_OPTIONS,
   TreeGrowthStage,
   advanceNurserySlot,
   applyBoostToGarden,
   calculateFocusOutcome,
+  evaluatePersistedTimerRecovery,
   formatDurationCompact,
   getBoostWallet,
   getNurserySlotProgress,
@@ -44,9 +53,155 @@ interface PersistedTimerState {
   stopwatchChimeMinutes: number;
   soundEnabled: boolean;
   isFloatingExpanded: boolean;
+  pauseOnClose: boolean;
+  pauseOnTabSwitch: boolean;
+  maxContinuousMinutes: number;
+  lastActiveAtMs: number | null;
+  ownerTabId: string | null;
+  unloadedAtMs: number | null;
+}
+
+interface TabReloadMarker {
+  tabId: string;
+  unloadedAtMs: number;
+  wasRunning: boolean;
+}
+
+interface BroadcastSyncMessage {
+  type: 'STATE_SYNC';
+  senderTabId: string;
+  state: PersistedTimerState;
 }
 
 const STORAGE_KEY = 'adaptivemed_focus_timer_state_v1';
+const TAB_ID_SESSION_KEY = 'adaptivemed_focus_tab_id_v1';
+const RELOAD_MARKER_SESSION_KEY = 'adaptivemed_focus_tab_reload_v1';
+const BROADCAST_CHANNEL_NAME = 'adaptivemed_focus_timer_sync';
+
+const HEARTBEAT_INTERVAL_MS = 5_000;
+const OS_SUSPEND_THRESHOLD_MS = 180_000; // 3 min (seguro contra throttling de 60s em background)
+const OWNER_TAKEOVER_STALE_MS = 75_000;
+
+function formatTimeHHMM(ms: number): string {
+  try {
+    return new Date(ms).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function getOrCreateTabId(): string {
+  const fallback = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const existing = window.sessionStorage.getItem(TAB_ID_SESSION_KEY);
+    if (existing) return existing;
+    window.sessionStorage.setItem(TAB_ID_SESSION_KEY, fallback);
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function sanitizeChimeMinutes(raw: unknown): number {
+  const parsed = Number(raw);
+  return STOPWATCH_CHIME_OPTIONS.includes(
+    parsed as (typeof STOPWATCH_CHIME_OPTIONS)[number]
+  )
+    ? parsed
+    : 25;
+}
+
+function sanitizeMaxContinuousMinutes(raw: unknown): number {
+  const parsed = Number(raw);
+  return STOPWATCH_MAX_CONTINUOUS_OPTIONS.includes(
+    parsed as (typeof STOPWATCH_MAX_CONTINUOUS_OPTIONS)[number]
+  )
+    ? parsed
+    : DEFAULT_MAX_CONTINUOUS_MINUTES;
+}
+
+function sanitizePersistedState(
+  parsed: Partial<PersistedTimerState>,
+  fallbackArea: string,
+  base: PersistedTimerState
+): PersistedTimerState {
+  const validMode: FocusMode =
+    parsed.mode === 'stopwatch' || parsed.mode === 'pomodoro' ? parsed.mode : base.mode;
+  const validPhase: TimerPhase =
+    parsed.phase === 'break' || parsed.phase === 'focus' ? parsed.phase : base.phase;
+  const validStatus: TimerRunStatus =
+    parsed.status === 'running' || parsed.status === 'paused' || parsed.status === 'idle'
+      ? parsed.status
+      : base.status;
+
+  const startedAtMs =
+    typeof parsed.startedAtMs === 'number' && Number.isFinite(parsed.startedAtMs)
+      ? parsed.startedAtMs
+      : null;
+  const accumulatedSeconds = Math.max(0, Math.floor(Number(parsed.accumulatedSeconds) || 0));
+  const lastActiveAtMs =
+    typeof parsed.lastActiveAtMs === 'number' && Number.isFinite(parsed.lastActiveAtMs)
+      ? parsed.lastActiveAtMs
+      : null;
+  const unloadedAtMs =
+    typeof parsed.unloadedAtMs === 'number' && Number.isFinite(parsed.unloadedAtMs)
+      ? parsed.unloadedAtMs
+      : null;
+
+  return {
+    ...base,
+    mode: validMode,
+    phase: validPhase,
+    status: validStatus,
+    focusMinutes: Math.max(5, Math.min(180, Math.round(Number(parsed.focusMinutes) || 25))),
+    breakMinutes: Math.max(1, Math.min(60, Math.round(Number(parsed.breakMinutes) || 5))),
+    startedAtMs: validStatus === 'running' ? startedAtMs : null,
+    accumulatedSeconds: validStatus === 'idle' ? 0 : accumulatedSeconds,
+    sessionStartIso: typeof parsed.sessionStartIso === 'string' ? parsed.sessionStartIso : null,
+    selectedArea: typeof parsed.selectedArea === 'string' && parsed.selectedArea ? parsed.selectedArea : fallbackArea,
+    selectedTopicId: typeof parsed.selectedTopicId === 'string' ? parsed.selectedTopicId : null,
+    stopwatchChimeMinutes: sanitizeChimeMinutes(parsed.stopwatchChimeMinutes),
+    soundEnabled: typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : base.soundEnabled,
+    isFloatingExpanded:
+      typeof parsed.isFloatingExpanded === 'boolean'
+        ? parsed.isFloatingExpanded
+        : base.isFloatingExpanded,
+    pauseOnClose:
+      typeof parsed.pauseOnClose === 'boolean' ? parsed.pauseOnClose : true,
+    pauseOnTabSwitch:
+      typeof parsed.pauseOnTabSwitch === 'boolean' ? parsed.pauseOnTabSwitch : false,
+    maxContinuousMinutes: sanitizeMaxContinuousMinutes(parsed.maxContinuousMinutes),
+    lastActiveAtMs,
+    ownerTabId: typeof parsed.ownerTabId === 'string' ? parsed.ownerTabId : null,
+    unloadedAtMs,
+  };
+}
+
+function isHeartbeatOnlyDiff(a: PersistedTimerState, b: PersistedTimerState): boolean {
+  return (
+    a.mode === b.mode &&
+    a.phase === b.phase &&
+    a.status === b.status &&
+    a.focusMinutes === b.focusMinutes &&
+    a.breakMinutes === b.breakMinutes &&
+    a.startedAtMs === b.startedAtMs &&
+    a.accumulatedSeconds === b.accumulatedSeconds &&
+    a.sessionStartIso === b.sessionStartIso &&
+    a.selectedArea === b.selectedArea &&
+    a.selectedTopicId === b.selectedTopicId &&
+    a.stopwatchChimeMinutes === b.stopwatchChimeMinutes &&
+    a.soundEnabled === b.soundEnabled &&
+    a.pauseOnClose === b.pauseOnClose &&
+    a.pauseOnTabSwitch === b.pauseOnTabSwitch &&
+    a.maxContinuousMinutes === b.maxContinuousMinutes &&
+    a.ownerTabId === b.ownerTabId &&
+    a.unloadedAtMs === b.unloadedAtMs
+  );
+}
 
 interface FocusTimerContextType {
   mode: FocusMode;
@@ -66,6 +221,9 @@ interface FocusTimerContextType {
   selectedArea: string;
   selectedTopicId: string | null;
   stopwatchChimeMinutes: number;
+  pauseOnClose: boolean;
+  pauseOnTabSwitch: boolean;
+  maxContinuousMinutes: number;
   forestGarden: ForestGardenState;
   activeSlotIndex: 0 | 1 | 2;
   activeSlot: NurserySlotState;
@@ -77,6 +235,9 @@ interface FocusTimerContextType {
   setMode: (mode: FocusMode) => void;
   setPomodoroDurations: (focusMins: number, breakMins: number) => void;
   setStopwatchChimeMinutes: (minutes: number) => void;
+  setPauseOnClose: (enabled: boolean) => void;
+  setPauseOnTabSwitch: (enabled: boolean) => void;
+  setMaxContinuousMinutes: (minutes: number) => void;
   setSelectedArea: (area: string) => void;
   setSlotArea: (slotIndex: 0 | 1 | 2, area: string) => void;
   setSelectedTopicId: (topicId: string | null) => void;
@@ -95,12 +256,23 @@ interface FocusTimerContextType {
 const FocusTimerContext = createContext<FocusTimerContextType | undefined>(undefined);
 
 export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { areas, topics, stats, forestGarden, updateForestGarden, addStudySession } = useData();
+  const {
+    areas,
+    topics,
+    stats,
+    forestGarden,
+    updateForestGarden,
+    addStudySession,
+    isLoading,
+  } = useData();
   const defaultArea = areas[0]?.name || 'Clínica Médica';
+  const defaultAreaRef = useRef(defaultArea);
+  defaultAreaRef.current = defaultArea;
+
   const activeSlotIndex = forestGarden.activeSlotIndex;
   const activeSlot = forestGarden.slots[activeSlotIndex];
 
-  const [state, setState] = useState<PersistedTimerState>({
+  const [state, setState] = useState<PersistedTimerState>(() => ({
     mode: 'pomodoro',
     phase: 'focus',
     status: 'idle',
@@ -114,50 +286,273 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     stopwatchChimeMinutes: 25,
     soundEnabled: true,
     isFloatingExpanded: false,
-  });
+    pauseOnClose: true,
+    pauseOnTabSwitch: false,
+    maxContinuousMinutes: DEFAULT_MAX_CONTINUOUS_MINUTES,
+    lastActiveAtMs: null,
+    ownerTabId: null,
+    unloadedAtMs: null,
+  }));
 
+  const [isHydrated, setIsHydrated] = useState(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [lastNotice, setLastNotice] = useState<{
     type: 'success' | 'info' | 'withered';
     message: string;
   } | null>(null);
+
   const hasHydratedRef = useRef(false);
+  const stateRef = useRef<PersistedTimerState>(state);
+  stateRef.current = state;
+
+  const tabIdRef = useRef<string>('');
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const isApplyingRemoteSyncRef = useRef(false);
+  const didPersistUnloadPauseRef = useRef(false);
+  const pendingUnloadPauseStateRef = useRef<PersistedTimerState | null>(null);
+  const isMutatingSessionRef = useRef(false);
+
   const completionLockRef = useRef(false);
   const lastStopwatchChimeMilestoneRef = useRef(0);
+  const lastContinuousLimitMilestoneRef = useRef(0);
+  const lastTickMsRef = useRef<number>(Date.now());
+  const lastHeartbeatMsRef = useRef<number>(Date.now());
 
-  // Hidrata estado salvo do localStorage
+  const broadcastState = useCallback((nextState: PersistedTimerState) => {
+    try {
+      if (channelRef.current && tabIdRef.current) {
+        const msg: BroadcastSyncMessage = {
+          type: 'STATE_SYNC',
+          senderTabId: tabIdRef.current,
+          state: nextState,
+        };
+        channelRef.current.postMessage(msg);
+      }
+    } catch {
+      // Ignora caso o canal tenha sido fechado ou indisponível
+    }
+  }, []);
+
+  const persistStateNow = useCallback(
+    (nextState: PersistedTimerState, shouldBroadcast = true) => {
+      if (typeof window === 'undefined') return;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+      } catch {
+        // Ignora erro de quota/privacidade
+      }
+      if (shouldBroadcast) {
+        broadcastState(nextState);
+      }
+    },
+    [broadcastState]
+  );
+
+  // Hidratação única do localStorage + detecção de F5 rápido vs fechamento/crash (StrictMode-safe)
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (hasHydratedRef.current) {
+      setIsHydrated(true);
+      return;
+    }
+    hasHydratedRef.current = true;
+
+    const currentTabId = getOrCreateTabId();
+    tabIdRef.current = currentTabId;
+
+    const now = Date.now();
+    let reloadMarker: TabReloadMarker | null = null;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const rawMarker = window.sessionStorage.getItem(RELOAD_MARKER_SESSION_KEY);
+      if (rawMarker) {
+        window.sessionStorage.removeItem(RELOAD_MARKER_SESSION_KEY);
+        const parsedMarker = JSON.parse(rawMarker) as Partial<TabReloadMarker>;
+        if (
+          typeof parsedMarker.tabId === 'string' &&
+          typeof parsedMarker.unloadedAtMs === 'number' &&
+          Number.isFinite(parsedMarker.unloadedAtMs) &&
+          typeof parsedMarker.wasRunning === 'boolean'
+        ) {
+          reloadMarker = {
+            tabId: parsedMarker.tabId,
+            unloadedAtMs: parsedMarker.unloadedAtMs,
+            wasRunning: parsedMarker.wasRunning,
+          };
+        }
+      }
+    } catch {
+      // Ignora erro ao acessar sessionStorage
+    }
+
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<PersistedTimerState>;
-        const parsedChime = Number(parsed.stopwatchChimeMinutes);
-        const validChime = STOPWATCH_CHIME_OPTIONS.includes(
-          parsedChime as (typeof STOPWATCH_CHIME_OPTIONS)[number]
-        )
-          ? parsedChime
-          : 25;
-        setState(prev => ({
-          ...prev,
-          ...parsed,
-          focusMinutes: Math.max(1, Math.min(180, Number(parsed.focusMinutes) || 25)),
-          breakMinutes: Math.max(1, Math.min(60, Number(parsed.breakMinutes) || 5)),
-          stopwatchChimeMinutes: validChime,
-          selectedArea: parsed.selectedArea || defaultArea,
-        }));
-      }
-    } catch {}
-    hasHydratedRef.current = true;
-  }, [defaultArea]);
+        const base = sanitizePersistedState(parsed, defaultAreaRef.current, stateRef.current);
 
-  // Persiste no localStorage sempre que alterar
+        let hydrated: PersistedTimerState = base;
+        let notice: { type: 'success' | 'info' | 'withered'; message: string } | null = null;
+
+        // Caso A: F5 / reload nesta mesma aba após Camada 1 ter gravado pause em beforeunload/pagehide
+        if (
+          reloadMarker &&
+          reloadMarker.wasRunning &&
+          reloadMarker.tabId === currentTabId &&
+          base.status === 'paused' &&
+          base.unloadedAtMs !== null
+        ) {
+          const recovery = evaluatePersistedTimerRecovery({
+            status: 'running',
+            mode: base.mode,
+            startedAtMs: null,
+            accumulatedSeconds: base.accumulatedSeconds,
+            lastActiveAtMs: base.lastActiveAtMs,
+            ownerTabId: reloadMarker.tabId,
+            currentTabId,
+            nowMs: now,
+            pauseOnClose: base.pauseOnClose,
+            unloadedAtMs: reloadMarker.unloadedAtMs,
+          });
+
+          if (!recovery.shouldAutoPause) {
+            hydrated = {
+              ...base,
+              status: 'running',
+              startedAtMs: now,
+              accumulatedSeconds: base.accumulatedSeconds,
+              lastActiveAtMs: now,
+              ownerTabId: currentTabId,
+              unloadedAtMs: null,
+            };
+          } else {
+            const pauseTs = recovery.pausedAtMs ?? base.unloadedAtMs ?? now;
+            hydrated = {
+              ...base,
+              status: 'paused',
+              startedAtMs: null,
+              accumulatedSeconds: recovery.recoveredAccumulatedSeconds,
+              lastActiveAtMs: pauseTs,
+              unloadedAtMs: null,
+            };
+            notice = {
+              type: 'info',
+              message: `Sessão pausada automaticamente às ${formatTimeHHMM(
+                pauseTs
+              )} ao fechar/recarregar a página para não computar horas extras. Clique em Retomar ou Salvar.`,
+            };
+          }
+        } else if (base.status === 'paused' && base.unloadedAtMs !== null) {
+          // Caso B: aba foi fechada pela Camada 1 e reaberta em outra aba/momento
+          const pauseTs = base.unloadedAtMs;
+          hydrated = {
+            ...base,
+            status: 'paused',
+            startedAtMs: null,
+            unloadedAtMs: null,
+          };
+          notice = {
+            type: 'info',
+            message: `Sessão pausada automaticamente às ${formatTimeHHMM(
+              pauseTs
+            )} ao fechar a página para não computar horas com o navegador fechado. Clique em Retomar ou Salvar.`,
+          };
+        } else if (base.status === 'running') {
+          // Caso C: estava salvo como running (crash sem pagehide, legado ou outra aba aberta)
+          const recovery = evaluatePersistedTimerRecovery({
+            status: base.status,
+            mode: base.mode,
+            startedAtMs: base.startedAtMs,
+            accumulatedSeconds: base.accumulatedSeconds,
+            lastActiveAtMs: base.lastActiveAtMs,
+            ownerTabId: base.ownerTabId,
+            currentTabId,
+            nowMs: now,
+            pauseOnClose: base.pauseOnClose,
+            unloadedAtMs: base.unloadedAtMs,
+          });
+
+          if (recovery.shouldAutoPause) {
+            const pauseTs = recovery.pausedAtMs ?? base.lastActiveAtMs ?? now;
+            hydrated = {
+              ...base,
+              status: 'paused',
+              startedAtMs: null,
+              accumulatedSeconds: recovery.recoveredAccumulatedSeconds,
+              lastActiveAtMs: pauseTs,
+              unloadedAtMs: null,
+            };
+            notice = {
+              type: 'info',
+              message:
+                recovery.reason === 'page_closed'
+                  ? `Sessão pausada automaticamente às ${formatTimeHHMM(
+                      pauseTs
+                    )} ao fechar a página para não computar horas extras. Clique em Retomar ou Salvar.`
+                  : `Sessão pausada automaticamente às ${formatTimeHHMM(
+                      pauseTs
+                    )} (fechamento/hibernação detectada) para não contar horas com a página fechada. Clique em Retomar ou Salvar.`,
+            };
+          } else {
+            hydrated = {
+              ...base,
+              unloadedAtMs: null,
+              ownerTabId: base.ownerTabId || currentTabId,
+            };
+          }
+        }
+
+        const initialElapsed =
+          hydrated.status === 'running' && hydrated.startedAtMs
+            ? hydrated.accumulatedSeconds +
+              Math.max(0, Math.floor((now - hydrated.startedAtMs) / 1000))
+            : hydrated.accumulatedSeconds;
+
+        lastStopwatchChimeMilestoneRef.current =
+          hydrated.stopwatchChimeMinutes > 0
+            ? Math.floor(initialElapsed / (hydrated.stopwatchChimeMinutes * 60))
+            : 0;
+        lastContinuousLimitMilestoneRef.current =
+          hydrated.maxContinuousMinutes > 0
+            ? Math.floor(initialElapsed / (hydrated.maxContinuousMinutes * 60))
+            : 0;
+
+        lastTickMsRef.current = now;
+        lastHeartbeatMsRef.current = hydrated.lastActiveAtMs ?? now;
+        stateRef.current = hydrated;
+        setNowMs(now);
+        setState(hydrated);
+        if (notice) {
+          setLastNotice(notice);
+        }
+      }
+    } catch {
+      // Ignora JSON corrompido no localStorage
+    }
+
+    setIsHydrated(true);
+  }, []);
+
+  // Persiste no localStorage somente após a hidratação commitar (evita sobrescrever com idle no StrictMode)
   useEffect(() => {
-    if (!hasHydratedRef.current || typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {}
-  }, [state]);
+    if (!isHydrated || typeof window === 'undefined') return;
+
+    if (isApplyingRemoteSyncRef.current) {
+      isApplyingRemoteSyncRef.current = false;
+      return;
+    }
+
+    const toPersist: PersistedTimerState =
+      state.status === 'running'
+        ? {
+            ...state,
+            lastActiveAtMs:
+              Math.max(state.lastActiveAtMs ?? 0, lastHeartbeatMsRef.current) || Date.now(),
+          }
+        : state;
+
+    stateRef.current = toPersist;
+    persistStateNow(toPersist, true);
+  }, [state, isHydrated, persistStateNow]);
 
   // Garante que a área selecionada exista caso o usuário personalize áreas
   useEffect(() => {
@@ -166,15 +561,432 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [areas, state.selectedArea]);
 
-  // Intervalo ativo para atualizar o relógio em tempo real
+  // Destrava completionLockRef deterministicamente sempre que não estiver rodando
+  useEffect(() => {
+    if (state.status !== 'running') {
+      completionLockRef.current = false;
+    }
+  }, [state.status]);
+
+  // Helper de auto-pausa por suspensão/hibernação do SO
+  const autoPauseFromSuspension = useCallback(
+    (fallbackPauseMs: number, now: number) => {
+      const curr = stateRef.current;
+      if (curr.status !== 'running' || !curr.pauseOnClose || !curr.startedAtMs) return;
+
+      // Usa o timestamp mais recente de atividade conhecida (nunca perde minutos estudados
+      // caso state.lastActiveAtMs não tenha disparado re-render durante os heartbeats de 5s)
+      const latestKnownActiveMs = Math.max(
+        curr.startedAtMs,
+        curr.lastActiveAtMs ?? 0,
+        lastHeartbeatMsRef.current,
+        fallbackPauseMs
+      );
+      const freezeAt = Math.min(now, latestKnownActiveMs);
+      const deltaSec = Math.max(0, Math.floor((freezeAt - curr.startedAtMs) / 1000));
+      const pausedState: PersistedTimerState = {
+        ...curr,
+        status: 'paused',
+        startedAtMs: null,
+        accumulatedSeconds: curr.accumulatedSeconds + deltaSec,
+        lastActiveAtMs: freezeAt,
+        unloadedAtMs: null,
+      };
+
+      pendingUnloadPauseStateRef.current = null;
+      didPersistUnloadPauseRef.current = false;
+      lastTickMsRef.current = now;
+      lastHeartbeatMsRef.current = freezeAt;
+      stateRef.current = pausedState;
+      persistStateNow(pausedState, true);
+      setNowMs(now);
+      setState(pausedState);
+      setLastNotice({
+        type: 'info',
+        message: `Sessão pausada automaticamente às ${formatTimeHHMM(
+          freezeAt
+        )} (suspensão/hibernação do computador detectada). Clique em Retomar ou Salvar.`,
+      });
+    },
+    [persistStateNow]
+  );
+
+  // Camada 1 (pagehide + beforeunload + freeze) e Camada 3 (visibilitychange)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let cancelBeforeUnloadRestoreTimer: number | null = null;
+
+    const clearBeforeUnloadRestoreTimer = () => {
+      if (cancelBeforeUnloadRestoreTimer !== null) {
+        window.clearTimeout(cancelBeforeUnloadRestoreTimer);
+        cancelBeforeUnloadRestoreTimer = null;
+      }
+    };
+
+    const handleUnloadOrFreeze = (event: Event) => {
+      if (event.type === 'pagehide' || event.type === 'freeze') {
+        clearBeforeUnloadRestoreTimer();
+      }
+      const curr = stateRef.current;
+      if (curr.status !== 'running' || !curr.pauseOnClose || !curr.startedAtMs) return;
+      if (didPersistUnloadPauseRef.current) {
+        // Se beforeunload já persistiu, garante que pagehide/freeze também atualize o estado React
+        if ((event.type === 'pagehide' || event.type === 'freeze') && pendingUnloadPauseStateRef.current) {
+          setState(pendingUnloadPauseStateRef.current);
+        }
+        return;
+      }
+      // Somente a aba dona pausa ao fechar; fechar uma aba secundária mantém o timer da aba principal rodando
+      if (curr.ownerTabId && tabIdRef.current && curr.ownerTabId !== tabIdRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      const deltaSec = Math.max(0, Math.floor((now - curr.startedAtMs) / 1000));
+      const pausedState: PersistedTimerState = {
+        ...curr,
+        status: 'paused',
+        startedAtMs: null,
+        accumulatedSeconds: curr.accumulatedSeconds + deltaSec,
+        lastActiveAtMs: now,
+        unloadedAtMs: now,
+        ownerTabId: tabIdRef.current || curr.ownerTabId,
+      };
+
+      didPersistUnloadPauseRef.current = true;
+      pendingUnloadPauseStateRef.current = pausedState;
+      lastHeartbeatMsRef.current = now;
+      persistStateNow(pausedState, true);
+
+      try {
+        const marker: TabReloadMarker = {
+          tabId: tabIdRef.current || getOrCreateTabId(),
+          unloadedAtMs: now,
+          wasRunning: true,
+        };
+        window.sessionStorage.setItem(RELOAD_MARKER_SESSION_KEY, JSON.stringify(marker));
+      } catch {
+        // Ignora erro de sessionStorage
+      }
+
+      if (event.type === 'freeze' || event.type === 'pagehide') {
+        stateRef.current = pausedState;
+        setState(pausedState);
+      } else if (event.type === 'beforeunload') {
+        // Se o beforeunload não resultou em fechamento real (ex: download ou navegação cancelada), restaura
+        const previousRunning = curr;
+        clearBeforeUnloadRestoreTimer();
+        cancelBeforeUnloadRestoreTimer = window.setTimeout(() => {
+          cancelBeforeUnloadRestoreTimer = null;
+          if (
+            didPersistUnloadPauseRef.current &&
+            pendingUnloadPauseStateRef.current !== null &&
+            document.visibilityState === 'visible' &&
+            stateRef.current.status === 'running'
+          ) {
+            didPersistUnloadPauseRef.current = false;
+            pendingUnloadPauseStateRef.current = null;
+            try {
+              window.sessionStorage.removeItem(RELOAD_MARKER_SESSION_KEY);
+            } catch {
+              // Ignora
+            }
+            const restoredNow = Date.now();
+            lastHeartbeatMsRef.current = restoredNow;
+            const restored: PersistedTimerState = {
+              ...previousRunning,
+              lastActiveAtMs: restoredNow,
+              unloadedAtMs: null,
+            };
+            persistStateNow(restored, true);
+          }
+        }, 1500);
+      }
+    };
+
+    const handlePageShowOrResume = (event: Event) => {
+      const wasFrozenOrBfcache =
+        event.type === 'resume' ||
+        (event instanceof PageTransitionEvent && event.persisted);
+      if (!wasFrozenOrBfcache) return;
+
+      const hadPersistedPause = didPersistUnloadPauseRef.current;
+      const savedPauseState = pendingUnloadPauseStateRef.current;
+      didPersistUnloadPauseRef.current = false;
+      pendingUnloadPauseStateRef.current = null;
+
+      if (hadPersistedPause) {
+        const basePaused = savedPauseState ?? stateRef.current;
+        const pauseTs = basePaused.unloadedAtMs ?? basePaused.lastActiveAtMs ?? Date.now();
+        const cleanedState: PersistedTimerState = {
+          ...basePaused,
+          status: 'paused',
+          startedAtMs: null,
+          unloadedAtMs: null,
+        };
+        const now = Date.now();
+        lastTickMsRef.current = now;
+        lastHeartbeatMsRef.current = pauseTs;
+        stateRef.current = cleanedState;
+        persistStateNow(cleanedState, true);
+        setState(cleanedState);
+        setNowMs(now);
+        setLastNotice({
+          type: 'info',
+          message: `Sessão pausada automaticamente às ${formatTimeHHMM(
+            pauseTs
+          )} ao suspender/sair da página. Clique em Retomar ou Salvar.`,
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      const curr = stateRef.current;
+      const now = Date.now();
+
+      if (document.visibilityState === 'hidden') {
+        if (curr.status === 'running' && curr.startedAtMs) {
+          if (curr.pauseOnTabSwitch) {
+            const deltaSec = Math.max(0, Math.floor((now - curr.startedAtMs) / 1000));
+            const pausedState: PersistedTimerState = {
+              ...curr,
+              status: 'paused',
+              startedAtMs: null,
+              accumulatedSeconds: curr.accumulatedSeconds + deltaSec,
+              lastActiveAtMs: now,
+              unloadedAtMs: null,
+            };
+            pendingUnloadPauseStateRef.current = null;
+            didPersistUnloadPauseRef.current = false;
+            stateRef.current = pausedState;
+            lastTickMsRef.current = now;
+            lastHeartbeatMsRef.current = now;
+            persistStateNow(pausedState, true);
+            setState(pausedState);
+            setLastNotice({
+              type: 'info',
+              message: `Sessão pausada automaticamente às ${formatTimeHHMM(
+                now
+              )} ao sair da aba ("Pausar ao sair da aba" está ativo).`,
+            });
+          } else if (!curr.ownerTabId || curr.ownerTabId === tabIdRef.current) {
+            // Atualiza heartbeat imediatamente antes de ir para segundo plano
+            lastHeartbeatMsRef.current = now;
+            const heartbeatState: PersistedTimerState = {
+              ...curr,
+              lastActiveAtMs: now,
+              ownerTabId: tabIdRef.current || curr.ownerTabId,
+            };
+            persistStateNow(heartbeatState, false);
+          }
+        }
+      } else if (document.visibilityState === 'visible') {
+        if (curr.status === 'running' && curr.pauseOnClose) {
+          const referenceMs = Math.max(
+            lastTickMsRef.current,
+            curr.lastActiveAtMs ?? 0,
+            lastHeartbeatMsRef.current
+          );
+          if (referenceMs > 0 && now - referenceMs > OS_SUSPEND_THRESHOLD_MS) {
+            autoPauseFromSuspension(referenceMs, now);
+            return;
+          }
+        }
+        lastTickMsRef.current = now;
+        setNowMs(now);
+      }
+    };
+
+    window.addEventListener('pagehide', handleUnloadOrFreeze);
+    window.addEventListener('beforeunload', handleUnloadOrFreeze);
+    document.addEventListener('freeze', handleUnloadOrFreeze);
+    window.addEventListener('pageshow', handlePageShowOrResume);
+    document.addEventListener('resume', handlePageShowOrResume);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearBeforeUnloadRestoreTimer();
+      window.removeEventListener('pagehide', handleUnloadOrFreeze);
+      window.removeEventListener('beforeunload', handleUnloadOrFreeze);
+      document.removeEventListener('freeze', handleUnloadOrFreeze);
+      window.removeEventListener('pageshow', handlePageShowOrResume);
+      document.removeEventListener('resume', handlePageShowOrResume);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [autoPauseFromSuspension, persistStateNow]);
+
+  // Camada 4: Sincronização Multi-Aba (BroadcastChannel + window storage event)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const applyRemoteState = (rawState: Partial<PersistedTimerState>) => {
+      const prevState = stateRef.current;
+      const sanitized = sanitizePersistedState(
+        rawState,
+        defaultAreaRef.current,
+        prevState
+      );
+      // Preserva o estado expandido/recolhido do flutuante de forma independente por aba
+      const merged: PersistedTimerState = {
+        ...sanitized,
+        isFloatingExpanded: prevState.isFloatingExpanded,
+      };
+
+      const now = Date.now();
+      if (isHeartbeatOnlyDiff(prevState, merged)) {
+        // Apenas atualização de heartbeat: atualiza ref monotônica sem disparar re-render
+        if (merged.lastActiveAtMs) {
+          lastHeartbeatMsRef.current = Math.max(
+            lastHeartbeatMsRef.current,
+            merged.lastActiveAtMs
+          );
+        }
+        return;
+      }
+
+      const remoteElapsed =
+        merged.status === 'running' && merged.startedAtMs
+          ? merged.accumulatedSeconds +
+            Math.max(0, Math.floor((now - merged.startedAtMs) / 1000))
+          : merged.accumulatedSeconds;
+
+      lastStopwatchChimeMilestoneRef.current =
+        merged.stopwatchChimeMinutes > 0
+          ? Math.floor(remoteElapsed / (merged.stopwatchChimeMinutes * 60))
+          : 0;
+      lastContinuousLimitMilestoneRef.current =
+        merged.maxContinuousMinutes > 0
+          ? Math.floor(remoteElapsed / (merged.maxContinuousMinutes * 60))
+          : 0;
+
+      if (merged.status !== 'running') {
+        completionLockRef.current = false;
+      }
+      didPersistUnloadPauseRef.current = false;
+      pendingUnloadPauseStateRef.current = null;
+      lastTickMsRef.current = now;
+      lastHeartbeatMsRef.current = merged.lastActiveAtMs ?? now;
+      stateRef.current = merged;
+      isApplyingRemoteSyncRef.current = true;
+      setNowMs(now);
+      setState(merged);
+
+      if (
+        prevState.status === 'running' &&
+        merged.status === 'paused' &&
+        merged.unloadedAtMs !== null
+      ) {
+        setLastNotice({
+          type: 'info',
+          message: `A aba principal foi fechada às ${formatTimeHHMM(
+            merged.unloadedAtMs
+          )} e o timer foi pausado automaticamente. Clique em Retomar se quiser continuar nesta aba.`,
+        });
+      } else if (prevState.status !== 'running' && merged.status === 'running') {
+        setLastNotice(null);
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+        channelRef.current = bc;
+        bc.onmessage = (event: MessageEvent<BroadcastSyncMessage>) => {
+          const data = event.data;
+          if (!data || data.type !== 'STATE_SYNC') return;
+          if (data.senderTabId === tabIdRef.current) return;
+          if (data.state && typeof data.state === 'object') {
+            applyRemoteState(data.state);
+          }
+        };
+      }
+    } catch {
+      bc = null;
+      channelRef.current = null;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      try {
+        const parsed = JSON.parse(event.newValue) as Partial<PersistedTimerState>;
+        applyRemoteState(parsed);
+      } catch {
+        // Ignora payload malformado
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (bc) {
+        try {
+          bc.close();
+        } catch {
+          // Ignora
+        }
+      }
+      if (channelRef.current === bc) {
+        channelRef.current = null;
+      }
+    };
+  }, []);
+
+  // Camada 2: Intervalo ativo (500ms) + Heartbeat (5s) + Detecção de suspensão/hibernação do SO
   useEffect(() => {
     if (state.status !== 'running') return;
-    setNowMs(Date.now());
+
+    const initialNow = Date.now();
+    lastTickMsRef.current = initialNow;
+    didPersistUnloadPauseRef.current = false;
+    setNowMs(initialNow);
+
     const id = window.setInterval(() => {
-      setNowMs(Date.now());
+      const now = Date.now();
+      const curr = stateRef.current;
+      if (curr.status !== 'running') return;
+
+      const prevTick = lastTickMsRef.current;
+      if (curr.pauseOnClose && now - prevTick > OS_SUSPEND_THRESHOLD_MS) {
+        autoPauseFromSuspension(prevTick, now);
+        return;
+      }
+
+      lastTickMsRef.current = now;
+      setNowMs(now);
+
+      // Heartbeat a cada 5s pela aba dona (ou assumindo liderança se a dona ficou obsoleta)
+      const isOwner = !curr.ownerTabId || curr.ownerTabId === tabIdRef.current;
+      const latestHeartbeatMs = Math.max(curr.lastActiveAtMs ?? 0, lastHeartbeatMsRef.current);
+      const ownerIsStale = Boolean(
+        !isOwner &&
+          document.visibilityState === 'visible' &&
+          latestHeartbeatMs > 0 &&
+          now - latestHeartbeatMs > OWNER_TAKEOVER_STALE_MS
+      );
+
+      if ((isOwner || ownerIsStale) && now - lastHeartbeatMsRef.current >= HEARTBEAT_INTERVAL_MS) {
+        lastHeartbeatMsRef.current = now;
+        const nextOwner = tabIdRef.current || curr.ownerTabId;
+        const heartbeatState: PersistedTimerState = {
+          ...curr,
+          lastActiveAtMs: now,
+          ownerTabId: nextOwner,
+        };
+        persistStateNow(heartbeatState, false);
+        if (ownerIsStale && nextOwner !== curr.ownerTabId) {
+          setState(prev =>
+            prev.status === 'running'
+              ? { ...prev, ownerTabId: nextOwner, lastActiveAtMs: now }
+              : prev
+          );
+        }
+      }
     }, 500);
+
     return () => window.clearInterval(id);
-  }, [state.status]);
+  }, [state.status, autoPauseFromSuspension, persistStateNow]);
 
   const elapsedSeconds = useMemo(() => {
     if (state.status === 'running' && state.startedAtMs) {
@@ -320,9 +1132,11 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     ]
   );
 
-  // Detecta término natural do Pomodoro (foco ou pausa)
+  // Detecta término natural do Pomodoro (foco ou pausa) — aguarda isLoading === false e evita duplicação multi-aba
   useEffect(() => {
     if (
+      !isHydrated ||
+      isLoading ||
       state.mode !== 'pomodoro' ||
       state.status !== 'running' ||
       elapsedSeconds < targetSeconds ||
@@ -331,32 +1145,55 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return;
     }
 
+    const isOwner = !state.ownerTabId || state.ownerTabId === tabIdRef.current;
+    const latestHeartbeatMs = Math.max(state.lastActiveAtMs ?? 0, lastHeartbeatMsRef.current);
+    const ownerIsStale = Boolean(
+      !isOwner &&
+        latestHeartbeatMs > 0 &&
+        Date.now() - latestHeartbeatMs > OWNER_TAKEOVER_STALE_MS
+    );
+    if (!isOwner && !ownerIsStale) {
+      return;
+    }
+
     completionLockRef.current = true;
     const finishedPhase = state.phase;
     const finishedTarget = targetSeconds;
+    const finishedSlotIndex = activeSlotIndex;
+    const finishedArea = effectiveArea;
 
     if (state.soundEnabled) {
       playGentleChime();
     }
 
     if (finishedPhase === 'focus') {
-      void recordSession('pomodoro', finishedTarget, finishedTarget).then(outcome => {
-        if (outcome.harvestedCount > 0) {
+      void recordSession('pomodoro', finishedTarget, finishedTarget)
+        .then(outcome => {
+          if (outcome.harvestedCount > 0) {
+            setLastNotice({
+              type: 'success',
+              message: `Ciclo de ${formatDurationCompact(finishedTarget)} concluído! +${outcome.harvestedCount} ${
+                outcome.harvestedCount === 1
+                  ? 'árvore frondosa colhida'
+                  : 'árvores frondosas colhidas'
+              } para sua Floresta Permanente!`,
+            });
+          } else {
+            setLastNotice({
+              type: 'success',
+              message: `Ciclo de ${formatDurationCompact(
+                finishedTarget
+              )} concluído! O Canteiro ${finishedSlotIndex + 1} (${finishedArea}) avançou no viveiro.`,
+            });
+          }
+        })
+        .catch(() => {
           setLastNotice({
-            type: 'success',
-            message: `Ciclo de ${formatDurationCompact(finishedTarget)} concluído! +${outcome.harvestedCount} ${
-              outcome.harvestedCount === 1 ? 'árvore frondosa colhida' : 'árvores frondosas colhidas'
-            } para sua Floresta Permanente!`,
+            type: 'info',
+            message:
+              'Ciclo concluído, mas houve um erro ao sincronizar a sessão. Verifique sua conexão.',
           });
-        } else {
-          setLastNotice({
-            type: 'success',
-            message: `Ciclo de ${formatDurationCompact(
-              finishedTarget
-            )} concluído! O Canteiro ${activeSlotIndex + 1} (${effectiveArea}) avançou no viveiro.`,
-          });
-        }
-      });
+        });
 
       setState(prev => ({
         ...prev,
@@ -365,6 +1202,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         startedAtMs: null,
         accumulatedSeconds: 0,
         sessionStartIso: null,
+        lastActiveAtMs: null,
+        ownerTabId: null,
+        unloadedAtMs: null,
       }));
     } else {
       setLastNotice({
@@ -378,14 +1218,93 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         startedAtMs: null,
         accumulatedSeconds: 0,
         sessionStartIso: null,
+        lastActiveAtMs: null,
+        ownerTabId: null,
+        unloadedAtMs: null,
       }));
     }
+  }, [
+    isHydrated,
+    isLoading,
+    state.mode,
+    state.status,
+    state.phase,
+    state.soundEnabled,
+    state.ownerTabId,
+    state.lastActiveAtMs,
+    elapsedSeconds,
+    targetSeconds,
+    recordSession,
+    activeSlotIndex,
+    effectiveArea,
+  ]);
 
-    const unlockTimer = window.setTimeout(() => {
-      completionLockRef.current = false;
-    }, 300);
-    return () => window.clearTimeout(unlockTimer);
-  }, [state.mode, state.status, state.phase, state.soundEnabled, elapsedSeconds, targetSeconds, recordSession]);
+  // Auto-pausa por limite contínuo no Cronômetro Livre (evita horas esquecidas)
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (state.status === 'idle' || elapsedSeconds === 0) {
+      lastContinuousLimitMilestoneRef.current = 0;
+      return;
+    }
+    if (
+      state.mode !== 'stopwatch' ||
+      state.status !== 'running' ||
+      state.maxContinuousMinutes <= 0
+    ) {
+      return;
+    }
+    const isOwner = !state.ownerTabId || state.ownerTabId === tabIdRef.current;
+    const latestHeartbeatMs = Math.max(state.lastActiveAtMs ?? 0, lastHeartbeatMsRef.current);
+    const ownerIsStale = Boolean(
+      !isOwner &&
+        latestHeartbeatMs > 0 &&
+        Date.now() - latestHeartbeatMs > OWNER_TAKEOVER_STALE_MS
+    );
+    if (!isOwner && !ownerIsStale) {
+      return;
+    }
+
+    const limitSec = state.maxContinuousMinutes * 60;
+    const milestone = Math.floor(elapsedSeconds / limitSec);
+    if (milestone >= 1 && milestone > lastContinuousLimitMilestoneRef.current) {
+      lastContinuousLimitMilestoneRef.current = milestone;
+      const now = Date.now();
+      const cappedSeconds = Math.min(elapsedSeconds, milestone * limitSec);
+      const pausedState: PersistedTimerState = {
+        ...stateRef.current,
+        status: 'paused',
+        startedAtMs: null,
+        accumulatedSeconds: cappedSeconds,
+        lastActiveAtMs: now,
+        unloadedAtMs: null,
+      };
+      pendingUnloadPauseStateRef.current = null;
+      didPersistUnloadPauseRef.current = false;
+      lastHeartbeatMsRef.current = now;
+      stateRef.current = pausedState;
+      setState(pausedState);
+      if (state.soundEnabled) {
+        playGentleChime();
+      }
+      const hoursLabel =
+        state.maxContinuousMinutes % 60 === 0
+          ? `${state.maxContinuousMinutes / 60}h`
+          : `${state.maxContinuousMinutes} min`;
+      setLastNotice({
+        type: 'info',
+        message: `Cronômetro pausado automaticamente após ${hoursLabel} contínuas para evitar horas esquecidas. Clique em Retomar ou Salvar.`,
+      });
+    }
+  }, [
+    isHydrated,
+    state.mode,
+    state.status,
+    state.maxContinuousMinutes,
+    state.ownerTabId,
+    state.lastActiveAtMs,
+    state.soundEnabled,
+    elapsedSeconds,
+  ]);
 
   const setMode = useCallback((mode: FocusMode) => {
     setState(prev => {
@@ -397,12 +1316,15 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         startedAtMs: null,
         accumulatedSeconds: 0,
         sessionStartIso: null,
+        lastActiveAtMs: null,
+        ownerTabId: null,
+        unloadedAtMs: null,
       };
     });
   }, []);
 
   const setPomodoroDurations = useCallback((focusMins: number, breakMins: number) => {
-    const safeFocus = Math.max(1, Math.min(180, Math.round(focusMins)));
+    const safeFocus = Math.max(5, Math.min(180, Math.round(focusMins)));
     const safeBreak = Math.max(1, Math.min(60, Math.round(breakMins)));
     setState(prev => {
       if (prev.status !== 'idle') return prev;
@@ -414,8 +1336,33 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
   }, []);
 
+  const setPauseOnClose = useCallback((enabled: boolean) => {
+    setState(prev => ({ ...prev, pauseOnClose: Boolean(enabled) }));
+  }, []);
+
+  const setPauseOnTabSwitch = useCallback((enabled: boolean) => {
+    setState(prev => ({ ...prev, pauseOnTabSwitch: Boolean(enabled) }));
+  }, []);
+
+  const setMaxContinuousMinutes = useCallback(
+    (minutes: number) => {
+      const sanitized = sanitizeMaxContinuousMinutes(minutes);
+      lastContinuousLimitMilestoneRef.current =
+        sanitized > 0 ? Math.floor(elapsedSeconds / (sanitized * 60)) : 0;
+      setState(prev => ({ ...prev, maxContinuousMinutes: sanitized }));
+    },
+    [elapsedSeconds]
+  );
+
   const setSlotArea = useCallback(
     (slotIndex: 0 | 1 | 2, area: string) => {
+      if (slotIndex === activeSlotIndex && stateRef.current.status !== 'idle') {
+        setLastNotice({
+          type: 'info',
+          message: 'Finalize/salve ou cancele a sessão ativa antes de alterar a Grande Área.',
+        });
+        return;
+      }
       if (slotIndex === activeSlotIndex) {
         setState(prev => ({
           ...prev,
@@ -444,6 +1391,17 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const setSelectedTopicId = useCallback(
     (topicId: string | null) => {
       const found = topicId ? topics.find(t => t.id === topicId) : undefined;
+      if (
+        stateRef.current.status !== 'idle' &&
+        found?.area &&
+        found.area !== activeSlot.area
+      ) {
+        setLastNotice({
+          type: 'info',
+          message: 'Finalize/salve ou cancele a sessão ativa antes de trocar para outra Grande Área.',
+        });
+        return;
+      }
       setState(prev => ({
         ...prev,
         selectedTopicId: topicId,
@@ -464,7 +1422,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         slots: nextSlots,
       });
     },
-    [topics, forestGarden, activeSlotIndex, updateForestGarden]
+    [topics, forestGarden, activeSlotIndex, activeSlot.area, updateForestGarden]
   );
 
   const selectNurserySlot = useCallback(
@@ -472,7 +1430,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (state.status !== 'idle') {
         setLastNotice({
           type: 'info',
-          message: 'Finalize ou pause/cancele o timer antes de trocar para outro canteiro.',
+          message: 'Finalize/salve ou cancele a sessão ativa antes de trocar para outro canteiro.',
         });
         return;
       }
@@ -518,7 +1476,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setLastNotice({
           type: 'success',
           message: `${cfg.label} aplicado! +${result.harvestedCount} ${
-            result.harvestedCount === 1 ? 'árvore completou o ciclo' : 'árvores completaram o ciclo'
+            result.harvestedCount === 1
+              ? 'árvore completou o ciclo'
+              : 'árvores completaram o ciclo'
           } e foi para a Floresta Permanente!`,
         });
       } else {
@@ -533,11 +1493,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const setStopwatchChimeMinutes = useCallback(
     (minutes: number) => {
-      const sanitized = STOPWATCH_CHIME_OPTIONS.includes(
-        minutes as (typeof STOPWATCH_CHIME_OPTIONS)[number]
-      )
-        ? minutes
-        : 25;
+      const sanitized = sanitizeChimeMinutes(minutes);
       lastStopwatchChimeMilestoneRef.current =
         sanitized > 0 ? Math.floor(elapsedSeconds / (sanitized * 60)) : 0;
       setState(prev => ({ ...prev, stopwatchChimeMinutes: sanitized }));
@@ -547,6 +1503,7 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Sinal sonoro periódico no Cronômetro Livre sem interromper a contagem
   useEffect(() => {
+    if (!isHydrated) return;
     if (state.status === 'idle' || elapsedSeconds === 0) {
       lastStopwatchChimeMilestoneRef.current = 0;
       return;
@@ -556,6 +1513,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       state.status !== 'running' ||
       state.stopwatchChimeMinutes <= 0
     ) {
+      return;
+    }
+    if (state.ownerTabId && state.ownerTabId !== tabIdRef.current) {
       return;
     }
     const intervalSec = state.stopwatchChimeMinutes * 60;
@@ -571,10 +1531,12 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     }
   }, [
+    isHydrated,
     state.mode,
     state.status,
     state.stopwatchChimeMinutes,
     state.soundEnabled,
+    state.ownerTabId,
     elapsedSeconds,
   ]);
 
@@ -598,6 +1560,22 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const resolvedArea =
         areas.length === 0 || areas.some(a => a.name === rawArea) ? rawArea : defaultArea;
       const resolvedSubject = foundTopic?.subject_name || null;
+
+      // Se há sessão em andamento (rodando ou pausada), NÃO trocar de canteiro/área para não transferir segundos entre áreas
+      if (state.status !== 'idle') {
+        setState(prev => ({
+          ...prev,
+          isFloatingExpanded: true,
+        }));
+        const targetLabel = resolvedSubject ? `${resolvedSubject} (${resolvedArea})` : resolvedArea;
+        setLastNotice({
+          type: 'info',
+          message: `Há uma sessão ${
+            state.status === 'paused' ? 'pausada' : 'em andamento'
+          } no Canteiro ${activeSlotIndex + 1} (${effectiveArea}). Finalize/salve ou cancele antes de trocar para ${targetLabel}.`,
+        });
+        return;
+      }
 
       let targetSlotIndex: 0 | 1 | 2 = activeSlotIndex;
       if (activeSlot.area !== resolvedArea && activeSlot.accumulatedSeconds > 0) {
@@ -630,8 +1608,13 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
 
       const now = Date.now();
-      const shouldStart = state.status === 'idle' && autoStart !== false;
+      const shouldStart = autoStart !== false;
       if (shouldStart) {
+        completionLockRef.current = false;
+        didPersistUnloadPauseRef.current = false;
+        pendingUnloadPauseStateRef.current = null;
+        lastTickMsRef.current = now;
+        lastHeartbeatMsRef.current = now;
         setNowMs(now);
       }
 
@@ -642,51 +1625,36 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           selectedTopicId: resolvedTopicId,
           isFloatingExpanded: true,
         };
-        if (prev.status === 'idle') {
-          if (autoStart !== false) {
-            return {
-              ...base,
-              phase: 'focus' as TimerPhase,
-              status: 'running' as TimerRunStatus,
-              startedAtMs: now,
-              accumulatedSeconds: 0,
-              sessionStartIso: new Date(now).toISOString(),
-            };
-          }
+        if (shouldStart) {
           return {
             ...base,
             phase: 'focus' as TimerPhase,
-            startedAtMs: null,
+            status: 'running' as TimerRunStatus,
+            startedAtMs: now,
             accumulatedSeconds: 0,
-            sessionStartIso: null,
+            sessionStartIso: new Date(now).toISOString(),
+            lastActiveAtMs: now,
+            ownerTabId: tabIdRef.current || getOrCreateTabId(),
+            unloadedAtMs: null,
           };
         }
-        return base;
+        return {
+          ...base,
+          phase: 'focus' as TimerPhase,
+          startedAtMs: null,
+          accumulatedSeconds: 0,
+          sessionStartIso: null,
+          lastActiveAtMs: null,
+          ownerTabId: null,
+          unloadedAtMs: null,
+        };
       });
 
       const labelSuffix = resolvedSubject ? ` (${resolvedSubject})` : ` (${resolvedArea})`;
-      if (state.status === 'running') {
-        setLastNotice({
-          type: 'info',
-          message:
-            state.phase === 'break'
-              ? `Foco vinculado ao assunto!${labelSuffix} Intervalo em andamento — valerá no próximo bloco.`
-              : `Foco vinculado ao assunto!${labelSuffix} Sessão em andamento atualizada.`,
-        });
-      } else if (state.status === 'paused') {
-        setLastNotice({
-          type: 'info',
-          message:
-            state.phase === 'break'
-              ? `Foco vinculado ao assunto!${labelSuffix} Intervalo pausado — retome ou pule o intervalo para focar.`
-              : `Foco vinculado ao assunto!${labelSuffix} Relógio pausado — clique em Retomar para continuar.`,
-        });
-      } else {
-        setLastNotice({
-          type: 'info',
-          message: `Foco vinculado ao assunto!${labelSuffix}`,
-        });
-      }
+      setLastNotice({
+        type: 'info',
+        message: `Foco vinculado ao assunto!${labelSuffix}`,
+      });
     },
     [
       areas,
@@ -694,15 +1662,23 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       defaultArea,
       activeSlotIndex,
       activeSlot,
+      effectiveArea,
       forestGarden,
       state.status,
-      state.phase,
       updateForestGarden,
     ]
   );
 
   const start = useCallback(() => {
     const now = Date.now();
+    if (!tabIdRef.current) {
+      tabIdRef.current = getOrCreateTabId();
+    }
+    completionLockRef.current = false;
+    didPersistUnloadPauseRef.current = false;
+    pendingUnloadPauseStateRef.current = null;
+    lastTickMsRef.current = now;
+    lastHeartbeatMsRef.current = now;
     setLastNotice(null);
     setNowMs(now);
     setState(prev => ({
@@ -710,11 +1686,18 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       status: 'running',
       startedAtMs: now,
       sessionStartIso: prev.sessionStartIso || new Date(now).toISOString(),
+      lastActiveAtMs: now,
+      ownerTabId: tabIdRef.current,
+      unloadedAtMs: null,
     }));
   }, []);
 
   const pause = useCallback(() => {
     const now = Date.now();
+    didPersistUnloadPauseRef.current = false;
+    pendingUnloadPauseStateRef.current = null;
+    lastTickMsRef.current = now;
+    lastHeartbeatMsRef.current = now;
     setState(prev => {
       if (prev.status !== 'running' || !prev.startedAtMs) return prev;
       const delta = Math.max(0, Math.floor((now - prev.startedAtMs) / 1000));
@@ -723,99 +1706,150 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         status: 'paused',
         startedAtMs: null,
         accumulatedSeconds: prev.accumulatedSeconds + delta,
+        lastActiveAtMs: now,
+        unloadedAtMs: null,
       };
     });
   }, []);
 
   const finishAndSave = useCallback(async () => {
-    const currentElapsed = elapsedSeconds;
-    const currentMode = state.mode;
-    const planned = currentMode === 'pomodoro' ? state.focusMinutes * 60 : null;
-    lastStopwatchChimeMilestoneRef.current = 0;
+    if (isMutatingSessionRef.current) return;
+    const curr = stateRef.current;
+    const now = Date.now();
+    const currentElapsed =
+      curr.status === 'running' && curr.startedAtMs
+        ? curr.accumulatedSeconds + Math.max(0, Math.floor((now - curr.startedAtMs) / 1000))
+        : curr.accumulatedSeconds;
+    if (curr.status === 'idle' && currentElapsed === 0) return;
 
-    setState(prev => ({
-      ...prev,
+    isMutatingSessionRef.current = true;
+    const currentMode = curr.mode;
+    const planned = currentMode === 'pomodoro' ? curr.focusMinutes * 60 : null;
+    completionLockRef.current = false;
+    didPersistUnloadPauseRef.current = false;
+    pendingUnloadPauseStateRef.current = null;
+    lastStopwatchChimeMilestoneRef.current = 0;
+    lastContinuousLimitMilestoneRef.current = 0;
+
+    const resetState: PersistedTimerState = {
+      ...curr,
       status: 'idle',
       phase: 'focus',
       startedAtMs: null,
       accumulatedSeconds: 0,
       sessionStartIso: null,
-    }));
+      lastActiveAtMs: null,
+      ownerTabId: null,
+      unloadedAtMs: null,
+    };
+    stateRef.current = resetState;
+    setState(resetState);
 
-    if (currentElapsed < 60) {
+    try {
+      if (currentElapsed < 60) {
+        setLastNotice({
+          type: 'info',
+          message: 'Sessão com menos de 1 minuto não foi registrada no histórico.',
+        });
+        return;
+      }
+
+      const outcome = await recordSession(currentMode, currentElapsed, planned);
+      if (curr.soundEnabled && outcome.treesEarned > 0) {
+        playGentleChime();
+      }
+
+      if (outcome.status === 'withered') {
+        setLastNotice({
+          type: 'withered',
+          message: `Pomodoro interrompido antes do fim (${formatDurationCompact(
+            currentElapsed
+          )}). Um galho seco ficou registrado na floresta.`,
+        });
+      } else if (outcome.harvestedCount > 0) {
+        setLastNotice({
+          type: 'success',
+          message: `Sessão de ${formatDurationCompact(currentElapsed)} salva! +${outcome.harvestedCount} ${
+            outcome.harvestedCount === 1 ? 'árvore madura plantada' : 'árvores maduras plantadas'
+          } na Floresta Permanente.`,
+        });
+      } else {
+        setLastNotice({
+          type: 'success',
+          message: `+${formatDurationCompact(currentElapsed)} adicionados ao Canteiro ${
+            activeSlotIndex + 1
+          } (${effectiveArea})! Suas fases ficam salvas mesmo ao alternar entre os canteiros.`,
+        });
+      }
+    } catch {
       setLastNotice({
         type: 'info',
-        message: 'Sessão com menos de 1 minuto não foi registrada no histórico.',
+        message: 'Não foi possível salvar a sessão no momento. Verifique sua conexão.',
       });
-      return;
+    } finally {
+      isMutatingSessionRef.current = false;
     }
-
-    const outcome = await recordSession(currentMode, currentElapsed, planned);
-    if (state.soundEnabled && outcome.treesEarned > 0) {
-      playGentleChime();
-    }
-
-    if (outcome.status === 'withered') {
-      setLastNotice({
-        type: 'withered',
-        message: `Pomodoro interrompido antes do fim (${formatDurationCompact(
-          currentElapsed
-        )}). Um galho seco ficou registrado na floresta.`,
-      });
-    } else if (outcome.harvestedCount > 0) {
-      setLastNotice({
-        type: 'success',
-        message: `Sessão de ${formatDurationCompact(currentElapsed)} salva! +${outcome.harvestedCount} ${
-          outcome.harvestedCount === 1 ? 'árvore madura plantada' : 'árvores maduras plantadas'
-        } na Floresta Permanente.`,
-      });
-    } else {
-      setLastNotice({
-        type: 'success',
-        message: `+${formatDurationCompact(currentElapsed)} adicionados ao Canteiro ${
-          activeSlotIndex + 1
-        } (${effectiveArea})! Suas fases ficam salvas mesmo ao alternar entre os canteiros.`,
-      });
-    }
-  }, [
-    elapsedSeconds,
-    state.mode,
-    state.focusMinutes,
-    state.soundEnabled,
-    recordSession,
-    activeSlotIndex,
-    effectiveArea,
-  ]);
+  }, [recordSession, activeSlotIndex, effectiveArea]);
 
   const abandonSession = useCallback(async () => {
-    const currentElapsed = elapsedSeconds;
-    const wasFocusPomodoro = state.mode === 'pomodoro' && state.phase === 'focus';
-    const planned = state.focusMinutes * 60;
-    lastStopwatchChimeMilestoneRef.current = 0;
+    if (isMutatingSessionRef.current) return;
+    const curr = stateRef.current;
+    const now = Date.now();
+    const currentElapsed =
+      curr.status === 'running' && curr.startedAtMs
+        ? curr.accumulatedSeconds + Math.max(0, Math.floor((now - curr.startedAtMs) / 1000))
+        : curr.accumulatedSeconds;
+    if (curr.status === 'idle' && currentElapsed === 0) return;
 
-    setState(prev => ({
-      ...prev,
+    isMutatingSessionRef.current = true;
+    const wasFocusPomodoro = curr.mode === 'pomodoro' && curr.phase === 'focus';
+    const planned = curr.focusMinutes * 60;
+    completionLockRef.current = false;
+    didPersistUnloadPauseRef.current = false;
+    pendingUnloadPauseStateRef.current = null;
+    lastStopwatchChimeMilestoneRef.current = 0;
+    lastContinuousLimitMilestoneRef.current = 0;
+
+    const resetState: PersistedTimerState = {
+      ...curr,
       status: 'idle',
       phase: 'focus',
       startedAtMs: null,
       accumulatedSeconds: 0,
       sessionStartIso: null,
-    }));
+      lastActiveAtMs: null,
+      ownerTabId: null,
+      unloadedAtMs: null,
+    };
+    stateRef.current = resetState;
+    setState(resetState);
 
-    if (wasFocusPomodoro && currentElapsed >= 60) {
-      await recordSession('pomodoro', currentElapsed, planned);
+    try {
+      if (wasFocusPomodoro && currentElapsed >= 60) {
+        await recordSession('pomodoro', currentElapsed, planned);
+        setLastNotice({
+          type: 'withered',
+          message: `Pomodoro cancelado após ${formatDurationCompact(
+            currentElapsed
+          )}. Um galho seco foi marcado na Floresta.`,
+        });
+      } else {
+        setLastNotice(null);
+      }
+    } catch {
       setLastNotice({
-        type: 'withered',
-        message: `Pomodoro cancelado após ${formatDurationCompact(
-          currentElapsed
-        )}. Um galho seco foi marcado na Floresta.`,
+        type: 'info',
+        message: 'Sessão encerrada, mas houve um erro ao registrar o cancelamento.',
       });
-    } else {
-      setLastNotice(null);
+    } finally {
+      isMutatingSessionRef.current = false;
     }
-  }, [elapsedSeconds, state.mode, state.phase, state.focusMinutes, recordSession]);
+  }, [recordSession]);
 
   const skipBreak = useCallback(() => {
+    completionLockRef.current = false;
+    didPersistUnloadPauseRef.current = false;
+    pendingUnloadPauseStateRef.current = null;
     setState(prev => ({
       ...prev,
       phase: 'focus',
@@ -823,6 +1857,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       startedAtMs: null,
       accumulatedSeconds: 0,
       sessionStartIso: null,
+      lastActiveAtMs: null,
+      ownerTabId: null,
+      unloadedAtMs: null,
     }));
   }, []);
 
@@ -848,6 +1885,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         selectedArea: effectiveArea,
         selectedTopicId: effectiveTopicId,
         stopwatchChimeMinutes: state.stopwatchChimeMinutes,
+        pauseOnClose: state.pauseOnClose,
+        pauseOnTabSwitch: state.pauseOnTabSwitch,
+        maxContinuousMinutes: state.maxContinuousMinutes,
         forestGarden,
         activeSlotIndex,
         activeSlot,
@@ -859,6 +1899,9 @@ export const FocusTimerProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setMode,
         setPomodoroDurations,
         setStopwatchChimeMinutes,
+        setPauseOnClose,
+        setPauseOnTabSwitch,
+        setMaxContinuousMinutes,
         setSelectedArea,
         setSlotArea,
         setSelectedTopicId,

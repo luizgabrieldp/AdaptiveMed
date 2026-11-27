@@ -66,7 +66,8 @@ async function resolveCookieGatedAuth(): Promise<AuthState> {
     const hasPaid = Boolean(
       prof?.is_subscribed ||
         prof?.subscription_status === 'active' ||
-        prof?.subscription_status === 'trial'
+        prof?.subscription_status === 'trial' ||
+        prof?.subscription_status === 'trialing'
     );
 
     return {
@@ -134,8 +135,12 @@ async function performSignOut() {
 
   if (typeof window !== 'undefined') {
     try {
+      const preservedUiKeys = new Set([
+        'adaptivemed_theme',
+        'adaptivemed_sidebar_collapsed',
+      ]);
       Object.keys(localStorage)
-        .filter(key => key.startsWith('adaptivemed_'))
+        .filter(key => key.startsWith('adaptivemed_') && !preservedUiKeys.has(key))
         .forEach(key => localStorage.removeItem(key));
       document.cookie = 'adaptivemed_demo=; path=/; max-age=0; SameSite=Lax';
     } catch {

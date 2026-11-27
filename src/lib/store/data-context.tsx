@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
 import {
   StudyTopic,
   TopicReview,
@@ -84,7 +84,7 @@ interface DataContextType {
     questionsDone: number,
     questionsCorrect: number,
     initialDate?: string,
-    durationMinutes?: number,
+    durationMinutes?: number | null,
     extraTopicData?: Partial<StudyTopic>,
     errorCauses?: ErrorLogCause[]
   ) => Promise<void>;
@@ -128,7 +128,9 @@ interface DataContextType {
     reviewId: string,
     questionsDone: number,
     questionsCorrect: number,
-    completedDate?: string
+    completedDate?: string,
+    durationMinutes?: number | null,
+    errorCauses?: ErrorLogCause[]
   ) => Promise<void>;
   deleteTopic: (topicId: string) => Promise<void>;
   deleteReviewsFromCycle: (topicId: string, fromReviewNumber: number) => Promise<void>;
@@ -146,7 +148,7 @@ interface DataContextType {
     score_percentage: number;
   }) => Promise<void>;
   deleteInstitutionExam: (examId: string) => Promise<void>;
-  addPrevalentTopic: (data: Omit<PrevalentTopic, 'id' | 'created_at'>) => Promise<void>;
+  addPrevalentTopic: (data: Omit<PrevalentTopic, 'id' | 'created_at'>) => Promise<string>;
   updatePrevalentTopic: (id: string, data: Partial<PrevalentTopic>) => Promise<void>;
   deletePrevalentTopic: (id: string) => Promise<void>;
   reorderPrevalentTopics: (orderedIds: string[]) => Promise<void>;
@@ -184,8 +186,55 @@ const LOCAL_STORAGE_KEYS = {
   AREAS: 'adaptivemed_areas_v1',
   STREAK_CONFIG: 'adaptivemed_streak_config_v1',
   WORKLOAD_CONFIG: 'adaptivemed_workload_config_v1',
+  PAUSED_TRACKS: 'adaptivemed_paused_tracks_v1',
   DEMO_ACTIVE: 'adaptivemed_demo_active',
 };
+
+function isProfileSubscribed(
+  prof?: { is_subscribed?: boolean | null; subscription_status?: string | null } | null
+): boolean {
+  if (!prof) return false;
+  const status = prof.subscription_status as string | null | undefined;
+  return Boolean(
+    prof.is_subscribed ||
+      status === 'active' ||
+      status === 'trial' ||
+      status === 'trialing'
+  );
+}
+
+function getPausedTrackIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEYS.PAUSED_TRACKS);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((id): id is string => typeof id === 'string'));
+    }
+  } catch {}
+  return new Set();
+}
+
+function savePausedTrackIds(ids: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEYS.PAUSED_TRACKS, JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
+function markTrackPaused(topicId: string) {
+  const ids = getPausedTrackIds();
+  ids.add(topicId);
+  savePausedTrackIds(ids);
+}
+
+function unmarkTrackPaused(topicId: string) {
+  const ids = getPausedTrackIds();
+  if (ids.delete(topicId)) {
+    savePausedTrackIds(ids);
+  }
+}
 
 // Campos homologados no schema base do PostgreSQL
 const BASE_STUDY_TOPIC_FIELDS = [
@@ -330,6 +379,108 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(true);
 
+  const topicsRef = useRef<StudyTopic[]>(topics);
+  const reviewsRef = useRef<TopicReview[]>(reviews);
+  const errorLogsRef = useRef<ErrorLog[]>(errorLogs);
+
+  const applyTopicsUpdate = (
+    updater: StudyTopic[] | ((prev: StudyTopic[]) => StudyTopic[]),
+    persistLocal = false
+  ): StudyTopic[] => {
+    const next = typeof updater === 'function' ? updater(topicsRef.current) : updater;
+    topicsRef.current = next;
+    setTopics(next);
+    if (persistLocal && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(next));
+      } catch {}
+    }
+    return next;
+  };
+
+  const applyReviewsUpdate = (
+    updater: TopicReview[] | ((prev: TopicReview[]) => TopicReview[]),
+    persistLocal = false
+  ): TopicReview[] => {
+    const next = typeof updater === 'function' ? updater(reviewsRef.current) : updater;
+    reviewsRef.current = next;
+    setReviews(next);
+    if (persistLocal && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(next));
+      } catch {}
+    }
+    return next;
+  };
+
+  const applyErrorLogsUpdate = (
+    updater: ErrorLog[] | ((prev: ErrorLog[]) => ErrorLog[]),
+    persistLocal = false
+  ): ErrorLog[] => {
+    const next = typeof updater === 'function' ? updater(errorLogsRef.current) : updater;
+    errorLogsRef.current = next;
+    setErrorLogs(next);
+    if (persistLocal && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(next));
+      } catch {}
+    }
+    return next;
+  };
+
+  const restoreProfileAndConfigsFromLocalStorage = (userId: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      let restoredProfile: Profile | null = null;
+      const storedProfileRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.PROFILE);
+      if (storedProfileRaw) {
+        const parsedProf = JSON.parse(storedProfileRaw) as Profile;
+        if (parsedProf && parsedProf.id === userId) {
+          restoredProfile = parsedProf;
+          setProfile(parsedProf);
+        }
+      }
+
+      const storedAreasRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS);
+      if (storedAreasRaw) {
+        try {
+          const parsedAreas = JSON.parse(storedAreasRaw);
+          if (Array.isArray(parsedAreas) && parsedAreas.length > 0) {
+            setAreas(parsedAreas);
+          }
+        } catch {}
+      } else if (restoredProfile?.custom_areas && restoredProfile.custom_areas.length > 0) {
+        setAreas(restoredProfile.custom_areas);
+      }
+
+      const storedStreakRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.STREAK_CONFIG);
+      if (storedStreakRaw) {
+        try {
+          const parsedStreak = JSON.parse(storedStreakRaw);
+          if (parsedStreak && typeof parsedStreak === 'object') {
+            setStreakConfig(parsedStreak);
+          }
+        } catch {}
+      } else if (restoredProfile?.streak_config) {
+        setStreakConfig(restoredProfile.streak_config);
+      }
+
+      const storedWorkloadRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG);
+      if (storedWorkloadRaw) {
+        try {
+          const parsedWorkload = JSON.parse(storedWorkloadRaw);
+          if (parsedWorkload && typeof parsedWorkload === 'object') {
+            setWorkloadConfig(parsedWorkload);
+          }
+        } catch {}
+      } else if (restoredProfile?.workload_config) {
+        setWorkloadConfig(restoredProfile.workload_config);
+      }
+    } catch (storageErr) {
+      console.error('Erro ao restaurar perfil/configurações do localStorage:', storageErr);
+    }
+  };
+
 
   // Inicialização e detecção do Supabase
   useEffect(() => {
@@ -355,12 +506,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Se não autenticado no Supabase, limpa estados e não permite acesso
       setUser(null);
       setProfile(null);
-      setTopics([]);
-      setReviews([]);
+      applyTopicsUpdate([]);
+      applyReviewsUpdate([]);
       setMockExams([]);
       setInstitutionExams([]);
       setPrevalentTopics([]);
-      setErrorLogs([]);
+      applyErrorLogsUpdate([]);
       setStudySessions([]);
       setAreas(DEFAULT_STUDY_AREAS);
       setIsDemoMode(false);
@@ -470,11 +621,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Se usuário logado não possui assinatura ativa e tenta acessar rotas internas de estudo
-        const hasActivePlan = Boolean(
-          profData.is_subscribed ||
-            profData.subscription_status === 'active' ||
-            profData.subscription_status === 'trial'
-        );
+        const hasActivePlan = isProfileSubscribed(profData);
         if (!hasActivePlan && typeof window !== 'undefined') {
           const path = window.location.pathname;
           const isContaResetAccess =
@@ -544,6 +691,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
         }
+      } else {
+        // Fallback seguro se profData vier null (ex.: falha temporária na query de profiles)
+        restoreProfileAndConfigsFromLocalStorage(userId);
       }
 
       // 1. MERGE INTELIGENTE DE TÓPICOS (Preserva tópicos locais do mesmo usuário que ainda não subiram ao banco)
@@ -563,10 +713,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch {}
       }
-      setTopics(mergedTopics);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(mergedTopics));
-      }
+      applyTopicsUpdate(mergedTopics, true);
 
       // 2. MERGE INTELIGENTE DE REVISÕES (Preserva revisões locais do mesmo usuário se o banco estiver desatualizado)
       let mergedReviews: TopicReview[] = (revData as TopicReview[]) || [];
@@ -585,9 +732,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
       }
 
-      // 3. AUTO-CURA PEDAGÓGICA (Gera R1 para qualquer estudo que tenha ficado sem revisão)
+      // 3. AUTO-CURA PEDAGÓGICA (Gera R1 para qualquer estudo que tenha ficado sem revisão, exceto trilhas pausadas manualmente)
+      const pausedTrackIds = getPausedTrackIds();
       const missingReviews: TopicReview[] = [];
       mergedTopics.forEach(topic => {
+        if (pausedTrackIds.has(topic.id)) return;
         if (!topic.is_planned && (topic.initial_questions > 0 || topic.initial_percentage > 0)) {
           const hasReview = mergedReviews.some(r => r.topic_id === topic.id);
           if (!hasReview) {
@@ -624,10 +773,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mergedReviews = [...mergedReviews, ...missingReviews];
       }
 
-      setReviews(mergedReviews);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(mergedReviews));
-      }
+      applyReviewsUpdate(mergedReviews, true);
 
       // 4. Simulados e Assuntos Prevalentes
       setMockExams(mockData ? (mockData as MockExam[]) : []);
@@ -669,10 +815,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } catch {}
       }
-      setErrorLogs(mergedErrorLogs);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(mergedErrorLogs));
-      }
+      applyErrorLogsUpdate(mergedErrorLogs, true);
 
       // 6. Sessões de Foco & Floresta (study_sessions) com merge local seguro
       let mergedSessions: StudySession[] = (sessResult?.data as StudySession[]) || [];
@@ -694,7 +837,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       console.warn('Aviso ou timeout no carregamento do Supabase. Carregando dados locais de segurança:', err);
-      // Fallback seguro: se falhar a rede/timeout, carrega dados locais do mesmo usuário
+      // Fallback seguro: se falhar a rede/timeout, carrega perfil, configs e dados locais do mesmo usuário
+      restoreProfileAndConfigsFromLocalStorage(userId);
       if (typeof window !== 'undefined') {
         try {
           const parseForUser = <T extends { user_id?: string }>(raw: string | null): T[] | null => {
@@ -705,9 +849,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
 
           const storedTopics = parseForUser<StudyTopic>(localStorage.getItem(LOCAL_STORAGE_KEYS.TOPICS));
-          if (storedTopics) setTopics(storedTopics);
+          if (storedTopics) applyTopicsUpdate(storedTopics);
           const storedReviews = parseForUser<TopicReview>(localStorage.getItem(LOCAL_STORAGE_KEYS.REVIEWS));
-          if (storedReviews) setReviews(storedReviews);
+          if (storedReviews) applyReviewsUpdate(storedReviews);
           const storedMocks = parseForUser<MockExam>(localStorage.getItem(LOCAL_STORAGE_KEYS.MOCK_EXAMS));
           if (storedMocks) setMockExams(storedMocks);
           const storedInsts = parseForUser<InstitutionExam>(localStorage.getItem(LOCAL_STORAGE_KEYS.INST_EXAMS));
@@ -715,7 +859,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const storedPrev = parseForUser<PrevalentTopic>(localStorage.getItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS));
           if (storedPrev) setPrevalentTopics(storedPrev);
           const storedErrors = parseForUser<ErrorLog>(localStorage.getItem(LOCAL_STORAGE_KEYS.ERROR_LOGS));
-          if (storedErrors) setErrorLogs(storedErrors);
+          if (storedErrors) applyErrorLogsUpdate(storedErrors);
           const storedSessions = parseForUser<StudySession>(localStorage.getItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS));
           if (storedSessions) setStudySessions(storedSessions);
         } catch (storageErr) {
@@ -735,12 +879,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dSessions = getInitialDemoStudySessions();
     const dProf = INITIAL_DEMO_PROFILE;
 
-    setTopics(dTopics);
-    setReviews(dReviews);
+    applyTopicsUpdate(dTopics);
+    applyReviewsUpdate(dReviews);
     setMockExams(dMocks);
     setInstitutionExams(dInsts);
     setPrevalentTopics(dPrevalent);
-    setErrorLogs(dErrors);
+    applyErrorLogsUpdate(dErrors);
     setStudySessions(dSessions);
     setProfile(dProf);
     setAreas(DEFAULT_STUDY_AREAS);
@@ -779,12 +923,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setIsDemoMode(false);
-    setTopics([]);
-    setReviews([]);
+    applyTopicsUpdate([]);
+    applyReviewsUpdate([]);
     setMockExams([]);
     setInstitutionExams([]);
     setPrevalentTopics([]);
-    setErrorLogs([]);
+    applyErrorLogsUpdate([]);
     setStudySessions([]);
     setProfile(null);
     setAreas(DEFAULT_STUDY_AREAS);
@@ -933,15 +1077,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(updated));
     }
 
-    // Se o nome foi alterado, faz o cascade nos tópicos e tópicos prevalentes
+    let nextWorkloadForProfile: WorkloadConfig | null = null;
+
+    // Se o nome foi alterado, faz o cascade em topics, prevalent_topics, study_sessions e forestGarden
     if (oldName && oldName !== newName) {
-      setTopics(prev => {
-        const up = prev.map(t => (t.area === oldName ? { ...t, area: newName } : t));
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(up));
-        }
-        return up;
-      });
+      applyTopicsUpdate(
+        prev => prev.map(t => (t.area === oldName ? { ...t, area: newName } : t)),
+        true
+      );
 
       setPrevalentTopics(prev => {
         const up = prev.map(p => (p.area === oldName ? { ...p, area: newName } : p));
@@ -950,17 +1093,69 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return up;
       });
+
+      setStudySessions(prev => {
+        const up = prev.map(s => (s.area === oldName ? { ...s, area: newName } : s));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(up));
+        }
+        return up;
+      });
+
+      const gardenNeedsUpdate =
+        forestGarden.slots.some(slot => slot.area === oldName) ||
+        forestGarden.maturedTrees.some(tree => tree.area === oldName);
+      if (gardenNeedsUpdate) {
+        const updatedGarden: ForestGardenState = {
+          ...forestGarden,
+          slots: forestGarden.slots.map(slot =>
+            slot.area === oldName ? { ...slot, area: newName } : slot
+          ) as ForestGardenState['slots'],
+          maturedTrees: forestGarden.maturedTrees.map(tree =>
+            tree.area === oldName ? { ...tree, area: newName } : tree
+          ),
+        };
+        const mergedWorkload: WorkloadConfig = {
+          ...(workloadConfig || DEFAULT_WORKLOAD_CONFIG),
+          forestGarden: updatedGarden,
+        };
+        nextWorkloadForProfile = mergedWorkload;
+        setWorkloadConfig(mergedWorkload);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(mergedWorkload));
+          } catch {}
+        }
+      }
     }
+
+    setProfile(prev => {
+      if (!prev) return prev;
+      const nextProf: Profile = nextWorkloadForProfile
+        ? { ...prev, custom_areas: updated, workload_config: nextWorkloadForProfile }
+        : { ...prev, custom_areas: updated };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(nextProf));
+        } catch {}
+      }
+      return nextProf;
+    });
 
     if (!isDemoMode && user) {
       const supabase = createClient();
+      const profilePatch: Record<string, any> = { custom_areas: updated };
+      if (nextWorkloadForProfile) {
+        profilePatch.workload_config = nextWorkloadForProfile;
+      }
       const calls: PromiseLike<any>[] = [
-        supabase.from('profiles').update({ custom_areas: updated }).eq('id', user.id)
+        supabase.from('profiles').update(profilePatch).eq('id', user.id),
       ];
       if (oldName && oldName !== newName) {
         calls.push(
           supabase.from('study_topics').update({ area: newName }).eq('user_id', user.id).eq('area', oldName),
-          supabase.from('prevalent_topics').update({ area: newName }).eq('user_id', user.id).eq('area', oldName)
+          supabase.from('prevalent_topics').update({ area: newName }).eq('user_id', user.id).eq('area', oldName),
+          supabase.from('study_sessions').update({ area: newName }).eq('user_id', user.id).eq('area', oldName)
         );
       }
       syncSupabase(Promise.allSettled(calls));
@@ -979,24 +1174,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(updated));
     }
 
+    let nextWorkloadForProfile: WorkloadConfig | null = null;
+
     if (targetArea) {
-      setTopics(prev => {
-        const up = prev.map(t => (t.area === targetArea.name ? { ...t, area: fallbackAreaName } : t));
+      applyTopicsUpdate(
+        prev => prev.map(t => (t.area === targetArea.name ? { ...t, area: fallbackAreaName } : t)),
+        true
+      );
+
+      setPrevalentTopics(prev => {
+        const up = prev.map(p => (p.area === targetArea.name ? { ...p, area: fallbackAreaName } : p));
         if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(up));
+          localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(up));
         }
         return up;
       });
+
+      setStudySessions(prev => {
+        const up = prev.map(s => (s.area === targetArea.name ? { ...s, area: fallbackAreaName } : s));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.STUDY_SESSIONS, JSON.stringify(up));
+        }
+        return up;
+      });
+
+      const gardenNeedsUpdate =
+        forestGarden.slots.some(slot => slot.area === targetArea.name) ||
+        forestGarden.maturedTrees.some(tree => tree.area === targetArea.name);
+      if (gardenNeedsUpdate) {
+        const updatedGarden: ForestGardenState = {
+          ...forestGarden,
+          slots: forestGarden.slots.map(slot =>
+            slot.area === targetArea.name ? { ...slot, area: fallbackAreaName } : slot
+          ) as ForestGardenState['slots'],
+          maturedTrees: forestGarden.maturedTrees.map(tree =>
+            tree.area === targetArea.name ? { ...tree, area: fallbackAreaName } : tree
+          ),
+        };
+        const mergedWorkload: WorkloadConfig = {
+          ...(workloadConfig || DEFAULT_WORKLOAD_CONFIG),
+          forestGarden: updatedGarden,
+        };
+        nextWorkloadForProfile = mergedWorkload;
+        setWorkloadConfig(mergedWorkload);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.WORKLOAD_CONFIG, JSON.stringify(mergedWorkload));
+          } catch {}
+        }
+      }
     }
+
+    setProfile(prev => {
+      if (!prev) return prev;
+      const nextProf: Profile = nextWorkloadForProfile
+        ? { ...prev, custom_areas: updated, workload_config: nextWorkloadForProfile }
+        : { ...prev, custom_areas: updated };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEYS.PROFILE, JSON.stringify(nextProf));
+        } catch {}
+      }
+      return nextProf;
+    });
 
     if (!isDemoMode && user) {
       const supabase = createClient();
+      const profilePatch: Record<string, any> = { custom_areas: updated };
+      if (nextWorkloadForProfile) {
+        profilePatch.workload_config = nextWorkloadForProfile;
+      }
       const calls: PromiseLike<any>[] = [
-        supabase.from('profiles').update({ custom_areas: updated }).eq('id', user.id)
+        supabase.from('profiles').update(profilePatch).eq('id', user.id),
       ];
       if (targetArea) {
         calls.push(
-          supabase.from('study_topics').update({ area: fallbackAreaName }).eq('user_id', user.id).eq('area', targetArea.name)
+          supabase.from('study_topics').update({ area: fallbackAreaName }).eq('user_id', user.id).eq('area', targetArea.name),
+          supabase.from('prevalent_topics').update({ area: fallbackAreaName }).eq('user_id', user.id).eq('area', targetArea.name),
+          supabase.from('study_sessions').update({ area: fallbackAreaName }).eq('user_id', user.id).eq('area', targetArea.name)
         );
       }
       syncSupabase(Promise.allSettled(calls));
@@ -1035,7 +1290,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     extraCauses?: ErrorLogCause[]
   ): ErrorLogCause[] => {
     const existing = topicId
-      ? errorLogs.filter(e => e.topic_id === topicId && !e.is_reviewed).map(e => e.cause)
+      ? errorLogsRef.current.filter(e => e.topic_id === topicId && !e.is_reviewed).map(e => e.cause)
       : [];
     return extraCauses && extraCauses.length > 0 ? [...existing, ...extraCauses] : existing;
   };
@@ -1089,7 +1344,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Gestão de carga diária e rolagem automática (anti-sobrecarga)
     const scheduledCounts = new Map<string, number>();
-    reviews.forEach(r => {
+    reviewsRef.current.forEach(r => {
       if (!r.completed_date) {
         scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
       }
@@ -1117,16 +1372,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // 1. Atualização Otimista Imediata
-    setTopics(prev => {
-      const up = [newTopic, ...prev];
-      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(up));
-      return up;
-    });
-    setReviews(prev => {
-      const up = [...prev, r1Review];
-      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(up));
-      return up;
-    });
+    applyTopicsUpdate(prev => [newTopic, ...prev], true);
+    applyReviewsUpdate(prev => [...prev, r1Review], true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1173,13 +1420,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // 1. Atualização Otimista Imediata (zero latência)
-    setTopics(prev => {
-      const updated = [newTopic, ...prev];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(prev => [newTopic, ...prev], true);
 
     // 2. Sincronização não-bloqueante com Supabase
     if (!isDemoMode && user) {
@@ -1200,6 +1441,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       errorCauses?: ErrorLogCause[];
     }
   ): Promise<{ nextReviewDate?: string }> => {
+    unmarkTrackPaused(topicId);
+
     const percentage =
       data.questions_done > 0
         ? Math.round((data.questions_correct / data.questions_done) * 1000) / 10
@@ -1217,7 +1460,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Gestão de carga diária e rolagem automática (anti-sobrecarga)
     const scheduledCounts = new Map<string, number>();
-    reviews.forEach(r => {
+    reviewsRef.current.forEach(r => {
       if (!r.completed_date) {
         scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
       }
@@ -1225,8 +1468,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
     const r1ScheduledDate = findNextAvailableDate(targetR1Date, scheduledCounts, maxDailyLimit);
 
-    const targetTopic = topics.find(t => t.id === topicId);
+    const targetTopic = topicsRef.current.find(t => t.id === topicId);
     const userId = user?.id || 'demo-user-id';
+    const hasNotesUpdate = data.notes !== undefined;
+    const normalizedNotes = hasNotesUpdate ? data.notes!.trim() : undefined;
 
     const updatedTopic: StudyTopic = targetTopic
       ? {
@@ -1236,7 +1481,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
           initial_duration_minutes: data.duration_minutes || null,
-          notes: data.notes !== undefined ? data.notes.trim() : targetTopic.notes,
+          notes: hasNotesUpdate ? normalizedNotes : targetTopic.notes,
           base_questions_count: data.questions_done,
           is_planned: false,
         }
@@ -1250,7 +1495,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           initial_correct: data.questions_correct,
           initial_percentage: percentage,
           initial_duration_minutes: data.duration_minutes || null,
-          notes: data.notes !== undefined ? data.notes.trim() : undefined,
+          notes: normalizedNotes || undefined,
           base_questions_count: data.questions_done,
           is_planned: false,
           created_at: new Date().toISOString(),
@@ -1275,26 +1520,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // Atualização otimista imediata
-    setTopics(prev => {
-      const updated = prev.map(t => (t.id === topicId ? updatedTopic : t));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
-    setReviews(prev => {
-      const updated = [...prev, r1Review];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(prev => prev.map(t => (t.id === topicId ? updatedTopic : t)), true);
+    applyReviewsUpdate(prev => [...prev, r1Review], true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
       syncSupabase(
         (async () => {
-          await safeUpdateStudyTopic(supabase, topicId, {
+          const updatePayload: Partial<StudyTopic> = {
             initial_date: data.study_date,
             initial_questions: data.questions_done,
             initial_correct: data.questions_correct,
@@ -1302,7 +1535,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             initial_duration_minutes: data.duration_minutes || null,
             base_questions_count: data.questions_done,
             is_planned: false,
-          });
+          };
+          if (hasNotesUpdate) {
+            updatePayload.notes = normalizedNotes;
+          }
+          await safeUpdateStudyTopic(supabase, topicId, updatePayload);
           await safeInsertTopicReview(supabase, r1Review);
         })()
       );
@@ -1313,13 +1550,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 1.2b: Editar Conteúdo / Tópico de Estudo (nome, área, tags, data prevista, notas)
   const updateTopic = async (topicId: string, data: Partial<StudyTopic>) => {
-    setTopics(prev => {
-      const updated = prev.map(t => (t.id === topicId ? { ...t, ...data } : t));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(prev => prev.map(t => (t.id === topicId ? { ...t, ...data } : t)), true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1333,11 +1564,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     questionsDone: number,
     questionsCorrect: number,
     initialDate?: string,
-    durationMinutes?: number,
+    durationMinutes?: number | null,
     extraTopicData?: Partial<StudyTopic>,
     errorCauses?: ErrorLogCause[]
   ) => {
-    const targetTopic = topics.find(t => t.id === topicId);
+    const targetTopic = topicsRef.current.find(t => t.id === topicId);
     if (!targetTopic) return;
 
     const percentage =
@@ -1357,7 +1588,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Se R1 ainda não foi concluído, recalcula os parâmetros de agendamento de R1
     let updatedR1: TopicReview | null = null;
-    const r1Review = reviews.find(r => r.topic_id === topicId && r.review_number === 1);
+    const r1Review = reviewsRef.current.find(r => r.topic_id === topicId && r.review_number === 1);
     if (r1Review && !r1Review.completed_date) {
       const reviewCalc = calculateNextReview({
         currentCycle: 0,
@@ -1370,7 +1601,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const targetR1Date = addDaysToDate(finalInitialDate, reviewCalc.nextIntervalDays);
 
       const scheduledCounts = new Map<string, number>();
-      reviews.forEach(r => {
+      reviewsRef.current.forEach(r => {
         if (!r.completed_date && r.id !== r1Review.id) {
           scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
         }
@@ -1390,22 +1621,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    setTopics(prev => {
-      const updated = prev.map(t => (t.id === topicId ? updatedTopic : t));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(prev => prev.map(t => (t.id === topicId ? updatedTopic : t)), true);
 
     if (updatedR1) {
-      setReviews(prev => {
-        const updated = prev.map(r => (r.id === updatedR1!.id ? updatedR1! : r));
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-        }
-        return updated;
-      });
+      applyReviewsUpdate(prev => prev.map(r => (r.id === updatedR1!.id ? updatedR1! : r)), true);
     }
 
     if (!isDemoMode && user) {
@@ -1439,13 +1658,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 1.3: Alternar se assunto é meta da semana
   const updateTopicWeeklyGoal = async (topicId: string, is_weekly_goal: boolean) => {
-    setTopics(prev => {
-      const updated = prev.map(t => (t.id === topicId ? { ...t, is_weekly_goal } : t));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(
+      prev => prev.map(t => (t.id === topicId ? { ...t, is_weekly_goal } : t)),
+      true
+    );
     if (!isDemoMode && user) {
       const supabase = createClient();
       syncSupabase(supabase.from('study_topics').update({ is_weekly_goal }).eq('id', topicId));
@@ -1456,22 +1672,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updatePlannedTopicDate = async (topicId: string, planned_date: string | null) => {
     const normalizedPlannedDate = planned_date?.trim() || null;
     const safeInitialDate = normalizedPlannedDate || getTodayDateString();
-    setTopics(prev => {
-      const updated = prev.map(t =>
-        t.id === topicId
-          ? {
-              ...t,
-              planned_date: normalizedPlannedDate || undefined,
-              is_planned: true,
-              initial_date: safeInitialDate,
-            }
-          : t
-      );
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyTopicsUpdate(
+      prev =>
+        prev.map(t =>
+          t.id === topicId
+            ? {
+                ...t,
+                planned_date: normalizedPlannedDate || undefined,
+                is_planned: true,
+                initial_date: safeInitialDate,
+              }
+            : t
+        ),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1490,20 +1704,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 1.4b: Reprogramar Data de uma Revisão Agendada/Atrasada no Calendário
   const rescheduleReview = async (reviewId: string, newScheduledDate: string) => {
-    setReviews(prev => {
-      const updated = prev.map(r =>
-        r.id === reviewId
-          ? {
-              ...r,
-              scheduled_date: newScheduledDate,
-            }
-          : r
-      );
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyReviewsUpdate(
+      prev =>
+        prev.map(r =>
+          r.id === reviewId
+            ? {
+                ...r,
+                scheduled_date: newScheduledDate,
+              }
+            : r
+        ),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1519,23 +1731,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // AÇÃO 1.4c: Rebalanceamento em 1 Clique das Revisões Atrasadas respeitando cota diária
   const rebalanceOverdueReviews = async (): Promise<number> => {
     const maxDailyLimit = workloadConfig?.maxDailyReviews || 3;
-    const updates = computeRebalancedSchedule(reviews, maxDailyLimit, getTodayDateString());
+    const updates = computeRebalancedSchedule(reviewsRef.current, maxDailyLimit, getTodayDateString());
 
     if (updates.length === 0) return 0;
 
     const updateMap = new Map<string, string>();
     updates.forEach(u => updateMap.set(u.reviewId, u.newScheduledDate));
 
-    setReviews(prev => {
-      const updated = prev.map(r => {
-        const newDate = updateMap.get(r.id);
-        return newDate ? { ...r, scheduled_date: newDate } : r;
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyReviewsUpdate(
+      prev =>
+        prev.map(r => {
+          const newDate = updateMap.get(r.id);
+          return newDate ? { ...r, scheduled_date: newDate } : r;
+        }),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1553,17 +1763,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 1.5: Distribuir Automaticamente os Assuntos da Semana (Auto-Estudo)
   const distributeWeeklyAutoStudy = async (weekStartStr: string): Promise<number> => {
-    const [year, month, day] = weekStartStr.split('-').map(Number);
-    const startDate = new Date(year, month - 1, day);
     const weekDays: string[] = [];
     for (let i = 0; i < 5; i++) {
-      const d = new Date(startDate);
-      d.setDate(startDate.getDate() + i);
-      weekDays.push(d.toISOString().split('T')[0]);
+      weekDays.push(addDaysToDate(weekStartStr, i));
     }
 
     // Assuntos pendentes de agendamento: is_planned = true e (sem data ou de semanas passadas)
-    const pendingTopics = topics.filter(
+    const pendingTopics = topicsRef.current.filter(
       t => t.is_planned && (!t.planned_date || t.planned_date < weekStartStr)
     );
 
@@ -1592,15 +1798,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       topicDateMap.set(topic.id, targetDay);
     });
 
-    const updatedTopics = topics.map(t => {
-      const newDate = topicDateMap.get(t.id);
-      return newDate ? { ...t, planned_date: newDate, initial_date: newDate } : t;
-    });
-
-    setTopics(updatedTopics);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(updatedTopics));
-    }
+    applyTopicsUpdate(
+      prev =>
+        prev.map(t => {
+          const newDate = topicDateMap.get(t.id);
+          return newDate ? { ...t, planned_date: newDate, initial_date: newDate } : t;
+        }),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1625,14 +1830,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const percentage =
       questionsDone > 0 ? Math.round((questionsCorrect / questionsDone) * 1000) / 10 : 0;
 
-    const currentReview = reviews.find(r => r.id === reviewId);
+    const currentReview = reviewsRef.current.find(r => r.id === reviewId);
     if (!currentReview) throw new Error('Revisão não encontrada');
 
-    const targetTopic = topics.find(t => t.id === currentReview.topic_id);
+    const targetTopic = topicsRef.current.find(t => t.id === currentReview.topic_id);
     const baseQuestions = targetTopic?.base_questions_count || targetTopic?.initial_questions || 20;
 
     // Tempo real decorrido desde o último contato/revisão concluída
-    const priorCompleted = reviews
+    const priorCompleted = reviewsRef.current
       .filter(
         r =>
           r.topic_id === currentReview.topic_id &&
@@ -1703,7 +1908,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Gestão de carga diária e rolagem automática (anti-sobrecarga)
       const scheduledCounts = new Map<string, number>();
-      reviews.forEach(r => {
+      reviewsRef.current.forEach(r => {
         if (!r.completed_date && r.id !== reviewId) {
           scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
         }
@@ -1731,14 +1936,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    setReviews(prev => {
+    applyReviewsUpdate(prev => {
       const updated = prev.map(r => (r.id === reviewId ? updatedReview : r));
-      const finalRev = nextReviewObj ? [...updated, nextReviewObj] : updated;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(finalRev));
-      }
-      return finalRev;
-    });
+      return nextReviewObj ? [...updated, nextReviewObj] : updated;
+    }, true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1769,20 +1970,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reviewId: string,
     questionsDone: number,
     questionsCorrect: number,
-    completedDate?: string
+    completedDate?: string,
+    durationMinutes?: number | null,
+    errorCauses?: ErrorLogCause[]
   ) => {
-    const targetRev = reviews.find(r => r.id === reviewId);
+    const targetRev = reviewsRef.current.find(r => r.id === reviewId);
     if (!targetRev) return;
 
     const percentage =
       questionsDone > 0 ? Math.round((questionsCorrect / questionsDone) * 1000) / 10 : 0;
     const finalDate = completedDate || targetRev.completed_date || getTodayDateString();
+    const resolvedDuration =
+      durationMinutes !== undefined ? durationMinutes : targetRev.duration_minutes ?? null;
 
-    const targetTopic = topics.find(t => t.id === targetRev.topic_id);
+    const targetTopic = topicsRef.current.find(t => t.id === targetRev.topic_id);
     const baseQuestions = targetTopic?.base_questions_count || questionsDone || 20;
     const prevInterval = targetRev.previous_interval_days || 7;
 
-    const priorCompleted = reviews
+    const priorCompleted = reviewsRef.current
       .filter(
         r =>
           r.topic_id === targetRev.topic_id &&
@@ -1822,7 +2027,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       targetYear: profile?.target_year,
       reviewHistory,
       referenceDate: finalDate,
-      errorCauses: getPendingErrorCausesForTopic(targetRev.topic_id),
+      errorCauses: getPendingErrorCausesForTopic(targetRev.topic_id, errorCauses),
     });
 
     const updatedReview: TopicReview = {
@@ -1831,6 +2036,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       questions_correct: questionsCorrect,
       percentage,
       completed_date: finalDate,
+      duration_minutes: resolvedDuration,
       diagnosis: reviewCalc.diagnosis,
       diagnosis_badge: reviewCalc.diagnosisBadge,
       pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1839,13 +2045,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Se a próxima revisão existir e não estiver concluída, recalcula seus parâmetros de agendamento
     let updatedNextRev: TopicReview | null = null;
     if (targetRev.review_number < 8) {
-      const nextRev = reviews.find(
+      const nextRev = reviewsRef.current.find(
         r => r.topic_id === targetRev.topic_id && r.review_number === targetRev.review_number + 1
       );
       if (nextRev && !nextRev.completed_date) {
         const targetNextDate = addDaysToDate(finalDate, reviewCalc.nextIntervalDays);
         const scheduledCounts = new Map<string, number>();
-        reviews.forEach(r => {
+        reviewsRef.current.forEach(r => {
           if (!r.completed_date && r.id !== nextRev.id) {
             scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
           }
@@ -1866,17 +2072,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    setReviews(prev => {
-      const updated = prev.map(r => {
-        if (r.id === reviewId) return updatedReview;
-        if (updatedNextRev && r.id === updatedNextRev.id) return updatedNextRev;
-        return r;
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyReviewsUpdate(
+      prev =>
+        prev.map(r => {
+          if (r.id === reviewId) return updatedReview;
+          if (updatedNextRev && r.id === updatedNextRev.id) return updatedNextRev;
+          return r;
+        }),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1887,6 +2091,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             questions_correct: questionsCorrect,
             percentage,
             completed_date: finalDate,
+            duration_minutes: resolvedDuration,
             diagnosis: reviewCalc.diagnosis,
             diagnosis_badge: reviewCalc.diagnosisBadge,
             pedagogical_note: reviewCalc.pedagogicalNote,
@@ -1908,21 +2113,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 3: Excluir Assunto e suas Revisões
   const deleteTopic = async (topicId: string) => {
-    setTopics(prev => {
-      const up = prev.filter(t => t.id !== topicId);
-      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.TOPICS, JSON.stringify(up));
-      return up;
-    });
-    setReviews(prev => {
-      const up = prev.filter(r => r.topic_id !== topicId);
-      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(up));
-      return up;
-    });
-    setErrorLogs(prev => {
-      const up = prev.filter(e => e.topic_id !== topicId);
-      if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(up));
-      return up;
-    });
+    unmarkTrackPaused(topicId);
+    applyTopicsUpdate(prev => prev.filter(t => t.id !== topicId), true);
+    applyReviewsUpdate(prev => prev.filter(r => r.topic_id !== topicId), true);
+    applyErrorLogsUpdate(prev => prev.filter(e => e.topic_id !== topicId), true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1932,13 +2126,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 3b: Excluir um ciclo de revisão e os posteriores (mantém R0 e ciclos anteriores)
   const deleteReviewsFromCycle = async (topicId: string, fromReviewNumber: number) => {
-    setReviews(prev => {
-      const up = prev.filter(r => !(r.topic_id === topicId && r.review_number >= fromReviewNumber));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(up));
-      }
-      return up;
-    });
+    if (fromReviewNumber <= 1) {
+      markTrackPaused(topicId);
+    }
+    applyReviewsUpdate(
+      prev => prev.filter(r => !(r.topic_id === topicId && r.review_number >= fromReviewNumber)),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -1954,16 +2148,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // AÇÃO 3c: Recalcular e reativar trilha de revisões a partir do último estágio concluído
   const recalculateTopicReviews = async (topicId: string) => {
-    const targetTopic = topics.find(t => t.id === topicId);
+    unmarkTrackPaused(topicId);
+    const targetTopic = topicsRef.current.find(t => t.id === topicId);
     if (!targetTopic) return;
 
-    const topicRevs = reviews.filter(r => r.topic_id === topicId);
+    const topicRevs = reviewsRef.current.filter(r => r.topic_id === topicId);
     const completedRevs = topicRevs
       .filter(r => Boolean(r.completed_date))
       .sort((a, b) => a.review_number - b.review_number);
 
     let nextCycleNum = 1;
-    let baseAccuracy = targetTopic.initial_percentage || 80;
+    let baseAccuracy = targetTopic.initial_percentage ?? 80;
     const baseQuestions = targetTopic.base_questions_count || targetTopic.initial_questions || 20;
     let prevInterval = 7;
 
@@ -1990,7 +2185,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetDate = addDaysToDate(today, reviewCalc.nextIntervalDays);
 
     const scheduledCounts = new Map<string, number>();
-    reviews.forEach(r => {
+    reviewsRef.current.forEach(r => {
       if (!r.completed_date && !(r.topic_id === topicId && r.review_number >= nextCycleNum)) {
         scheduledCounts.set(r.scheduled_date, (scheduledCounts.get(r.scheduled_date) || 0) + 1);
       }
@@ -2018,14 +2213,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    setReviews(prev => {
+    applyReviewsUpdate(prev => {
       const filtered = prev.filter(r => !(r.topic_id === topicId && r.review_number >= nextCycleNum));
-      const updated = [...filtered, newReview];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.REVIEWS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+      return [...filtered, newReview];
+    }, true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -2142,42 +2333,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   // AÇÃO 6: Gestão de Assuntos Prevalentes da Banca
-  const addPrevalentTopic = async (data: Omit<PrevalentTopic, 'id' | 'created_at'>) => {
+  const addPrevalentTopic = async (
+    data: Omit<PrevalentTopic, 'id' | 'created_at'>
+  ): Promise<string> => {
+    const newId = isDemoMode ? `prev-${Date.now()}` : crypto.randomUUID();
     const newPrev: PrevalentTopic = {
-      id: isDemoMode ? `prev-${Date.now()}` : crypto.randomUUID(),
+      id: newId,
       user_id: user?.id || 'demo-user-id',
       ...data,
       created_at: new Date().toISOString(),
     };
-    const updated = [...prevalentTopics, newPrev];
-    setPrevalentTopics(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
-    }
+    setPrevalentTopics(prev => {
+      const updated = [...prev, newPrev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
     if (!isDemoMode && user) {
       const supabase = createClient();
       syncSupabase(supabase.from('prevalent_topics').insert(newPrev));
     }
+    return newId;
   };
 
   const updatePrevalentTopic = async (id: string, data: Partial<PrevalentTopic>) => {
-    const updated = prevalentTopics.map(p => (p.id === id ? { ...p, ...data } : p));
-    setPrevalentTopics(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
-    }
+    setPrevalentTopics(prev => {
+      const updated = prev.map(p => (p.id === id ? { ...p, ...data } : p));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
     if (!isDemoMode && user) {
       const supabase = createClient();
-      syncSupabase(supabase.from('prevalent_topics').update(data).eq('id', id));
+      const dbPayload: Record<string, unknown> = { ...data };
+      if ('banca' in data && data.banca === undefined) {
+        dbPayload.banca = null;
+      }
+      if ('frequency_notes' in data && data.frequency_notes === undefined) {
+        dbPayload.frequency_notes = null;
+      }
+      syncSupabase(supabase.from('prevalent_topics').update(dbPayload).eq('id', id));
     }
   };
 
   const deletePrevalentTopic = async (id: string) => {
-    const updated = prevalentTopics.filter(p => p.id !== id);
-    setPrevalentTopics(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
-    }
+    setPrevalentTopics(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
     if (!isDemoMode && user) {
       const supabase = createClient();
       syncSupabase(supabase.from('prevalent_topics').delete().eq('id', id));
@@ -2187,21 +2395,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const reorderPrevalentTopics = async (orderedIds: string[]) => {
     const rankMap = new Map<string, number>();
     orderedIds.forEach((id, index) => rankMap.set(id, index + 1));
-    const updated = prevalentTopics
-      .map(p => {
-        const newRank = rankMap.get(p.id);
-        return newRank !== undefined ? { ...p, rank_order: newRank } : p;
-      })
-      .sort((a, b) => a.rank_order - b.rank_order);
 
-    setPrevalentTopics(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
-    }
+    setPrevalentTopics(prev => {
+      const updated = prev
+        .map(p => {
+          const newRank = rankMap.get(p.id);
+          return newRank !== undefined ? { ...p, rank_order: newRank } : p;
+        })
+        .sort((a, b) => a.rank_order - b.rank_order);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.PREVALENT_TOPICS, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
     if (!isDemoMode && user) {
       const supabase = createClient();
-      const updates = updated.map(item =>
-        supabase.from('prevalent_topics').update({ rank_order: item.rank_order }).eq('id', item.id)
+      const updates = Array.from(rankMap.entries()).map(([id, rank_order]) =>
+        supabase.from('prevalent_topics').update({ rank_order }).eq('id', id)
       );
       syncSupabase(Promise.allSettled(updates));
     }
@@ -2227,13 +2438,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    setErrorLogs(prev => {
-      const updated = [newError, ...prev];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyErrorLogsUpdate(prev => [newError, ...prev], true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -2242,17 +2447,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleErrorLogReviewed = async (id: string, is_reviewed?: boolean) => {
-    const target = errorLogs.find(e => e.id === id);
+    const target = errorLogsRef.current.find(e => e.id === id);
     if (!target) return;
     const nextValue = is_reviewed !== undefined ? is_reviewed : !target.is_reviewed;
 
-    setErrorLogs(prev => {
-      const updated = prev.map(e => (e.id === id ? { ...e, is_reviewed: nextValue } : e));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyErrorLogsUpdate(
+      prev => prev.map(e => (e.id === id ? { ...e, is_reviewed: nextValue } : e)),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -2261,13 +2463,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateErrorLog = async (id: string, data: Partial<ErrorLog>) => {
-    setErrorLogs(prev => {
-      const updated = prev.map(e => (e.id === id ? { ...e, ...data } : e));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyErrorLogsUpdate(
+      prev => prev.map(e => (e.id === id ? { ...e, ...data } : e)),
+      true
+    );
 
     if (!isDemoMode && user) {
       const supabase = createClient();
@@ -2276,13 +2475,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteErrorLog = async (id: string) => {
-    setErrorLogs(prev => {
-      const updated = prev.filter(e => e.id !== id);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ERROR_LOGS, JSON.stringify(updated));
-      }
-      return updated;
-    });
+    applyErrorLogsUpdate(prev => prev.filter(e => e.id !== id), true);
 
     if (!isDemoMode && user) {
       const supabase = createClient();

@@ -344,7 +344,7 @@ export interface Profile {
   workload_config?: WorkloadConfig;
   onboarding_completed?: boolean;
   is_subscribed?: boolean;
-  subscription_status?: 'active' | 'inactive' | 'trial' | 'canceled';
+  subscription_status?: 'active' | 'inactive' | 'trial' | 'trialing' | 'canceled';
   cancel_at_period_end?: boolean;
   current_period_end?: string;
   stripe_customer_id?: string;

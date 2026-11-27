@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -124,9 +124,10 @@ export default function ContaPage() {
   useEffect(() => {
     if (!isResetFlow || hasScrolledResetRef.current) return;
     if (!securityCardRef.current) return;
-    hasScrolledResetRef.current = true;
     const timer = window.setTimeout(() => {
-      securityCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!securityCardRef.current) return;
+      hasScrolledResetRef.current = true;
+      securityCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 150);
     return () => window.clearTimeout(timer);
   }, [isResetFlow, isLoading, profile, user]);
@@ -206,10 +207,15 @@ export default function ContaPage() {
     }
   };
 
-  const fetchSubscription = async () => {
+  const userId = user?.id;
+  const userEmail = user?.email;
+  const stripeCustomerId = profile?.stripe_customer_id;
+  const subscriptionStatus = profile?.subscription_status;
+
+  const fetchSubscription = useCallback(async () => {
     try {
       setIsLoadingSub(true);
-      const email = user?.email || profile?.id;
+      const email = userEmail || userId;
       const res = await fetch(`/api/subscription${email ? `?email=${encodeURIComponent(email)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
@@ -220,11 +226,16 @@ export default function ContaPage() {
     } finally {
       setIsLoadingSub(false);
     }
-  };
+  }, [userId, userEmail]);
 
   useEffect(() => {
+    if (isLoading) return;
+    if (!userId || isDemoMode) {
+      setIsLoadingSub(false);
+      return;
+    }
     fetchSubscription();
-  }, [user, profile]);
+  }, [isLoading, userId, stripeCustomerId, subscriptionStatus, isDemoMode, fetchSubscription]);
 
   const handleOpenStripePortal = async () => {
     try {

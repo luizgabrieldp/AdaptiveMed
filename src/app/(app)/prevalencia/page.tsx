@@ -54,6 +54,7 @@ export default function PrevalenciaPage() {
   // Modais de Criação / Edição de Assunto Prevalente
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PrevalentTopic | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form State
   const [formArea, setFormArea] = useState('');
@@ -210,71 +211,71 @@ export default function PrevalenciaPage() {
   // Salvar Criação ou Edição com Hierarquia Automática
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formSubjectName.trim()) return;
+    if (!formSubjectName.trim() || isSaving) return;
 
-    const weight: Record<string, number> = { ALTA: 1, MEDIA: 2, BAIXA: 3 };
-    const cleanBanca = formBanca.trim() ? formBanca.trim() : undefined;
-    const cleanNotes = formNotes.trim() ? formNotes.trim() : undefined;
+    setIsSaving(true);
+    try {
+      const weight: Record<string, number> = { ALTA: 1, MEDIA: 2, BAIXA: 3 };
+      const cleanBanca = formBanca.trim() ? formBanca.trim() : undefined;
+      const cleanNotes = formNotes.trim() ? formNotes.trim() : undefined;
 
-    if (editingItem) {
-      const updated = {
-        area: formArea,
-        subject_name: formSubjectName.trim(),
-        prevalence_level: formPrevalence,
-        banca: cleanBanca,
-        frequency_notes: cleanNotes,
-      };
-      await updatePrevalentTopic(editingItem.id, updated);
+      if (editingItem) {
+        const updated = {
+          area: formArea,
+          subject_name: formSubjectName.trim(),
+          prevalence_level: formPrevalence,
+          banca: cleanBanca,
+          frequency_notes: cleanNotes,
+        };
+        await updatePrevalentTopic(editingItem.id, updated);
 
-      // Reordena automaticamente para manter ALTA no topo, MEDIA no meio e BAIXA abaixo
-      const updatedList = prevalentTopics.map(p =>
-        p.id === editingItem.id ? { ...p, ...updated } : p
-      );
-      updatedList.sort((a, b) => {
-        const wA = weight[a.prevalence_level] || 2;
-        const wB = weight[b.prevalence_level] || 2;
-        if (wA !== wB) return wA - wB;
-        return a.rank_order - b.rank_order;
-      });
-      await reorderPrevalentTopics(updatedList.map(p => p.id));
-    } else {
-      // Inserção de novo assunto
-      const tempId = `temp-${Date.now()}`;
-      const newEntry: PrevalentTopic = {
-        id: tempId,
-        area: formArea,
-        subject_name: formSubjectName.trim(),
-        prevalence_level: formPrevalence,
-        rank_order: 9999,
-        banca: cleanBanca,
-        frequency_notes: cleanNotes,
-        created_at: new Date().toISOString(),
-      };
+        // Reordena automaticamente para manter ALTA no topo, MEDIA no meio e BAIXA abaixo
+        const updatedList = prevalentTopics.map(p =>
+          p.id === editingItem.id ? { ...p, ...updated } : p
+        );
+        updatedList.sort((a, b) => {
+          const wA = weight[a.prevalence_level] || 2;
+          const wB = weight[b.prevalence_level] || 2;
+          if (wA !== wB) return wA - wB;
+          return a.rank_order - b.rank_order;
+        });
+        await reorderPrevalentTopics(updatedList.map(p => p.id));
+      } else {
+        // Inserção de novo assunto calculando posição antes e usando o ID real retornado
+        const placeholderEntry = {
+          id: '__new_prevalent__',
+          prevalence_level: formPrevalence,
+          rank_order: Number.MAX_SAFE_INTEGER,
+        };
 
-      const combined = [...prevalentTopics, newEntry];
-      combined.sort((a, b) => {
-        const wA = weight[a.prevalence_level] || 2;
-        const wB = weight[b.prevalence_level] || 2;
-        if (wA !== wB) return wA - wB;
-        return a.rank_order - b.rank_order;
-      });
+        const combinedOrder = [...prevalentTopics, placeholderEntry].sort((a, b) => {
+          const wA = weight[a.prevalence_level] || 2;
+          const wB = weight[b.prevalence_level] || 2;
+          if (wA !== wB) return wA - wB;
+          return a.rank_order - b.rank_order;
+        });
 
-      const assignedRank = combined.findIndex(c => c.id === tempId) + 1;
-      await addPrevalentTopic({
-        area: formArea,
-        subject_name: formSubjectName.trim(),
-        prevalence_level: formPrevalence,
-        rank_order: assignedRank,
-        banca: cleanBanca,
-        frequency_notes: cleanNotes,
-      });
+        const assignedRank = combinedOrder.findIndex(c => c.id === '__new_prevalent__') + 1;
+        const createdId = await addPrevalentTopic({
+          area: formArea,
+          subject_name: formSubjectName.trim(),
+          prevalence_level: formPrevalence,
+          rank_order: assignedRank,
+          banca: cleanBanca,
+          frequency_notes: cleanNotes,
+        });
 
-      // Normaliza as ordens de todos os itens
-      const finalIds = combined.map(c => c.id);
-      await reorderPrevalentTopics(finalIds);
+        // Normaliza as ordens de todos os itens usando o ID real do item recém-criado
+        const finalIds = combinedOrder.map(c =>
+          c.id === '__new_prevalent__' ? createdId : c.id
+        );
+        await reorderPrevalentTopics(finalIds);
+      }
+
+      setEditModalOpen(false);
+    } finally {
+      setIsSaving(false);
     }
-
-    setEditModalOpen(false);
   };
 
   // Agendar no Diário
@@ -778,9 +779,14 @@ export default function PrevalenciaPage() {
               <Button
                 type="submit"
                 size="sm"
+                disabled={isSaving}
                 className="text-xs font-bold shadow-md shadow-primary/20"
               >
-                {editingItem ? 'Salvar Alterações' : 'Cadastrar Assunto'}
+                {isSaving
+                  ? 'Salvando...'
+                  : editingItem
+                  ? 'Salvar Alterações'
+                  : 'Cadastrar Assunto'}
               </Button>
             </DialogFooter>
           </form>

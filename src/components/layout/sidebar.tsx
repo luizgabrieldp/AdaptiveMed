@@ -31,12 +31,23 @@ import { ThemeToggle } from './theme-toggle';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { profile, stats, topics, errorLogs, isDemoMode, signOut } = useData();
+  const { profile, stats, streakConfig, topics, errorLogs, isDemoMode, signOut } = useData();
   const { status: timerStatus, displaySeconds } = useFocusTimer();
   const { theme } = useTheme();
   const [manageAreasOpen, setManageAreasOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pendingErrorsCount = errorLogs.filter(e => !e.is_reviewed).length;
+
+  const minDailyQuestions = streakConfig?.minDailyQuestions ?? 10;
+  const streakRuleType = streakConfig?.ruleType ?? 'questions_or_mock';
+  const streakGoalLabel =
+    streakRuleType === 'mock_only'
+      ? 'Meta: 1 Simulado'
+      : streakRuleType === 'questions_only'
+      ? `Meta: ${minDailyQuestions} Qs/dia`
+      : streakRuleType === 'questions_and_mock'
+      ? `Meta: ${minDailyQuestions} Qs e 1 Simulado`
+      : `Meta: ${minDailyQuestions} Qs ou 1 Simulado`;
 
   // Lê preferência de sidebar encolhida do localStorage
   useEffect(() => {
@@ -171,7 +182,7 @@ export const Sidebar: React.FC = () => {
                   {stats.currentStreak} {stats.currentStreak === 1 ? 'dia' : 'dias'} de ofensiva
                 </p>
                 <p className="text-[10px] text-muted-foreground truncate">
-                  {stats.streakQualifiedToday ? 'Ofensiva garantida hoje!' : 'Meta: 10 Qs ou 1 Simulado'}
+                  {stats.streakQualifiedToday ? 'Ofensiva garantida hoje!' : streakGoalLabel}
                 </p>
               </div>
             </div>
